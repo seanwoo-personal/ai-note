@@ -12,6 +12,10 @@ playwright-report/
 # internal build scaffolding — never published
 BUILD_PLAN.md
 
+# local environment and provider credentials — never commit
+.env*
+!.env.example
+
 # runtime meeting data (audio = PII, transcripts) — never commit
 data/
 

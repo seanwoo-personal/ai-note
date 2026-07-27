@@ -1,9 +1,12 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
 import { useRecorder } from "@/components/useRecorder";
 import type { RecorderRequestedLocation } from "@/components/RecorderSessionProvider";
 import { RecorderFinalizeResultView } from "@/components/RecorderFinalizeResultView";
 import { formatDuration, recorderPhaseAnnouncement } from "@/lib/recorder";
+import type { SonioxTranslationOptions } from "@/services/sonioxRealtime";
 
 // Human labels for the server-derived lifecycle polled after upload.
 const STATUS_LABELS: Record<string, string> = {
@@ -13,6 +16,14 @@ const STATUS_LABELS: Record<string, string> = {
   summarizing: "요약 생성 중…",
   summarized: "요약 완료",
 };
+
+function liveTranslation(value: string): SonioxTranslationOptions {
+  if (value === "none") return { mode: "none" };
+  if (value === "two_way:ko-en") {
+    return { mode: "two_way", languageA: "ko", languageB: "en" };
+  }
+  return { mode: "one_way", targetLanguage: value.split(":")[1] || "en" };
+}
 
 export function Recorder({
   requestedLocation,
@@ -29,11 +40,37 @@ export function Recorder({
     meetingId,
     hasRetainedBlob,
     retryDisposition,
+    liveStatus,
+    liveTranscript,
+    liveError,
     start,
     stop,
     retry,
     probe,
   } = useRecorder();
+  const [sonioxConfigured, setSonioxConfigured] = useState(false);
+  const [liveEnabled, setLiveEnabled] = useState(false);
+  const [translationValue, setTranslationValue] = useState("one_way:en");
+
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/soniox/temporary-key", { cache: "no-store" })
+      .then(async (response) => response.ok ? response.json() as Promise<{ configured?: unknown }> : null)
+      .then((payload) => {
+        if (active) setSonioxConfigured(payload?.configured === true);
+      })
+      .catch(() => {
+        if (active) setSonioxConfigured(false);
+      });
+    return () => { active = false; };
+  }, []);
+
+  const beginRecording = () => void start({
+    requestedLocation,
+    ...(liveEnabled && sonioxConfigured
+      ? { soniox: { translation: liveTranslation(translationValue) } }
+      : {}),
+  });
 
   const recording = phase === "recording";
   const busy = phase === "requesting_permission" || phase === "stopping" || phase === "uploading";
@@ -68,7 +105,7 @@ export function Recorder({
               ? () => void probe()
               : retryable
                 ? () => void retry()
-                : () => void start({ requestedLocation })}
+                : beginRecording}
           disabled={busy || blocked}
           className="min-h-11 w-full shrink-0 rounded-full bg-ink px-5 text-[14px] font-semibold text-bg transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 disabled:opacity-50 sm:w-auto"
         >
@@ -87,6 +124,43 @@ export function Recorder({
                       : "회의 녹음 시작"}
         </button>
       </div>
+
+      {(phase === "idle" || phase === "saved") && (
+        <div className="mt-4 flex flex-col gap-3 rounded-xl border border-line bg-soft/40 p-3 sm:flex-row sm:items-center">
+          <label className="flex min-h-11 items-center gap-2 text-[13px] font-semibold text-ink">
+            <input
+              type="checkbox"
+              checked={liveEnabled}
+              disabled={!sonioxConfigured}
+              onChange={(event) => setLiveEnabled(event.target.checked)}
+              className="h-4 w-4 accent-accent"
+            />
+            Soniox 실시간 전사
+          </label>
+          <label className="flex min-h-11 items-center gap-2 text-[13px] text-inkSoft">
+            <span>실시간 번역</span>
+            <select
+              aria-label="실시간 번역"
+              value={translationValue}
+              disabled={!liveEnabled || !sonioxConfigured}
+              onChange={(event) => setTranslationValue(event.target.value)}
+              className="min-h-10 rounded-lg border border-line bg-panel px-3 text-ink"
+            >
+              <option value="none">번역 안 함</option>
+              <option value="one_way:en">영어로 번역</option>
+              <option value="one_way:ko">한국어로 번역</option>
+              <option value="one_way:ja">일본어로 번역</option>
+              <option value="one_way:zh">중국어로 번역</option>
+              <option value="two_way:ko-en">한국어 ↔ 영어 양방향</option>
+            </select>
+          </label>
+          <span className="text-[12px] text-inkSoft">
+            {sonioxConfigured
+              ? "켜면 마이크 오디오가 Soniox 서버로 전송되며 사용량에 따라 비용이 발생할 수 있습니다."
+              : "SONIOX_API_KEY 설정이 필요합니다."}
+          </span>
+        </div>
+      )}
 
       {/* Phase transitions are announced once here; the ticking timer and the rapidly
           changing meter below are deliberately kept out of any live region. */}
@@ -120,6 +194,28 @@ export function Recorder({
                 style={{ width: `${meterPct}%` }}
               />
             </div>
+          </div>
+        )}
+
+        {liveStatus !== "idle" && (
+          <div className="mt-4 grid gap-3 rounded-xl border border-line bg-soft/30 p-4 md:grid-cols-2">
+            <div>
+              <div className="text-[12px] font-semibold uppercase tracking-wide text-inkSoft">실시간 원문</div>
+              <p className="mt-2 min-h-12 whitespace-pre-wrap text-[15px] leading-relaxed text-ink">
+                {liveTranscript.original.final}
+                <span className="text-inkSoft">{liveTranscript.original.provisional}</span>
+              </p>
+            </div>
+            {(liveTranscript.translation.final || liveTranscript.translation.provisional) && (
+              <div>
+                <div className="text-[12px] font-semibold uppercase tracking-wide text-inkSoft">실시간 번역</div>
+                <p className="mt-2 min-h-12 whitespace-pre-wrap text-[15px] leading-relaxed text-accent">
+                  {liveTranscript.translation.final}
+                  <span className="text-inkSoft">{liveTranscript.translation.provisional}</span>
+                </p>
+              </div>
+            )}
+            {liveError && <p className="text-[13px] text-error md:col-span-2">{liveError}</p>}
           </div>
         )}
 

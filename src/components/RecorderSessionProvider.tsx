@@ -20,6 +20,13 @@ import type {
   RecorderResultLocation,
 } from "@/lib/recorderFinalizeResult";
 import { isScopeOnlyNavigation } from "@/lib/recorderNavigation";
+import {
+  connectSonioxRealtime,
+  emptySonioxTranscript,
+  type SonioxRealtimeSession,
+  type SonioxTranscript,
+  type SonioxTranslationOptions,
+} from "@/services/sonioxRealtime";
 
 export type RecorderSessionPhase =
   | "idle"
@@ -36,6 +43,18 @@ export type RecorderRequestedLocation = RecorderResultLocation;
 export type RecorderFinalizeResult = RecorderFinalizeResultContract;
 export type RecorderRetryDisposition = "probe_required" | "body_required" | "blocked" | null;
 export type NavigationBlockerPhase = "dirty" | "saving" | "verifying";
+export type LiveTranscriptionStatus =
+  | "idle"
+  | "connecting"
+  | "connected"
+  | "finishing"
+  | "finished"
+  | "error";
+
+export interface RecorderStartOptions {
+  requestedLocation?: RecorderRequestedLocation;
+  soniox?: { translation: SonioxTranslationOptions };
+}
 
 export interface NavigationBlockerDescriptor {
   id: string;
@@ -77,7 +96,10 @@ export interface RecorderSessionValue {
   retryDisposition: RecorderRetryDisposition;
   hasRetainedBlob: boolean;
   hasUnsavedAudio: boolean;
-  start(options?: { requestedLocation?: RecorderRequestedLocation }): Promise<void>;
+  liveStatus: LiveTranscriptionStatus;
+  liveTranscript: SonioxTranscript;
+  liveError: string | null;
+  start(options?: RecorderStartOptions): Promise<void>;
   stop(): void;
   save(): Promise<void>;
   retry(): Promise<void>;
@@ -161,6 +183,9 @@ export function RecorderSessionProvider({ children }: { children: ReactNode }) {
   const [finalizeResult, setFinalizeResult] = useState<RecorderFinalizeResult | null>(null);
   const [retryDisposition, setRetryDisposition] = useState<RecorderRetryDisposition>(null);
   const [hasRetainedBlob, setHasRetainedBlob] = useState(false);
+  const [liveStatus, setLiveStatus] = useState<LiveTranscriptionStatus>("idle");
+  const [liveTranscript, setLiveTranscript] = useState<SonioxTranscript>(emptySonioxTranscript);
+  const [liveError, setLiveError] = useState<string | null>(null);
   const [pendingNavigation, setPendingNavigation] = useState<PendingNavigation | null>(null);
   const [blockerRevision, setBlockerRevision] = useState(0);
 
@@ -173,6 +198,9 @@ export function RecorderSessionProvider({ children }: { children: ReactNode }) {
   const capturedRef = useRef<CapturedRecording | null>(null);
   const finalizeMetadataRef = useRef<FinalizeMetadata | null>(null);
   const uploadAbortRef = useRef<AbortController | null>(null);
+  const sonioxSessionRef = useRef<SonioxRealtimeSession | null>(null);
+  const sonioxConnectAbortRef = useRef<AbortController | null>(null);
+  const sessionGenerationRef = useRef(0);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const animationRef = useRef<number | null>(null);
@@ -220,12 +248,13 @@ export function RecorderSessionProvider({ children }: { children: ReactNode }) {
 
   const startPolling = useCallback((id: string) => {
     stopPolling();
+    const generation = sessionGenerationRef.current;
     const tick = async () => {
       try {
         const response = await fetch(`/api/meetings/${id}`, { cache: "no-store" });
         if (!response.ok) return;
         const status = (await response.json()) as ServerStatus;
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || generation !== sessionGenerationRef.current) return;
         setServerStatus(status);
         if (status.error || status.status === "summarized") stopPolling();
       } catch {
@@ -399,12 +428,20 @@ export function RecorderSessionProvider({ children }: { children: ReactNode }) {
   }, [setPhase]);
 
   const start = useCallback(async (
-    options: { requestedLocation?: RecorderRequestedLocation } = {},
+    options: RecorderStartOptions = {},
   ) => {
     if (!["idle", "saved", "failed"].includes(phaseRef.current) || capturedRef.current) return;
+    const generation = ++sessionGenerationRef.current;
     discardInProgressRef.current = false;
+    sonioxConnectAbortRef.current?.abort();
+    sonioxConnectAbortRef.current = null;
+    sonioxSessionRef.current?.close();
+    sonioxSessionRef.current = null;
     stopPolling();
     setError(null);
+    setLiveError(null);
+    setLiveStatus(options.soniox ? "connecting" : "idle");
+    setLiveTranscript(emptySonioxTranscript());
     setServerStatus(null);
     setFinalizeResult(null);
     setRetryDisposition(null);
@@ -420,17 +457,28 @@ export function RecorderSessionProvider({ children }: { children: ReactNode }) {
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (permissionError) {
+      if (generation !== sessionGenerationRef.current || !mountedRef.current) return;
       setError(permissionError instanceof Error ? permissionError.message : "마이크 접근이 거부되었습니다.");
+      if (options.soniox) {
+        setLiveError("마이크 권한이 없어 Soniox 실시간 전사를 시작하지 못했습니다.");
+        setLiveStatus("error");
+      }
       setPhase("failed");
       return;
     }
-    if (discardInProgressRef.current || phaseRef.current !== "requesting_permission") {
+    if (
+      generation !== sessionGenerationRef.current
+      || discardInProgressRef.current
+      || phaseRef.current !== "requesting_permission"
+      || !mountedRef.current
+    ) {
       stream.getTracks().forEach((track) => track.stop());
       return;
     }
     streamRef.current = stream;
 
-    const AudioContextConstructor = resolveAudioContext();
+    try {
+      const AudioContextConstructor = resolveAudioContext();
     if (AudioContextConstructor) {
       const context = new AudioContextConstructor();
       audioContextRef.current = context;
@@ -455,12 +503,29 @@ export function RecorderSessionProvider({ children }: { children: ReactNode }) {
     const recorder = new MediaRecorder(stream, { mimeType });
     recorderRef.current = recorder;
     recorder.ondataavailable = (event) => {
-      if (event.data.size > 0 && !discardInProgressRef.current) chunksRef.current.push(event.data);
+      if (
+        event.data.size <= 0
+        || generation !== sessionGenerationRef.current
+        || discardInProgressRef.current
+      ) return;
+      chunksRef.current.push(event.data);
+      sonioxSessionRef.current?.sendAudio(event.data);
     };
     recorder.onstop = () => {
+      if (generation !== sessionGenerationRef.current) return;
       teardownCapture();
       recorderRef.current = null;
       if (discardInProgressRef.current) return;
+      if (!sonioxSessionRef.current && sonioxConnectAbortRef.current) {
+        sonioxConnectAbortRef.current.abort();
+        sonioxConnectAbortRef.current = null;
+        setLiveError("Soniox 연결이 완료되기 전에 녹음이 종료되었습니다.");
+        setLiveStatus("error");
+      }
+      sonioxSessionRef.current?.finish();
+      if (sonioxSessionRef.current) {
+        setLiveStatus((status) => status === "error" ? status : "finishing");
+      }
       const durationMs = Math.max(0, Math.round(performance.now() - startTimeRef.current));
       const capture: CapturedRecording = {
         id,
@@ -476,7 +541,12 @@ export function RecorderSessionProvider({ children }: { children: ReactNode }) {
       setElapsedMs(durationMs);
       setPhase("captured");
       window.setTimeout(() => {
-        if (capturedRef.current === capture && phaseRef.current === "captured") void uploadCapture(capture);
+        if (
+          mountedRef.current
+          && generation === sessionGenerationRef.current
+          && capturedRef.current === capture
+          && phaseRef.current === "captured"
+        ) void uploadCapture(capture);
       }, 0);
     };
 
@@ -485,12 +555,103 @@ export function RecorderSessionProvider({ children }: { children: ReactNode }) {
     timerRef.current = setInterval(() => {
       setElapsedMs(Math.max(0, Math.round(performance.now() - startTimeRef.current)));
     }, 250);
-    recorder.start();
+    recorder.start(options.soniox ? 1_000 : undefined);
     setPhase("recording");
+    } catch (captureError) {
+      const failedRecorder = recorderRef.current;
+      recorderRef.current = null;
+      if (failedRecorder) {
+        failedRecorder.ondataavailable = null;
+        failedRecorder.onstop = null;
+        if (failedRecorder.state !== "inactive") {
+          try {
+            failedRecorder.stop();
+          } catch {
+            // Capture teardown below is authoritative.
+          }
+        }
+      }
+      teardownCapture();
+      if (generation !== sessionGenerationRef.current || !mountedRef.current) return;
+      setError(captureError instanceof Error ? captureError.message : "녹음을 시작하지 못했습니다.");
+      if (options.soniox) {
+        setLiveError("로컬 녹음을 시작하지 못해 Soniox 전사도 시작되지 않았습니다.");
+        setLiveStatus("error");
+      }
+      setPhase("failed");
+      return;
+    }
+
+    if (options.soniox) {
+      const controller = new AbortController();
+      sonioxConnectAbortRef.current = controller;
+      let connectedSession: SonioxRealtimeSession | null = null;
+      void connectSonioxRealtime({
+        translation: options.soniox.translation,
+        signal: controller.signal,
+        onTranscript: (transcript) => {
+          if (
+            mountedRef.current
+            && generation === sessionGenerationRef.current
+            && !discardInProgressRef.current
+          ) setLiveTranscript(transcript);
+        },
+        onError: (message) => {
+          if (
+            !mountedRef.current
+            || generation !== sessionGenerationRef.current
+            || discardInProgressRef.current
+          ) return;
+          setLiveError(message);
+          setLiveStatus("error");
+        },
+        onFinished: () => {
+          if (
+            !mountedRef.current
+            || generation !== sessionGenerationRef.current
+            || discardInProgressRef.current
+          ) return;
+          setLiveStatus("finished");
+          connectedSession?.close();
+          if (sonioxSessionRef.current === connectedSession) sonioxSessionRef.current = null;
+        },
+      }).then((liveSession) => {
+        connectedSession = liveSession;
+        if (
+          !mountedRef.current
+          || generation !== sessionGenerationRef.current
+          || discardInProgressRef.current
+          || !["recording", "stopping"].includes(phaseRef.current)
+        ) {
+          liveSession.close();
+          return;
+        }
+        if (sonioxConnectAbortRef.current === controller) sonioxConnectAbortRef.current = null;
+        sonioxSessionRef.current = liveSession;
+        for (const chunk of chunksRef.current) liveSession.sendAudio(chunk);
+        setLiveStatus("connected");
+      }).catch(() => {
+        if (
+          controller.signal.aborted
+          || !mountedRef.current
+          || generation !== sessionGenerationRef.current
+          || discardInProgressRef.current
+        ) return;
+        setLiveError("Soniox 실시간 전사를 시작하지 못했습니다. 녹음은 로컬에 계속 저장됩니다.");
+        setLiveStatus("error");
+      }).finally(() => {
+        if (sonioxConnectAbortRef.current === controller) sonioxConnectAbortRef.current = null;
+      });
+    }
   }, [setPhase, stopPolling, teardownCapture, uploadCapture]);
 
   const discard = useCallback(() => {
+    sessionGenerationRef.current += 1;
     discardInProgressRef.current = true;
+    sonioxConnectAbortRef.current?.abort();
+    sonioxConnectAbortRef.current = null;
+    sonioxSessionRef.current?.close();
+    sonioxSessionRef.current = null;
     uploadAbortRef.current?.abort();
     uploadAbortRef.current = null;
     const recorder = recorderRef.current;
@@ -518,6 +679,9 @@ export function RecorderSessionProvider({ children }: { children: ReactNode }) {
     setError(null);
     setElapsedMs(0);
     setLevel(0);
+    setLiveStatus("idle");
+    setLiveTranscript(emptySonioxTranscript());
+    setLiveError(null);
     setPhase("idle");
   }, [setPhase, stopPolling, teardownCapture]);
 
@@ -626,7 +790,23 @@ export function RecorderSessionProvider({ children }: { children: ReactNode }) {
     currentUrlRef.current = window.location.href;
     return () => {
       mountedRef.current = false;
+      sessionGenerationRef.current += 1;
       uploadAbortRef.current?.abort();
+      sonioxConnectAbortRef.current?.abort();
+      sonioxConnectAbortRef.current = null;
+      sonioxSessionRef.current?.close();
+      sonioxSessionRef.current = null;
+      const recorder = recorderRef.current;
+      recorderRef.current = null;
+      if (recorder && recorder.state !== "inactive") {
+        recorder.ondataavailable = null;
+        recorder.onstop = null;
+        try {
+          recorder.stop();
+        } catch {
+          // Capture teardown below is authoritative.
+        }
+      }
       teardownCapture();
       stopPolling();
     };
@@ -733,6 +913,9 @@ export function RecorderSessionProvider({ children }: { children: ReactNode }) {
     retryDisposition,
     hasRetainedBlob,
     hasUnsavedAudio,
+    liveStatus,
+    liveTranscript,
+    liveError,
     start,
     stop,
     save,
@@ -754,6 +937,9 @@ export function RecorderSessionProvider({ children }: { children: ReactNode }) {
     retryDisposition,
     hasRetainedBlob,
     hasUnsavedAudio,
+    liveStatus,
+    liveTranscript,
+    liveError,
     start,
     stop,
     save,

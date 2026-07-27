@@ -31,21 +31,29 @@ vi.mock("next/navigation", () => ({
 }));
 
 class FakeMediaRecorder {
+  static latest: FakeMediaRecorder | null = null;
   static isTypeSupported() {
     return true;
   }
 
   readonly mimeType: string;
   state = "inactive";
+  timeslice: number | undefined;
   ondataavailable: ((event: { data: Blob }) => void) | null = null;
   onstop: (() => void) | null = null;
 
   constructor(_stream: MediaStream, options?: MediaRecorderOptions) {
     this.mimeType = options?.mimeType ?? "audio/webm";
+    FakeMediaRecorder.latest = this;
   }
 
-  start() {
+  start(timeslice?: number) {
+    this.timeslice = timeslice;
     this.state = "recording";
+  }
+
+  emitChunk(data = new Blob([new Uint8Array([9, 8, 7])], { type: this.mimeType })) {
+    this.ondataavailable?.({ data });
   }
 
   requestData() {
@@ -174,6 +182,7 @@ describe("RecorderSessionProvider", () => {
     navigation.back.mockReset();
     navigation.refresh.mockReset();
     latestSession = null;
+    FakeMediaRecorder.latest = null;
     window.history.replaceState({}, "", "/");
     Object.defineProperty(navigator, "mediaDevices", {
       configurable: true,
@@ -200,6 +209,128 @@ describe("RecorderSessionProvider", () => {
     view.rerender(<App full={false} />);
     expect(screen.getByTestId("session")).toHaveTextContent(session!);
     expect(screen.getByRole("button", { name: "기록 중지" })).toBeInTheDocument();
+  });
+
+  it("detaches recorder callbacks and does not upload when the provider unmounts", async () => {
+    const fetchMock = vi.fn<(
+      input: string | URL | Request,
+      init?: RequestInit,
+    ) => Promise<Response>>(() => new Promise<Response>(() => {}));
+    vi.stubGlobal("fetch", fetchMock);
+    const view = render(<App />);
+    await startRecording();
+    const recorder = FakeMediaRecorder.latest!;
+
+    view.unmount();
+    expect(recorder.state).toBe("inactive");
+    expect(recorder.ondataavailable).toBeNull();
+    expect(recorder.onstop).toBeNull();
+    expect(fetchMock.mock.calls.some(([input, init]) => (
+      String(input).includes("/finalize") && init?.method === "POST"
+    ))).toBe(false);
+  });
+
+  it("does not run a queued finalize after the provider unmounts", async () => {
+    const fetchMock = vi.fn<(
+      input: string | URL | Request,
+      init?: RequestInit,
+    ) => Promise<Response>>(() => new Promise<Response>(() => {}));
+    vi.stubGlobal("fetch", fetchMock);
+    const view = render(<App />);
+    await startRecording();
+    vi.useFakeTimers();
+
+    act(() => getRecorderSession().stop());
+    view.unmount();
+    act(() => vi.runOnlyPendingTimers());
+
+    expect(fetchMock.mock.calls.some(([input, init]) => (
+      String(input).includes("/finalize") && init?.method === "POST"
+    ))).toBe(false);
+  });
+
+  it("stops microphone tracks when MediaRecorder start throws", async () => {
+    const stopTrack = vi.fn();
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { getUserMedia: vi.fn(async () => ({ getTracks: () => [{ stop: stopTrack }] })) },
+    });
+    class FailingMediaRecorder extends FakeMediaRecorder {
+      start() { throw new Error("recorder start failed"); }
+    }
+    vi.stubGlobal("MediaRecorder", FailingMediaRecorder);
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "회의 녹음 시작" }));
+    await waitFor(() => expect(screen.getByTestId("session")).toHaveTextContent(/^failed:/));
+    expect(screen.getAllByText("recorder start failed")).toHaveLength(2);
+    expect(stopTrack).toHaveBeenCalledOnce();
+  });
+
+  it("streams one-second WebM chunks to Soniox and renders live transcript with translation", async () => {
+    class FakeSonioxSocket {
+      static instance: FakeSonioxSocket | null = null;
+      readyState = 1;
+      sent: unknown[] = [];
+      binaryType = "";
+      onopen: (() => void) | null = null;
+      onmessage: ((event: { data: string }) => void) | null = null;
+      onerror: (() => void) | null = null;
+      onclose: (() => void) | null = null;
+
+      constructor(readonly url: string) {
+        FakeSonioxSocket.instance = this;
+      }
+
+      send(data: unknown) {
+        this.sent.push(data);
+      }
+
+      close() {
+        this.readyState = 3;
+        this.onclose?.();
+      }
+    }
+    vi.stubGlobal("WebSocket", FakeSonioxSocket);
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/soniox/temporary-key" && (init?.method ?? "GET") === "GET") {
+        return new Response(JSON.stringify({ configured: true }), { status: 200 });
+      }
+      if (url === "/api/soniox/temporary-key" && init?.method === "POST") {
+        return new Response(JSON.stringify({ apiKey: "temporary-key" }), { status: 200 });
+      }
+      return new Promise<Response>(() => {});
+    }));
+
+    render(<App />);
+    const liveToggle = await screen.findByRole("checkbox", { name: "Soniox 실시간 전사" });
+    fireEvent.click(liveToggle);
+    fireEvent.change(screen.getByRole("combobox", { name: "실시간 번역" }), {
+      target: { value: "one_way:en" },
+    });
+    await startRecording();
+
+    expect(FakeMediaRecorder.latest?.timeslice).toBe(1_000);
+    await waitFor(() => expect(FakeSonioxSocket.instance).not.toBeNull());
+    const socket = FakeSonioxSocket.instance!;
+    expect(socket.sent).toHaveLength(0);
+    const chunk = new Blob([new Uint8Array([1, 2, 3])], { type: "audio/webm" });
+    act(() => FakeMediaRecorder.latest?.emitChunk(chunk));
+    act(() => socket.onopen?.());
+    await waitFor(() => expect(socket.sent).toHaveLength(2));
+    expect(JSON.parse(String(socket.sent[0]))).toMatchObject({
+      api_key: "temporary-key",
+      translation: { type: "one_way", target_language: "en" },
+    });
+    expect(socket.sent[1]).toBe(chunk);
+
+    act(() => socket.onmessage?.({ data: JSON.stringify({ tokens: [
+      { text: "안녕하세요", is_final: false, translation_status: "original" },
+      { text: "Hello", is_final: false, translation_status: "translation" },
+    ] }) }));
+    expect(screen.getByText("안녕하세요")).toBeInTheDocument();
+    expect(screen.getByText("Hello")).toBeInTheDocument();
   });
 
   it("retains captured audio while uploading and only confirmed explicit discard removes it", async () => {

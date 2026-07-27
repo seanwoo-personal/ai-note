@@ -1,6 +1,6 @@
 # AI NOTE
 
-**Local-first meeting notes.** Record on your laptop, transcribe locally with Whisper, and optionally turn the transcript into a clean meeting summary with your own Claude CLI, Codex CLI, or loopback Ollama model. AI NOTE stores recordings and derived files on your machine, exposes its web/STT services only on `127.0.0.1`, has no hosted account, and never stores API keys.
+**Local-first meeting notes.** Record on your laptop, transcribe locally with Whisper, and optionally show live captions and translation through Soniox. AI NOTE stores recordings and derived files on your machine, exposes its web/STT services only on `127.0.0.1`, and has no hosted account. Soniox is opt-in; its long-lived key stays in the gitignored local environment and the browser receives only a single-use temporary key.
 
 Review the transcript or summary, search meetings without AI, and copy or export the result. The meeting-assistant chatbot is currently dormant; it is not part of the active pipeline.
 
@@ -10,16 +10,17 @@ Review the transcript or summary, search meetings without AI, and copy or export
 
 - **Local app and storage.** Audio, transcripts, summaries, your optional profile, and derived search data stay under the local `data/` directory. The web server and transcription service bind to `127.0.0.1` only (never your LAN).
 - **Your model choice controls inference.** Ollama keeps model inference on the configured loopback service. Claude/Codex CLI runs as a local process but may send the bounded transcript and summary prompt to the provider you signed in to; that processing follows the CLI provider's terms. AI NOTE adds no hosted backend of its own.
-- **No API keys.** Summaries run through a CLI you're already signed in to (Claude/Codex) or a local model (Ollama). AI NOTE never stores an API key.
+- **Provider credentials stay local.** Summaries run through a CLI you're already signed in to or a loopback model. Optional Soniox streaming reads `SONIOX_API_KEY` only on the local server and mints a 60-second, single-use browser credential; never place the long-lived key in client code.
+- **Soniox is an explicit off-device opt-in.** When its live toggle is enabled, microphone audio is streamed to Soniox for captions/translation under Soniox's terms; the same audio is still retained locally for the normal Whisper transcript.
 - **No AI NOTE telemetry.** There is no analytics or hosted sync surface. Recordings and generated artifacts live under `data/` (gitignored); model-provider traffic, if any, is determined only by the summarizer you select above.
 
 ## How it works
 
 ```
-record (browser mic) → local Whisper (STT) → optional configured summary (worker) → view / search / export
+record (browser mic) → optional Soniox live captions/translation + local audio save → local Whisper final transcript → optional summary → view / search / export
 ```
 
-1. Click **회의 녹음 시작 (Start meeting recording)** — audio is captured in the browser and saved locally.
+1. Optionally enable **Soniox 실시간 전사** and choose a translation mode, then click **회의 녹음 시작 (Start meeting recording)**. Audio is still captured and saved locally.
 2. On stop, a local **Whisper** service creates the initial automatic transcript.
 3. If a summary model is configured, a background worker corrects that initial transcript and creates the structured summary — automatically, even if you close the tab.
 4. Organize meetings in local workspaces and up to three folder levels, then
@@ -147,6 +148,7 @@ Copy `.env.example` to `.env.local` and adjust as needed. Common knobs:
 | `LOCAL_STT_VAD` | `1` | Silence/hallucination filter (VAD); `0` to disable |
 | `LOCAL_STT_HOST` / `LOCAL_STT_PORT` | `127.0.0.1` / `8123` | Whisper loopback address; owned bootstrap pins the host to `127.0.0.1` and selects a bounded child-only port without rewriting `.env.local` |
 | `FFMPEG_PATH` | (from `PATH`) | Explicit ffmpeg binary |
+| `SONIOX_API_KEY` | unset | Optional long-lived server credential for live transcription/translation; keep it only in gitignored `.env.local` |
 
 Manage domain terms and "misheard → correct" pairs in the app's **단어 관리 (Glossary)** tab. They are applied by the LLM **correction** step (not the Whisper transcriber) to fix names and numbers. Stored in `glossary.json` as `{ terms, corrections }` (see `glossary.example.json`; a legacy string array is still read as `terms`).
 

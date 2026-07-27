@@ -34,6 +34,7 @@ export const DATA_SURFACE_INVENTORY = [
   "/api/settings/llm/models",
   "/api/settings/profile",
   "/api/search",
+  "/api/soniox/temporary-key",
   "/api/summary-work",
   "/api/summarize",
   "/api/transcribe",

@@ -418,8 +418,13 @@ describe("launch orchestration", () => {
         events.push("start-runtime");
         return { appPort: 3003, whisperPort: 8126 };
       },
-      waitForEndpoint: async ({ name }) => {
+      waitForEndpoint: async ({ name, url }) => {
         events.push(name);
+        expect(url).toBe(
+          name === "app"
+            ? "http://localhost:3003/"
+            : "http://localhost:3003/api/whisper/health",
+        );
       },
       openBrowser: async ({ url }) => {
         events.push("browser");

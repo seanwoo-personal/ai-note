@@ -500,7 +500,7 @@ export async function runLaunchFlow({
     await runCommand(spec);
   }
   const runtime = await startRuntime();
-  const loopbackBaseUrl = `http://127.0.0.1:${runtime.appPort}`;
+  const loopbackBaseUrl = canonicalAppUrl(runtime.appPort);
   await waitForEndpoint({
     name: "app",
     url: `${loopbackBaseUrl}/`,
@@ -511,7 +511,7 @@ export async function runLaunchFlow({
     url: `${loopbackBaseUrl}/api/whisper/health`,
     isReady: isWhisperHealthReady,
   });
-  const url = canonicalAppUrl(runtime.appPort);
+  const url = loopbackBaseUrl;
   writeLine(`AI_NOTE_URL=${url}`);
   const browser = await openBrowser({ url });
   if (!browser.opened && browser.message) writeLine(browser.message);
@@ -1125,9 +1125,9 @@ async function runStatus({ repositoryRoot, paths }) {
   }
   const { state } = ownership;
   const appUrl = canonicalAppUrl(state.appPort);
-  const app = await fetchEndpoint(`http://127.0.0.1:${state.appPort}/`);
+  const app = await fetchEndpoint(`${appUrl}/`);
   const whisper = await fetchEndpoint(
-    `http://127.0.0.1:${state.appPort}/api/whisper/health`,
+    `${appUrl}/api/whisper/health`,
     { json: true },
   );
   console.log(`AI_NOTE_URL=${appUrl}`);

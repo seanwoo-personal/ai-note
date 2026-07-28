@@ -24,7 +24,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 export const INTERNAL_SUPERVISOR_COMMAND = "__supervisor";
 
 const RUNTIME_DIRECTORY_NAME = ".ai-note-runtime";
-const APP_START_PORT = 3000;
+const APP_START_PORT = 3100;
 const WHISPER_START_PORT = 8123;
 const PORT_CANDIDATE_COUNT = 20;
 const HEARTBEAT_INTERVAL_MS = 2_000;

@@ -366,7 +366,9 @@ describe("app-api routes", () => {
     writeFileSync(p.summary, readFileSync(join(originalCwd, "fixtures", "summary.happy.json"), "utf-8"));
     const summarized = await (await getMeeting(appRequest(`http://t/api/meetings/${id}`), ctx(id))).json();
     expect(summarized.status).toBe("summarized");
-    expect(summarized.title).toBe("데일리 스크럼 2026-07-05"); // promoted from summary.title
+    expect(summarized.title).toMatch(
+      /^회의 \d{4}-\d{2}-\d{2} \d{2}:\d{2} · 데일리 스크럼 2026-07-05$/u,
+    );
   });
 
   it("POST /api/transcribe refuses a meeting that is already transcribed (raw.md immutable)", async () => {
@@ -574,19 +576,24 @@ describe("title edit / delete / export overlay", () => {
     await seedSummarized(id);
     await titlePOST(titleReq(id, { title: "내보내기 제목" }), ctx(id));
 
-    const md = await (await exportGET(appRequest(`http://t/api/meetings/${id}/export?fmt=md`), ctx(id))).text();
+    const mdResponse = await exportGET(appRequest(`http://t/api/meetings/${id}/export?fmt=md`), ctx(id));
+    const md = await mdResponse.text();
     expect(md).toContain("# 내보내기 제목");
+    expect(decodeURIComponent(mdResponse.headers.get("content-disposition") ?? ""))
+      .toContain("내보내기 제목.md");
 
     const jsonText = await (await exportGET(appRequest(`http://t/api/meetings/${id}/export?fmt=json`), ctx(id))).text();
     expect(JSON.parse(jsonText).title).toBe("데일리 스크럼 2026-07-05"); // raw summary.title, not overridden
   });
 
-  it("export md uses summary.title (not the stale auto title) when there is no titleOverride", async () => {
+  it("export md combines the dated automatic title with summary.title when there is no titleOverride", async () => {
     const id = "m-export-nooverride";
     await seedSummarized(id); // status.title stays the auto placeholder; no titleOverride
-    const md = await (await exportGET(appRequest(`http://t/api/meetings/${id}/export?fmt=md`), ctx(id))).text();
-    expect(md).toContain("# 데일리 스크럼 2026-07-05"); // the AI title shown in the UI
-    expect(md).not.toMatch(/^# 회의 /m); // never the "회의 YYYY-MM-DD HH:MM" placeholder
+    const response = await exportGET(appRequest(`http://t/api/meetings/${id}/export?fmt=md`), ctx(id));
+    const md = await response.text();
+    expect(md).toMatch(/^# 회의 \d{4}-\d{2}-\d{2} \d{2}:\d{2} · 데일리 스크럼 2026-07-05$/mu);
+    expect(decodeURIComponent(response.headers.get("content-disposition") ?? ""))
+      .toContain("· 데일리 스크럼 2026-07-05.md");
     expect(md).not.toContain("현재 스크립트 변경 후 회의록 요약이 갱신되지 않음");
   });
 

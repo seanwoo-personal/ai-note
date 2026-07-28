@@ -217,29 +217,30 @@ describe("activated library navigation", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders the Soniox product switcher and folder-scoped tools", () => {
+  it("renders one HeyHome service navigation with workspace tools instead of product tabs", () => {
     navigation.pathname = "/soniox";
     navigation.search = `workspace=${DEFAULT_WORKSPACE}&folder=${FOLDER}&tool=translator`;
     renderShell();
 
     const nav = screen.getByRole("navigation", { name: "라이브러리" });
-    expect(within(nav).getByRole("link", { name: "AI NOTE" })).toBeInTheDocument();
-    expect(within(nav).getByRole("link", { name: "SONIOX" })).toHaveAttribute("aria-current", "page");
-    expect(within(nav).getByText("Workspace")).toBeInTheDocument();
-    expect(within(nav).getByText("Folder")).toBeInTheDocument();
-    const newFolderButton = within(nav).getByRole("button", { name: "새 폴더" });
-    expect(newFolderButton).toBeInTheDocument();
-    fireEvent.click(newFolderButton);
-    expect(screen.getByRole("dialog", { name: "새 폴더" })).toBeInTheDocument();
-    expect(within(nav).getByText("프로젝트")).toBeInTheDocument();
-    expect(within(nav).getByRole("link", { name: "전사" })).toHaveAttribute(
+    expect(within(nav).getAllByRole("link", { name: "헤이홈 AI 기록도구 홈" })).toHaveLength(2);
+    expect(within(nav).getAllByRole("link", { name: "헤이홈 AI 기록도구 홈" }).every((link) => link.getAttribute("href") === "/")).toBe(true);
+    expect(within(nav).queryByLabelText("제품 전환")).not.toBeInTheDocument();
+    expect(within(nav).queryByRole("link", { name: "AI NOTE" })).not.toBeInTheDocument();
+    expect(within(nav).queryByRole("link", { name: "SONIOX" })).not.toBeInTheDocument();
+    expect(within(nav).getByText("내 워크스페이스")).toBeInTheDocument();
+    expect(within(nav).getByRole("button", { name: "새 워크스페이스" })).toBeInTheDocument();
+    expect(within(nav).getByRole("button", { name: "기본 이름 수정" })).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: "스마트 스크라이브" })).toHaveAttribute(
       "href",
       `/soniox?workspace=${DEFAULT_WORKSPACE}&folder=${FOLDER}&tool=transcription`,
     );
-    expect(within(nav).getByRole("link", { name: "번역" })).toHaveAttribute("aria-current", "page");
-    expect(within(nav).getByRole("link", { name: "Voice Typing" })).toBeInTheDocument();
-    expect(within(nav).getByText("단축키")).toBeInTheDocument();
-    expect(within(nav).getByText("Fn + Shift")).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: "트랜스레이터" })).toHaveAttribute("aria-current", "page");
+    expect(within(nav).getByRole("link", { name: "보이스 타이핑" })).toBeInTheDocument();
+    expect(within(nav).getByRole("button", { name: "회의 검색" })).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: /모든 내용/ })).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: /미분류/ })).toBeInTheDocument();
+    expect(within(nav).getByText("프로젝트")).toBeInTheDocument();
   });
 
   it("keeps a Soniox folder create inside the Soniox product", async () => {
@@ -278,7 +279,7 @@ describe("activated library navigation", () => {
     renderShell();
     const nav = screen.getByRole("navigation", { name: "라이브러리" });
     expect(nav).toHaveTextContent("기본");
-    expect(nav).toHaveTextContent("모든 회의");
+    expect(nav).toHaveTextContent("모든 내용");
     expect(nav).toHaveTextContent("미분류");
     expect(nav).toHaveTextContent("프로젝트");
     expect(screen.getByRole("button", { name: "새 워크스페이스" })).toBeInTheDocument();
@@ -289,7 +290,7 @@ describe("activated library navigation", () => {
   it("marks the active scope and route with aria-current='page' across rail links", () => {
     renderShell();
     const nav = screen.getByRole("navigation", { name: "라이브러리" });
-    const allLink = within(nav).getByRole("link", { name: /모든 회의/ });
+    const allLink = within(nav).getByRole("link", { name: /모든 내용/ });
     expect(allLink).toHaveAttribute("aria-current", "page");
     expect(allLink).toHaveClass("bg-soft");
     expect(within(nav).getByRole("link", { name: /미분류/ })).not.toHaveAttribute("aria-current");
@@ -302,7 +303,7 @@ describe("activated library navigation", () => {
     renderShell();
     const nav = screen.getByRole("navigation", { name: "라이브러리" });
     expect(within(nav).getByRole("link", { name: /프로젝트/ })).toHaveAttribute("aria-current", "page");
-    expect(within(nav).getByRole("link", { name: /모든 회의/ })).not.toHaveAttribute("aria-current");
+    expect(within(nav).getByRole("link", { name: /모든 내용/ })).not.toHaveAttribute("aria-current");
   });
 
   it("marks 단어 관리 active on the glossary route", () => {
@@ -310,10 +311,10 @@ describe("activated library navigation", () => {
     renderShell();
     const nav = screen.getByRole("navigation", { name: "라이브러리" });
     expect(within(nav).getByRole("link", { name: "단어 관리" })).toHaveAttribute("aria-current", "page");
-    expect(within(nav).getByRole("link", { name: /모든 회의/ })).not.toHaveAttribute("aria-current");
+    expect(within(nav).getByRole("link", { name: /모든 내용/ })).not.toHaveAttribute("aria-current");
   });
 
-  it("renders a search trigger above 모든 회의 and opens the search overlay from the rail", async () => {
+  it("renders a search trigger above 모든 내용 and opens the search overlay from the rail", async () => {
     renderShell();
     const nav = screen.getByRole("navigation", { name: "라이브러리" });
     expect(within(nav).queryByRole("link", { name: "검색/질문" })).not.toBeInTheDocument();
@@ -322,7 +323,7 @@ describe("activated library navigation", () => {
     expect(trigger).toHaveClass("min-h-11");
     expect(trigger.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
 
-    const allLink = within(nav).getByRole("link", { name: /모든 회의/ });
+    const allLink = within(nav).getByRole("link", { name: /모든 내용/ });
     const folderLink = within(nav).getByRole("link", { name: /프로젝트/ });
     expect(trigger.compareDocumentPosition(allLink) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(allLink.compareDocumentPosition(folderLink) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -343,7 +344,7 @@ describe("activated library navigation", () => {
     expect(await screen.findByRole("dialog", { name: "회의 검색" })).toBeInTheDocument();
   });
 
-  it("renders the search trigger above 모든 회의 in the fallback navigation", () => {
+  it("renders the search trigger above 모든 내용 in the fallback navigation", () => {
     libraryState = readyState({ library: null });
     render(
       <RecorderSessionProvider>
@@ -354,7 +355,7 @@ describe("activated library navigation", () => {
     const nav = screen.getByRole("navigation", { name: "라이브러리" });
     expect(within(nav).queryByRole("link", { name: "검색/질문" })).not.toBeInTheDocument();
     const trigger = within(nav).getByRole("button", { name: "회의 검색" });
-    const allLink = within(nav).getByRole("link", { name: "모든 회의" });
+    const allLink = within(nav).getByRole("link", { name: "모든 내용" });
     expect(trigger.compareDocumentPosition(allLink) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
@@ -476,6 +477,24 @@ describe("activated library navigation", () => {
       .toHaveAttribute("title", "3단계 아주 긴 마지막 폴더 이름");
     expect(screen.getByRole("navigation", { name: "라이브러리" }))
       .not.toHaveTextContent(/•••|＋|⌄|›|☰|×/);
+  });
+
+  it("shows recent documents on the service home without a recorder or canonical redirect", () => {
+    navigation.search = "";
+    const base = readyState();
+    libraryState = readyState({
+      scope: { kind: "global" },
+      pages: { ...base.pages, scopeKey: "global" },
+      summaryWork: null,
+      organizationPending: { ...base.organizationPending!, count: 0, rows: [] },
+    });
+
+    renderShell();
+
+    expect(screen.getByRole("heading", { level: 1, name: "최근 작업한 문서" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /제품 회의/ })).toHaveAttribute("href", "/meetings/meeting-1");
+    expect(screen.queryByRole("button", { name: "Whisper 전사용 녹음 시작" })).not.toBeInTheDocument();
+    expect(navigation.replace).not.toHaveBeenCalled();
   });
 
   it("uses global summary work, source-safe row links, pending provisional rows, and default-All recorder", () => {
@@ -1037,7 +1056,7 @@ describe("activated library navigation", () => {
         </div>
       </RecorderSessionProvider>,
     );
-    await waitFor(() => expect(screen.getByRole("heading", { level: 1, name: `${createdWorkspace.name} · 모든 회의` })).toHaveFocus());
+    await waitFor(() => expect(screen.getByRole("heading", { level: 1, name: `${createdWorkspace.name} · 모든 내용` })).toHaveFocus());
   });
 
   it("closes the underlying mobile drawer before a nested create hands off focus", async () => {
@@ -1086,7 +1105,7 @@ describe("activated library navigation", () => {
         </div>
       </RecorderSessionProvider>,
     );
-    await waitFor(() => expect(screen.getByRole("heading", { level: 1, name: `${createdWorkspace.name} · 모든 회의` })).toHaveFocus());
+    await waitFor(() => expect(screen.getByRole("heading", { level: 1, name: `${createdWorkspace.name} · 모든 내용` })).toHaveFocus());
   });
 
   it("returns focus to the original trigger after a successful rename", async () => {

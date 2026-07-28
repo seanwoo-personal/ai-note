@@ -86,14 +86,17 @@ describe("deriveStatus — titleOverride", () => {
     expect(status.title).toBe("내가 고친 제목"); // NOT clobbered back to summary.title
   });
 
-  it("legacy status without titleOverride still promotes summary.title", async () => {
+  it("legacy status without titleOverride appends summary.title as the automatic topic", async () => {
     const id = "m-legacy-promote";
     await seedSummary(id, "AI가 만든 제목");
-    const { status, changed } = deriveStatus(
-      id,
-      base(id, { status: "transcribed", title: "회의 2026-07-05 13:30" }),
-    );
-    expect(status.title).toBe("AI가 만든 제목");
+    const persisted = base(id, { status: "transcribed", title: "회의 2026-07-05 13:30" });
+    const { status, changed } = deriveStatus(id, persisted);
+    expect(status.title).toBe(`${initialStatus(id, {
+      startedAt: persisted.startedAt,
+      endedAt: persisted.endedAt!,
+      durationMs: persisted.durationMs,
+      audioMime: persisted.audioMime,
+    }).title} · AI가 만든 제목`);
     expect(status.status).toBe("summarized");
     expect(changed).toBe(true);
   });

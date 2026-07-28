@@ -39,19 +39,21 @@ export interface InitialStatusInput {
   audioMime: string;
 }
 
-function autoTitle(startedAtIso: string): string {
+export function automaticMeetingTitle(startedAtIso: string, topic?: string | null): string {
   const d = new Date(startedAtIso);
   const pad = (n: number) => String(n).padStart(2, "0");
   const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   const time = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  return `회의 ${date} ${time}`;
+  const base = `회의 ${date} ${time}`;
+  const normalizedTopic = topic?.replace(/\s+/gu, " ").trim();
+  return normalizedTopic && normalizedTopic !== base ? `${base} · ${normalizedTopic}` : base;
 }
 
 export function initialStatus(id: string, input: InitialStatusInput): StatusJson {
   const p = meetingPaths(id);
   return {
     id,
-    title: autoTitle(input.startedAt),
+    title: automaticMeetingTitle(input.startedAt),
     status: "recorded",
     error: null,
     startedAt: input.startedAt,
@@ -199,8 +201,11 @@ export function deriveStatus(id: string, persisted: StatusJson): { status: Statu
     }
   } else if (hasSummary) {
     const summary = readJson<{ title?: string }>(p.summary);
-    if (summary?.title && summary.title !== s.title) {
-      s = { ...s, title: summary.title };
+    const automaticTitle = summary?.title
+      ? automaticMeetingTitle(persisted.startedAt, summary.title)
+      : null;
+    if (automaticTitle && automaticTitle !== s.title) {
+      s = { ...s, title: automaticTitle };
       changed = true;
     }
   }

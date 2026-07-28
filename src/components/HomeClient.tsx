@@ -49,9 +49,9 @@ function detailHref(meetingId: string, scope: LibraryMeetingScope): string {
 }
 
 function scopeTitle(scope: LibraryMeetingScope, library: NonNullable<ReturnType<typeof useLibrary>["library"]>): string {
-  if (scope.kind === "global") return "모든 회의";
+  if (scope.kind === "global") return "모든 내용";
   const workspace = library.workspaces.find((candidate) => candidate.id === scope.workspaceId);
-  if (scope.kind === "workspace") return `${workspace?.name ?? "워크스페이스"} · 모든 회의`;
+  if (scope.kind === "workspace") return `${workspace?.name ?? "워크스페이스"} · 모든 내용`;
   if (scope.kind === "unfiled") return `${workspace?.name ?? "워크스페이스"} · 미분류`;
   return library.folders.find((candidate) => candidate.id === scope.folderId)?.name ?? "폴더";
 }
@@ -107,6 +107,7 @@ export function HomeClient() {
   const libraryState = useLibrary();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const homeMode = searchParams.toString() === "";
   const { llm } = useHealth();
   const [canonicalMessage, setCanonicalMessage] = useState<string | null>(null);
   const [moveNotice, setMoveNotice] = useState<{
@@ -123,10 +124,10 @@ export function HomeClient() {
   const generationEpochRef = useRef(libraryState.generationEpoch);
 
   const resolution = useMemo(() => (
-    libraryState.library
+    !homeMode && libraryState.library
       ? resolveCanonicalLibraryScope(new URLSearchParams(searchParams.toString()), libraryState.library)
       : null
-  ), [libraryState.library, searchParams]);
+  ), [homeMode, libraryState.library, searchParams]);
 
   useEffect(() => {
     if (generationEpochRef.current !== libraryState.generationEpoch) {
@@ -139,25 +140,32 @@ export function HomeClient() {
   }, [libraryState.generationEpoch]);
 
   useEffect(() => {
+    if (homeMode) {
+      lastCanonicalReplaceRef.current = null;
+      if (libraryState.scope?.kind !== "global") libraryState.setScope({ kind: "global" });
+      return;
+    }
     if (!resolution) return;
     if (resolution.replace) {
       const destination = `/?${resolution.search}`;
       if (lastCanonicalReplaceRef.current === destination) return;
       lastCanonicalReplaceRef.current = destination;
-      setCanonicalMessage("요청한 위치를 찾을 수 없어 기본 워크스페이스의 모든 회의로 이동했습니다.");
+      setCanonicalMessage("요청한 위치를 찾을 수 없어 기본 워크스페이스의 모든 내용으로 이동했습니다.");
       router.replace(destination);
       return;
     }
     lastCanonicalReplaceRef.current = null;
     if (!sameScope(libraryState.scope, resolution.scope)) libraryState.setScope(resolution.scope);
-  }, [libraryState, resolution, router]);
+  }, [homeMode, libraryState, resolution, router]);
 
   useEffect(() => {
     if (libraryState.mode !== "degraded_fallback") return;
     if (libraryState.scope?.kind !== "global") libraryState.setScope({ kind: "global" });
   }, [libraryState]);
 
-  const scope = resolution?.replace ? null : resolution?.scope ?? libraryState.scope;
+  const scope = homeMode
+    ? ({ kind: "global" } as const)
+    : resolution?.replace ? null : resolution?.scope ?? libraryState.scope;
   const currentPage = libraryState.pages.pages.get(libraryState.pages.currentPosition);
   const rows = currentPage?.ids
     .map((id) => libraryState.pages.entities.get(id))
@@ -211,8 +219,8 @@ export function HomeClient() {
     return (
       <main id="main" className="w-full max-w-5xl space-y-8 px-4 py-12 sm:px-6">
         <header>
-          <h1 className="text-2xl font-bold tracking-tight text-ink">모든 회의</h1>
-          <p className="mt-2 text-[15px] text-inkSoft">조직 위치 없이 저장하고 전체 회의를 표시합니다.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-ink">모든 내용</h1>
+          <p className="mt-2 text-[15px] text-inkSoft">조직 위치 없이 저장하고 전체 기록을 표시합니다.</p>
         </header>
         <LibraryRecoveryPanel
           mode={libraryState.mode === "degraded_last_good" ? "degraded_last_good" : "degraded_fallback"}
@@ -314,6 +322,35 @@ export function HomeClient() {
       void libraryState.loadPage({ position, cursor }).catch(() => {});
     }
   };
+
+  if (homeMode) {
+    const recentRows = libraryState.pages.scopeKey === "global" ? rows.slice(0, 6) : [];
+    return (
+      <main id="main" className="w-full max-w-5xl space-y-8 px-4 py-12 sm:px-6">
+        <header>
+          <h1 ref={headingRef} tabIndex={-1} className="text-2xl font-bold tracking-tight text-ink">
+            최근 작업한 문서
+          </h1>
+          <p className="mt-2 text-[15px] text-inkSoft">워크스페이스와 폴더에 관계없이 최근에 작업한 기록을 모았습니다.</p>
+        </header>
+        {recentRows.length === 0 ? (
+          <section className="rounded-[16px] border border-line bg-panel px-4 py-10 text-center sm:px-6">
+            <h2 className="text-[16px] font-bold text-ink">최근 작업한 문서가 없습니다</h2>
+            <p className="mt-2 text-[13px] text-inkSoft">스마트 스크라이브나 모든 내용에서 첫 기록을 시작해 보세요.</p>
+          </section>
+        ) : (
+          <section aria-label="최근 작업한 문서 목록">
+            <MeetingList
+              meetings={recentRows}
+              detailHref={(meeting) => `/meetings/${meeting.id}`}
+              onRenamed={(id, title) => libraryState.updateMeetingTitle(id, title)}
+              onDeleted={(id) => libraryState.removeMeeting(id)}
+            />
+          </section>
+        )}
+      </main>
+    );
+  }
 
   return (
     <main id="main" className="w-full max-w-5xl space-y-8 px-4 py-12 sm:px-6">

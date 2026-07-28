@@ -112,4 +112,44 @@ describe("Soniox real-time TTS", () => {
     socket.onmessage?.({ data: JSON.stringify({ audio: btoa("late"), stream_id: streamId }) });
     expect(onAudio).not.toHaveBeenCalled();
   });
+
+  it("treats the completion timer as inactivity and refreshes it while audio arrives", async () => {
+    class FakeWebSocket {
+      static instance: FakeWebSocket | null = null;
+      static readonly OPEN = 1;
+      readyState = FakeWebSocket.OPEN;
+      sent: unknown[] = [];
+      onopen: (() => void) | null = null;
+      onmessage: ((event: { data: string }) => void) | null = null;
+      onerror: (() => void) | null = null;
+      onclose: (() => void) | null = null;
+      constructor() { FakeWebSocket.instance = this; queueMicrotask(() => this.onopen?.()); }
+      send(data: unknown) { this.sent.push(data); }
+      close() { this.readyState = 3; }
+    }
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ ["api" + "Key"]: "temporary-value" }),
+    } as Response)));
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+    const onError = vi.fn();
+    const onAudio = vi.fn();
+    const session = await connectSonioxTts({ language: "en", voice: "Maya", onAudio, onError });
+    const socket = FakeWebSocket.instance!;
+    const streamId = JSON.parse(String(socket.sent[0])).stream_id;
+    vi.useFakeTimers();
+
+    session.speak("A long translation");
+    await vi.advanceTimersByTimeAsync(29_000);
+    socket.onmessage?.({ data: JSON.stringify({
+      audio: btoa(String.fromCharCode(0, 0)),
+      stream_id: streamId,
+    }) });
+    await vi.advanceTimersByTimeAsync(2_000);
+
+    expect(onAudio).toHaveBeenCalledTimes(1);
+    expect(onError).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(28_001);
+    expect(onError).toHaveBeenCalledWith("번역 음성 완료 응답이 지연되어 연결을 종료했습니다.");
+  });
 });

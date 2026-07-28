@@ -21,7 +21,7 @@ function contrastRatio(foreground: string, background: string) {
   return (values[0] + 0.05) / (values[1] + 0.05);
 }
 
-describe("HeyHome typography assets", () => {
+describe("Hejhome typography assets", () => {
   it("self-hosts SUIT 500 and 700 with the required OFL notice", () => {
     const css = read("src/app/globals.css").toString("utf8");
     const medium = read("public/fonts/SUIT/SUIT-Medium.otf");
@@ -70,6 +70,16 @@ describe("HeyHome typography assets", () => {
       ["--hej-color-status-warning", "--hej-color-status-warning-surface"],
       ["--hej-color-status-error", "--hej-color-background-surface"],
     ]) expect(contrastRatio(color(foreground), color(background))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("keeps light warning text above WCAG AA contrast", () => {
+    const css = read("src/app/globals.css").toString("utf8");
+    const light = css.match(/:root\s*{[^}]*}/s)?.[0] ?? "";
+    const color = (token: string) => light.match(new RegExp(`${token}:\\s*(#[0-9a-f]{6})`, "i"))?.[1] ?? "";
+    expect(contrastRatio(
+      color("--hej-color-status-warning"),
+      color("--hej-color-status-warning-surface"),
+    )).toBeGreaterThanOrEqual(4.5);
   });
 
   it("uses only defined semantic Tailwind ring tokens in navigation", () => {

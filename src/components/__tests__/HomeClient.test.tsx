@@ -2,7 +2,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { HomeQuickStart } from "@/components/HomeClient";
+import { HomeQuickStart, sortRecentMeetings } from "@/components/HomeClient";
 
 const recorder = vi.hoisted(() => ({ render: vi.fn() }));
 vi.mock("@/components/Recorder", () => ({
@@ -35,5 +35,17 @@ describe("HomeQuickStart", () => {
       "href",
       "/soniox?workspace=workspace-a&tool=voice-typing",
     );
+  });
+
+  it("orders recent documents by their last update instead of meeting start time", () => {
+    const meetings = [
+      { id: "new-meeting", startedAt: "2026-07-28T10:00:00.000Z", updatedAt: "2026-07-28T10:00:00.000Z" },
+      { id: "recently-edited", startedAt: "2026-01-01T10:00:00.000Z", updatedAt: "2026-07-28T12:00:00.000Z" },
+    ];
+
+    expect(sortRecentMeetings(meetings).map((meeting) => meeting.id)).toEqual([
+      "recently-edited",
+      "new-meeting",
+    ]);
   });
 });

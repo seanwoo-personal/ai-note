@@ -61,6 +61,7 @@ describe("public meeting DTO allowlist", () => {
       title: "회의",
       status: "transcribed",
       startedAt: "2026-07-10T00:00:00.000Z",
+      updatedAt: "2026-07-10T01:00:00.000Z",
       error: {
         code: "summary_failed",
         message: "요약을 완료하지 못했습니다. 설정을 확인한 뒤 다시 시도해 주세요",

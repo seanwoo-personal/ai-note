@@ -120,4 +120,18 @@ describe("useSonioxTts", () => {
     expect(result.current.phase).toBe("idle");
     await waitFor(() => expect(result.current.error).toBeNull());
   });
+
+  it("stops every queued source when the stream fails", async () => {
+    const { result } = renderHook(() => useSonioxTts());
+    await act(async () => {
+      await result.current.speak({ text: "Hello", language: "en", voice: "Maya" });
+    });
+    act(() => soniox.callbacks?.onAudio(new Uint8Array([0, 0])));
+
+    act(() => soniox.callbacks?.onError("stream failed"));
+
+    expect(FakeAudioContext.instance?.sources[0].stop).toHaveBeenCalledTimes(1);
+    expect(result.current.phase).toBe("error");
+    expect(result.current.error).toBe("stream failed");
+  });
 });

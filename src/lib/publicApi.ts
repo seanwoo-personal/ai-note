@@ -241,6 +241,7 @@ export interface PublicMeetingListItem {
   title: string;
   status: MeetingStatus;
   startedAt: string;
+  updatedAt?: string;
   error: PublicStatusError | null;
   // Durable content generation kind. `manual_edit` is intentionally null: a
   // save is not presented as transcript/summary generation.
@@ -257,6 +258,7 @@ export function toPublicMeetingListItem(status: StatusJson): PublicMeetingListIt
     title: status.title,
     status: status.status,
     startedAt: status.startedAt,
+    updatedAt: status.updatedAt,
     error: publicStatusError(status.error),
     contentOperation,
     resummarizeInflight: contentOperation === "initial" || contentOperation === "summary",

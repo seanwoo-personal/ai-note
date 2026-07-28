@@ -48,6 +48,6 @@ describe("app preferences", () => {
     expect(attributes.get("data-theme")).toBe("dark");
     expect(attributes.get("data-theme-preference")).toBe("system");
     expect(root.style.colorScheme).toBe("dark");
-    expect(root.lang).toBe("en");
+    expect(root.lang).toBe("ko");
   });
 });

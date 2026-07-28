@@ -376,6 +376,21 @@ describe("SonioxWorkspaceClient", () => {
     expect(screen.getByRole("status")).toHaveTextContent("번역 추가됨");
   });
 
+  it("restores and continuously saves the Voice Typing draft for its workspace", async () => {
+    navigation.search = "workspace=workspace-a&folder=folder-a&tool=voice-typing";
+    window.localStorage.setItem("ai-note-voice-typing-draft:workspace-a", "saved draft");
+    const view = render(<SonioxWorkspaceClient />);
+
+    const output = await screen.findByRole("textbox", { name: "입력 결과" });
+    await waitFor(() => expect(output).toHaveValue("saved draft"));
+    fireEvent.change(output, { target: { value: "edited draft" } });
+    await waitFor(() => expect(window.localStorage.getItem("ai-note-voice-typing-draft:workspace-a")).toBe("edited draft"));
+
+    view.unmount();
+    render(<SonioxWorkspaceClient />);
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "입력 결과" })).toHaveValue("edited draft"));
+  });
+
   it("keeps the first Voice Typing mode when different starts race before rerender", () => {
     navigation.search = "workspace=workspace-a&folder=folder-a&tool=voice-typing";
     const view = render(<SonioxWorkspaceClient />);

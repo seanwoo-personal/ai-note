@@ -79,6 +79,7 @@ export const scopedMeetingPageClientSchema = z.object({
     title: z.string(),
     status: z.enum(["recording", "recorded", "transcribing", "transcribed", "summarizing", "summarized"]),
     startedAt: clientTimestamp,
+    updatedAt: clientTimestamp.optional(),
     error: clientStatusError,
     contentOperation: z.enum(["initial", "transcript", "summary"]).nullable().optional(),
     // Legacy payloads may still carry the summary-only boolean. New payloads use

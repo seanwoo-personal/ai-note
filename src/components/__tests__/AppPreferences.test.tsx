@@ -120,4 +120,13 @@ describe("AppPreferencesProvider", () => {
     render(<AppPreferencesProvider><Probe /></AppPreferencesProvider>);
     await waitFor(() => expect(screen.getByTestId("preferences")).toHaveTextContent("en:system:light:Hejhome"));
   });
+
+  it("keeps locale and theme usable when matchMedia is unavailable", async () => {
+    vi.stubGlobal("matchMedia", vi.fn(() => { throw new TypeError("blocked"); }));
+    render(<AppPreferencesProvider><Probe /></AppPreferencesProvider>);
+
+    await waitFor(() => expect(screen.getByTestId("preferences")).toHaveTextContent("en:system:light:Hejhome"));
+    expect(document.documentElement).toHaveAttribute("lang", "en");
+    expect(document.documentElement).toHaveAttribute("data-theme", "light");
+  });
 });

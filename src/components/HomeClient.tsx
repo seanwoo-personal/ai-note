@@ -154,6 +154,15 @@ export function HomeQuickStart({ workspaceId }: { workspaceId: string }) {
   );
 }
 
+export function sortRecentMeetings<T extends { id: string; startedAt: string; updatedAt?: string }>(
+  meetings: readonly T[],
+): T[] {
+  return [...meetings].sort((left, right) => (
+    (right.updatedAt ?? right.startedAt).localeCompare(left.updatedAt ?? left.startedAt)
+    || left.id.localeCompare(right.id, "en")
+  ));
+}
+
 export function HomeClient() {
   const libraryState = useLibrary();
   const router = useRouter();
@@ -375,7 +384,9 @@ export function HomeClient() {
   };
 
   if (homeMode) {
-    const recentRows = libraryState.pages.scopeKey === "global" ? rows.slice(0, 6) : [];
+    const recentRows = libraryState.pages.scopeKey === "global"
+      ? sortRecentMeetings(rows).slice(0, 6)
+      : [];
     return (
       <main id="main" className="w-full max-w-5xl space-y-8 px-4 py-12 sm:px-6">
         <header>
@@ -386,6 +397,28 @@ export function HomeClient() {
         </header>
         <SummaryReadinessCard readiness={getLlmReadiness(llm)} />
         <HomeQuickStart workspaceId={library.defaultWorkspaceId} />
+        {libraryState.mode !== "ready" && (
+          <LibraryRecoveryPanel
+            mode={libraryState.mode}
+            reason={libraryState.degradedReason}
+            recovery={libraryState.recovery}
+            onRetry={libraryState.refreshLibrary}
+          />
+        )}
+        {summaryWork && (
+          <PendingBanner
+            count={summaryWork.processing}
+            needsAttention={summaryWork.needsAttention}
+            attention={summaryWork.attention}
+            readiness={getLlmReadiness(llm)}
+          />
+        )}
+        {library.counts.organizationPendingCount > 0 && (
+          <GuardedLink href={`/?workspace=${library.defaultWorkspaceId}#organization-pending`} className="flex min-h-11 min-w-0 flex-col items-stretch gap-1 rounded-[14px] border border-warn/40 bg-warnBg p-4 text-[13px] font-semibold text-warn focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warn/50 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+            <span className="min-w-0 break-words">위치 저장 대기 회의 보기</span>
+            <span className="shrink-0">{library.counts.organizationPendingCount}</span>
+          </GuardedLink>
+        )}
         {recentRows.length === 0 ? (
           <section className="rounded-[16px] border border-line bg-panel px-4 py-10 text-center sm:px-6">
             <h2 className="text-[16px] font-bold text-ink">최근 작업한 문서가 없습니다</h2>
@@ -399,6 +432,12 @@ export function HomeClient() {
               onRenamed={(id, title) => libraryState.updateMeetingTitle(id, title)}
               onDeleted={(id) => libraryState.removeMeeting(id)}
             />
+            <GuardedLink
+              href={`/?workspace=${library.defaultWorkspaceId}`}
+              className="mt-4 inline-flex min-h-11 items-center justify-center rounded-full border border-line px-4 text-[13px] font-semibold text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+            >
+              모든 내용 보기
+            </GuardedLink>
           </section>
         )}
       </main>

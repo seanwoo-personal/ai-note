@@ -23,7 +23,7 @@ export async function GET(request: Request) {
     return publicErrorResponse("invalid_request", 400, { field: "scope" });
   }
 
-  const allowed = new Set(["workspaceId", "folderId", "view", "cursor", "limit"]);
+  const allowed = new Set(["workspaceId", "folderId", "view", "cursor", "limit", "sort"]);
   if ([...url.searchParams.keys()].some((key) => !allowed.has(key))) {
     return publicErrorResponse("invalid_request", 400);
   }
@@ -31,11 +31,35 @@ export async function GET(request: Request) {
   const folderId = url.searchParams.get("folderId");
   const view = url.searchParams.get("view");
   const limitText = url.searchParams.get("limit");
+  const sort = url.searchParams.get("sort");
   if (limitText !== null && !/^[1-9][0-9]*$/u.test(limitText)) {
     return publicErrorResponse("invalid_request", 400, { field: "limit" });
   }
+  if (sort !== null && sort !== "updated") {
+    return publicErrorResponse("invalid_request", 400, { field: "sort" });
+  }
   if (view === "global" && workspaceId === null && folderId === null) {
     try {
+      if (sort === "updated") {
+        if (url.searchParams.get("cursor") !== null) {
+          return publicErrorResponse("invalid_request", 400, { field: "cursor" });
+        }
+        const limit = Math.min(100, Number(limitText ?? 6));
+        const meetings = state.records
+          .filter((record) => record.kind === "live" && record.status !== null)
+          .map((record) => toPublicMeetingListItem(record.status!))
+          .sort((left, right) => (
+            (right.updatedAt ?? right.startedAt).localeCompare(left.updatedAt ?? left.startedAt)
+            || left.id.localeCompare(right.id, "en")
+          ))
+          .slice(0, limit);
+        return jsonNoStore({
+          mode: state.mode,
+          version: state.version,
+          meetings,
+          nextCursor: null,
+        });
+      }
       const page = state.document
         ? paginateLibraryMeetings({
             document: state.document,

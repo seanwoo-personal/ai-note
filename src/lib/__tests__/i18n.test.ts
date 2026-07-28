@@ -24,6 +24,9 @@ describe("UI translations", () => {
     expect(translateUi("zh", "용어 삭제: {term}", { term: "설정" })).toBe("删除术语：설정");
     expect(translateUi("ja", "교정쌍 삭제: {term}", { term: "설정" })).toBe("修正ペアを削除: 설정");
     expect(translateUi("en", "{label} 단축키: {action}", { label: "Voice Typing", action: "Change" })).toBe("Voice Typing shortcut: Change");
+    expect(translateUi("en", "Whisper large-v3 · 준비됨")).toBe("Whisper large-v3 · Ready");
+    expect(translateUi("ja", "Codex CLI gpt-5 · 감지됨")).toBe("Codex CLI gpt-5 · 検出済み");
+    expect(translateUi("zh", "Claude CLI sonnet 사용 가능")).toBe("Claude CLI sonnet 可用");
   });
 
   it("translates runtime health status copy in every non-Korean locale", () => {

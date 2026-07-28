@@ -157,8 +157,7 @@ export function useSonioxTts() {
         },
         onError: (message) => {
           if (!mountedRef.current || generation !== generationRef.current) return;
-          sessionRef.current = null;
-          abortRef.current = null;
+          stopResources(false);
           setError(message);
           setPhase("error");
         },

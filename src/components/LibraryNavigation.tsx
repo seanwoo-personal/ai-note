@@ -49,7 +49,7 @@ import {
 type Editor =
   | { kind: "workspace-create"; trigger: HTMLElement | null }
   | { kind: "workspace-edit"; workspace: LibraryWorkspace; trigger: HTMLElement | null }
-  | { kind: "folder-create"; workspaceId: string; parent: LibraryFolder | null; returnProduct?: "soniox"; trigger: HTMLElement | null }
+  | { kind: "folder-create"; workspaceId: string; parent: LibraryFolder | null; returnSonioxTool?: SonioxTool; trigger: HTMLElement | null }
   | { kind: "folder-edit"; folder: LibraryFolder; trigger: HTMLElement | null }
   | { kind: "folder-move"; folder: LibraryFolder; trigger: HTMLElement | null }
   | { kind: "folder-delete"; folder: LibraryFolder; trigger: HTMLElement | null }
@@ -62,6 +62,16 @@ const COLORS: Array<{ value: LibraryColor; label: string; className: string }> =
   { value: "olive", label: "올리브", className: "bg-[#7c7a43]" },
   { value: "sage", label: "세이지", className: "bg-[#718774]" },
 ];
+
+export function folderCreateDestination(
+  workspaceId: string,
+  folderId: string,
+  returnSonioxTool?: SonioxTool,
+): string {
+  return returnSonioxTool
+    ? buildSonioxToolHref({ workspaceId, folderId, tool: returnSonioxTool })
+    : `/?workspace=${workspaceId}&folder=${folderId}`;
+}
 
 export function LibraryNavigation() {
   const { t } = useAppPreferences();
@@ -400,7 +410,7 @@ function NavigationContents({
   };
   const contextualEdit = (nextEditor: Editor) => {
     onEdit(nextEditor.kind === "folder-create" && sonioxSelection
-      ? { ...nextEditor, returnProduct: "soniox" }
+      ? { ...nextEditor, returnSonioxTool: sonioxSelection.tool }
       : nextEditor);
   };
   return (
@@ -853,9 +863,11 @@ function LibraryEditorDialog({
         if (created) {
           onCreateNavigation();
           window.sessionStorage.setItem("ai-note-focus-scope", "1");
-          router.push(editor.returnProduct === "soniox"
-            ? buildSonioxToolHref({ workspaceId: created.workspaceId, folderId: created.id, tool: "transcription" })
-            : `/?workspace=${created.workspaceId}&folder=${created.id}`);
+          router.push(folderCreateDestination(
+            created.workspaceId,
+            created.id,
+            editor.returnSonioxTool,
+          ));
           navigated = true;
         }
       }

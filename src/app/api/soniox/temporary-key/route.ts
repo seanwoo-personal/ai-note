@@ -48,7 +48,7 @@ export async function POST(request: Request): Promise<Response> {
         usage_type: parsed.data.service === "tts" ? "tts_rt" : "transcribe_websocket",
         expires_in_seconds: 60,
         single_use: true,
-        max_session_duration_seconds: parsed.data.service === "tts" ? 120 : 18_000,
+        ...(parsed.data.service === "stt" ? { max_session_duration_seconds: 18_000 } : {}),
       }),
       cache: "no-store",
       redirect: "error",

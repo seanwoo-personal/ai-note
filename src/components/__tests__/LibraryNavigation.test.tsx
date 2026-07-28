@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { HomeClient } from "@/components/HomeClient";
-import { LibraryNavigation } from "@/components/LibraryNavigation";
+import { folderCreateDestination, LibraryNavigation } from "@/components/LibraryNavigation";
 import { MeetingDetailView } from "@/components/MeetingDetailView";
 import { RecorderSessionProvider } from "@/components/RecorderSessionProvider";
 import type { LibraryProviderValue } from "@/components/LibraryProvider";
@@ -293,7 +293,7 @@ describe("activated library navigation", () => {
     fireEvent.keyDown(input, { key: "Enter" });
 
     await waitFor(() => expect(navigation.push).toHaveBeenCalledWith(
-      `/soniox?workspace=${DEFAULT_WORKSPACE}&folder=${createdFolder.id}&tool=transcription`,
+      `/soniox?workspace=${DEFAULT_WORKSPACE}&folder=${createdFolder.id}&tool=translator`,
     ));
   });
 
@@ -1195,5 +1195,12 @@ describe("activated library navigation", () => {
     await waitFor(() => expect(screen.getByText(/다른 변경이 먼저 저장/)).toBeInTheDocument());
     expect(input).toHaveValue("충돌해도 유지");
     expect(screen.getByRole("dialog", { name: "새 워크스페이스" })).toBeInTheDocument();
+  });
+
+  it("returns a newly created Soniox folder to the active tool", () => {
+    expect(folderCreateDestination("workspace-a", "folder-a", "translator"))
+      .toBe("/soniox?workspace=workspace-a&folder=folder-a&tool=translator");
+    expect(folderCreateDestination("workspace-a", "folder-a", "voice-typing"))
+      .toBe("/soniox?workspace=workspace-a&folder=folder-a&tool=voice-typing");
   });
 });

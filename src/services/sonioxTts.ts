@@ -98,6 +98,12 @@ export async function connectSonioxTts(
     if (closeSocket) socket.close();
     options.onError?.(message);
   };
+  const armInactivityTimeout = () => {
+    clearTerminationTimeout();
+    terminationTimeout = setTimeout(() => {
+      failRuntime("번역 음성 완료 응답이 지연되어 연결을 종료했습니다.");
+    }, TERMINATION_TIMEOUT_MS);
+  };
 
   await new Promise<void>((resolve, reject) => {
     const fail = (code: string) => {
@@ -147,6 +153,7 @@ export async function connectSonioxTts(
         return;
       }
       if (typeof result.audio === "string" && result.audio) {
+        armInactivityTimeout();
         options.onAudio(decodeBase64(result.audio));
       }
       if (result.audio_end === true) options.onAudioEnd?.();
@@ -167,10 +174,7 @@ export async function connectSonioxTts(
       const normalized = text.trim();
       if (!normalized) return;
       socket.send(JSON.stringify({ text: normalized, text_end: true, stream_id: streamId }));
-      clearTerminationTimeout();
-      terminationTimeout = setTimeout(() => {
-        failRuntime("번역 음성 완료 응답이 지연되어 연결을 종료했습니다.");
-      }, TERMINATION_TIMEOUT_MS);
+      armInactivityTimeout();
     },
     cancel() {
       if (closed || cancelled) return;

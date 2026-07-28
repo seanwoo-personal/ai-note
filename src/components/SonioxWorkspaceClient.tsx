@@ -173,7 +173,7 @@ function ShortcutSettingCard({
         })}
         aria-pressed={editing}
         onClick={() => onEdit(action)}
-        className="mt-3 min-h-10 rounded-lg border border-line bg-panel px-3 text-[12px] font-bold text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="mt-3 min-h-11 rounded-lg border border-line bg-panel px-3 text-[12px] font-bold text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         {editing ? "변경 취소" : "변경"}
       </button>
@@ -412,7 +412,7 @@ function TranslatorTool() {
               setShortcutError(null);
             }}
           />
-          <button type="button" onClick={() => { resetShortcuts(); setShortcutError(null); }} className="mt-3 min-h-10 px-2 text-[12px] font-bold text-accent underline-offset-4 hover:underline">
+          <button type="button" onClick={() => { resetShortcuts(); setShortcutError(null); }} className="mt-3 min-h-11 px-2 text-[12px] font-bold text-accent underline-offset-4 hover:underline">
             모든 단축키 기본값 복원
           </button>
         </div>
@@ -453,24 +453,53 @@ function LanguageSelect({ label, value, onChange, disabled }: { label: string; v
   );
 }
 
-function VoiceTypingTool() {
+function VoiceTypingTool({ workspaceId }: { workspaceId: string }) {
   const capture = useSonioxLiveCapture();
   const { settings: shortcuts, settingsRef: shortcutsRef, storageWarning, assign: assignShortcut, reset: resetShortcuts } = useSonioxShortcutSettings();
   const [editingShortcut, setEditingShortcut] = useState<SonioxShortcutAction | null>(null);
   const [shortcutError, setShortcutError] = useState<string | null>(null);
   const [targetLanguage, setTargetLanguage] = useState("en");
   const [output, setOutput] = useState("");
+  const [draftLoaded, setDraftLoaded] = useState(false);
+  const [draftWarning, setDraftWarning] = useState<string | null>(null);
   const [smartCleanup, setSmartCleanup] = useState(true);
   const [activeMode, setActiveMode] = useState<VoiceTypingShortcutMode>("dictation");
   const modeRef = useRef<VoiceTypingShortcutMode>("dictation");
   const commandPendingRef = useRef(false);
   const processedTranscriptRef = useRef<typeof capture.transcript | null>(null);
+  const lastPersistedDraftRef = useRef("");
   const captureRef = useLatestRef(capture);
   const editingShortcutRef = useLatestRef(editingShortcut);
   const targetLanguageRef = useLatestRef(targetLanguage);
   const pending = capture.phase === "requesting" || capture.phase === "connecting";
   const listening = capture.phase === "listening";
   const busy = ["requesting", "connecting", "finishing"].includes(capture.phase);
+
+  useEffect(() => {
+    const key = `ai-note-voice-typing-draft:${workspaceId}`;
+    try {
+      const stored = window.localStorage.getItem(key) ?? "";
+      lastPersistedDraftRef.current = stored;
+      setOutput(stored);
+    } catch {
+      setDraftWarning("브라우저 저장소를 사용할 수 없어 이 탭을 닫으면 입력 결과가 사라질 수 있습니다.");
+    } finally {
+      setDraftLoaded(true);
+    }
+  }, [workspaceId]);
+
+  useEffect(() => {
+    if (!draftLoaded || output === lastPersistedDraftRef.current) return;
+    const key = `ai-note-voice-typing-draft:${workspaceId}`;
+    try {
+      if (output) window.localStorage.setItem(key, output);
+      else window.localStorage.removeItem(key);
+      lastPersistedDraftRef.current = output;
+      setDraftWarning(null);
+    } catch {
+      setDraftWarning("브라우저 저장소를 사용할 수 없어 이 탭을 닫으면 입력 결과가 사라질 수 있습니다.");
+    }
+  }, [draftLoaded, output, workspaceId]);
 
   useEffect(() => {
     if (!["requesting", "connecting", "listening", "finishing"].includes(capture.phase)) {
@@ -592,7 +621,7 @@ function VoiceTypingTool() {
         </div>
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
           <p className="text-[12px] leading-5 text-inkSoft">변경을 누른 뒤 새 키 조합을 입력해 주세요. Escape를 누르면 취소합니다.</p>
-          <button type="button" onClick={() => { resetShortcuts(); setEditingShortcut(null); setShortcutError(null); }} className="min-h-10 px-2 text-[12px] font-bold text-accent underline-offset-4 hover:underline">
+          <button type="button" onClick={() => { resetShortcuts(); setEditingShortcut(null); setShortcutError(null); }} className="min-h-11 px-2 text-[12px] font-bold text-accent underline-offset-4 hover:underline">
             모든 단축키 기본값 복원
           </button>
         </div>
@@ -621,6 +650,8 @@ function VoiceTypingTool() {
           <button type="button" disabled={!output} onClick={() => void navigator.clipboard?.writeText(output)} className="min-h-11 rounded-full border border-line px-4 text-[12px] font-semibold text-accent disabled:opacity-40">복사</button>
         </div>
         <textarea id="voice-typing-output" value={output} onChange={(event) => setOutput(event.target.value)} placeholder="받아쓰기 또는 번역 결과가 여기에 추가됩니다." className="mt-3 min-h-48 w-full resize-y rounded-xl border border-line bg-bg p-4 text-[15px] leading-7 text-ink" />
+        <p className="mt-2 text-[12px] leading-5 text-inkSoft">입력 결과는 이 브라우저의 현재 워크스페이스 초안으로 자동 저장됩니다.</p>
+        {draftWarning && <p className="mt-2 text-[12px] font-medium text-warn" role="alert">{draftWarning}</p>}
         {(capture.transcript.original.final || capture.transcript.original.provisional) && capture.phase !== "finished" && (
           <p data-i18n-user-content className="mt-3 whitespace-pre-wrap text-[13px] text-inkSoft">{capture.transcript.original.final}{capture.transcript.original.provisional}</p>
         )}
@@ -681,7 +712,7 @@ export function SonioxWorkspaceClient() {
       </header>
       {selection.tool === "transcription" && <TranscriptionTool workspaceId={selection.workspaceId} folderId={selection.folderId} />}
       {selection.tool === "translator" && <TranslatorTool />}
-      {selection.tool === "voice-typing" && <VoiceTypingTool />}
+      {selection.tool === "voice-typing" && <VoiceTypingTool key={selection.workspaceId} workspaceId={selection.workspaceId} />}
     </main>
   );
 }

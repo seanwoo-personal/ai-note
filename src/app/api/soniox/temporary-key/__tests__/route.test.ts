@@ -33,9 +33,10 @@ describe("Soniox temporary-key route", () => {
     expect(stt.status).toBe(200);
     expect(tts.status).toBe(200);
     expect(requestBodies).toEqual([
-      expect.objectContaining({ usage_type: "transcribe_websocket", single_use: true }),
-      expect.objectContaining({ usage_type: "tts_rt", single_use: true }),
+      expect.objectContaining({ usage_type: "transcribe_websocket", single_use: true, max_session_duration_seconds: 18_000 }),
+      expect.not.objectContaining({ max_session_duration_seconds: expect.anything() }),
     ]);
+    expect(requestBodies[1]).toMatchObject({ usage_type: "tts_rt", single_use: true });
     expect(JSON.stringify(await tts.json())).not.toContain(process.env.SONIOX_API_KEY);
   });
 

@@ -72,36 +72,48 @@ export function AppPreferencesProvider({ children }: { children: ReactNode }) {
   const attributeSources = useRef(new WeakMap<Element, Map<string, { source: string; rendered: string }>>());
 
   useEffect(() => {
-    const media = window.matchMedia(DARK_QUERY);
-    setSystemDark(media.matches);
     const storedLocale = readStoredPreference(LOCALE_STORAGE_KEY);
     setLocaleState(storedLocale && SUPPORTED_LOCALES.includes(storedLocale as AppLocale)
       ? parseLocale(storedLocale)
       : preferredBrowserLocale());
     setThemeState(parseTheme(readStoredPreference(THEME_STORAGE_KEY)));
+    let media: MediaQueryList | null = null;
+    try {
+      media = typeof window.matchMedia === "function" ? window.matchMedia(DARK_QUERY) : null;
+      setSystemDark(media?.matches ?? false);
+    } catch {
+      setSystemDark(false);
+    }
+    if (!media) return;
     const onChange = (event: MediaQueryListEvent) => setSystemDark(event.matches);
-    media.addEventListener("change", onChange);
-    return () => media.removeEventListener("change", onChange);
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", onChange);
+      return () => media?.removeEventListener("change", onChange);
+    }
+    media.addListener(onChange);
+    return () => media?.removeListener(onChange);
   }, []);
 
   const resolvedTheme = resolveTheme(theme, systemDark);
 
   useEffect(() => {
     const root = document.documentElement;
-    root.lang = locale;
     root.dataset.theme = resolvedTheme;
     root.dataset.themePreference = theme;
     root.style.colorScheme = resolvedTheme;
-  }, [locale, resolvedTheme, theme]);
+  }, [resolvedTheme, theme]);
 
   useEffect(() => {
     const title = translateUi(locale, "헤이홈 AI 기록도구");
-    const maintainLocalizedTitle = () => {
+    const description = translateUi(locale, "회의 녹음, 실시간 전사·번역, 회의록 요약");
+    const maintainLocalizedMetadata = () => {
       if (document.title !== title) document.title = title;
+      const meta = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+      if (meta && meta.content !== description) meta.content = description;
     };
-    maintainLocalizedTitle();
-    const observer = new MutationObserver(maintainLocalizedTitle);
-    observer.observe(document.head, { subtree: true, childList: true, characterData: true });
+    maintainLocalizedMetadata();
+    const observer = new MutationObserver(maintainLocalizedMetadata);
+    observer.observe(document.head, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["content"] });
     return () => observer.disconnect();
   }, [locale]);
 
@@ -158,6 +170,7 @@ export function AppPreferencesProvider({ children }: { children: ReactNode }) {
     };
 
     localizeTree(document.body);
+    document.documentElement.lang = locale;
     const observer = new MutationObserver((mutations) => {
       for (const mutation of mutations) {
         if (mutation.type === "characterData") localizeText(mutation.target as Text);

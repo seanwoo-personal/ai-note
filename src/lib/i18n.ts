@@ -199,8 +199,29 @@ export const UI_CATALOGS: Record<Exclude<AppLocale, "ko">, Catalog> = {
 };
 
 export function translateUi(locale: AppLocale, source: string, values: UiValues = {}): string {
-  const translated = locale === "ko" ? source : UI_CATALOGS[locale][source] ?? source;
-  return translated.replace(/\{([a-zA-Z][a-zA-Z0-9_]*)\}/g, (match, key: string) => (
+  if (locale === "ko") return source.replace(/\{([a-zA-Z][a-zA-Z0-9_]*)\}/g, (match, key: string) => (
     Object.prototype.hasOwnProperty.call(values, key) ? String(values[key]) : match
+  ));
+
+  let translated = UI_CATALOGS[locale][source];
+  let resolvedValues = values;
+  if (!translated) {
+    const patterns: Array<[RegExp, string]> = [
+      [/^(.+) · (준비 중|준비됨|실패|감지됨|연결됨)$/u, "{name} · $2"],
+      [/^(.+) (준비 중|사용 가능)$/u, "{name} $2"],
+      [/^(.+)가 감지되었습니다\. 인증과 실제 요약 가능 여부는 첫 요약에서 확인됩니다\.$/u, "{name}가 감지되었습니다. 인증과 실제 요약 가능 여부는 첫 요약에서 확인됩니다."],
+    ];
+    for (const [pattern, template] of patterns) {
+      const match = source.match(pattern);
+      if (!match) continue;
+      const key = template.replace("$2", match[2] ?? "");
+      translated = UI_CATALOGS[locale][key];
+      if (translated) resolvedValues = { name: match[1], ...values };
+      break;
+    }
+  }
+  const rendered = translated ?? source;
+  return rendered.replace(/\{([a-zA-Z][a-zA-Z0-9_]*)\}/g, (match, key: string) => (
+    Object.prototype.hasOwnProperty.call(resolvedValues, key) ? String(resolvedValues[key]) : match
   ));
 }

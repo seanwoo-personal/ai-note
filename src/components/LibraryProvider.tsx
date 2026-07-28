@@ -106,12 +106,15 @@ function initialState(): LibraryProviderState {
 
 function scopeQuery(scope: LibraryMeetingScope, cursor?: string | null): string {
   const query = new URLSearchParams();
-  if (scope.kind === "global") query.set("view", "global");
+  if (scope.kind === "global") {
+    query.set("view", "global");
+    query.set("sort", "updated");
+  }
   else query.set("workspaceId", scope.workspaceId);
   if (scope.kind === "unfiled") query.set("view", "unfiled");
   if (scope.kind === "folder") query.set("folderId", scope.folderId);
   if (cursor) query.set("cursor", cursor);
-  query.set("limit", "50");
+  query.set("limit", scope.kind === "global" ? "6" : "50");
   return query.toString();
 }
 

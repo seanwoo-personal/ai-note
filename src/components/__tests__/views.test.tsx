@@ -266,7 +266,7 @@ describe("Recorder — responsive layout", () => {
     const heading = screen.getByRole("heading", { name: "새 회의 녹음" });
     expect(heading.parentElement?.parentElement).toHaveClass("flex-col");
     expect(heading.parentElement?.parentElement).toHaveClass("sm:flex-row");
-    const start = screen.getByRole("button", { name: "Whisper로 녹음 시작" });
+    const start = screen.getByRole("button", { name: "Whisper 전사용 녹음 시작" });
     expect(start).toHaveClass("w-full");
     expect(start).toHaveClass("sm:w-auto");
     expect(start).toHaveClass("min-h-11");

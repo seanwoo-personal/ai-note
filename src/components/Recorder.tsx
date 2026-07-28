@@ -92,8 +92,8 @@ export function Recorder({
     ? (STATUS_LABELS[serverStatus.status] ?? serverStatus.status)
     : null;
   const idleStartLabel = transcriptionMode === "soniox"
-    ? "Soniox로 녹음 시작"
-    : "Whisper로 녹음 시작";
+    ? "Soniox 실시간 전사로 녹음 시작"
+    : "Whisper 전사용 녹음 시작";
 
   return (
     <section
@@ -288,7 +288,9 @@ export function Recorder({
             {phase === "saved"
               ? `저장 완료${statusLabel ? ` · ${statusLabel}` : ""}`
               : transcriptionMode === "soniox"
-                ? "Soniox에서 실시간 원문과 번역을 보려면 녹음을 시작하세요. 마이크 권한이 필요합니다."
+                ? translationValue === "none"
+                  ? "Soniox에서 실시간 원문을 보려면 녹음을 시작하세요. 마이크 권한이 필요합니다."
+                  : "Soniox에서 실시간 원문과 번역을 보려면 녹음을 시작하세요. 마이크 권한이 필요합니다."
                 : "녹음이 끝나면 이 Mac에서 Whisper 전사를 시작합니다. 마이크 권한이 필요합니다."}
           </p>
         )}

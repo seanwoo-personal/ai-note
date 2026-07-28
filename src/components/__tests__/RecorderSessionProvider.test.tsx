@@ -155,7 +155,7 @@ function App({
 }
 
 async function startRecording() {
-  fireEvent.click(screen.getByRole("button", { name: /로 녹음 시작$/ }));
+  fireEvent.click(screen.getByRole("button", { name: /녹음 시작$/ }));
   await waitFor(() => expect(screen.getByTestId("session")).toHaveTextContent(/^recording:/));
 }
 
@@ -261,7 +261,7 @@ describe("RecorderSessionProvider", () => {
     vi.stubGlobal("MediaRecorder", FailingMediaRecorder);
     render(<App />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Whisper로 녹음 시작" }));
+    fireEvent.click(screen.getByRole("button", { name: "Whisper 전사용 녹음 시작" }));
     await waitFor(() => expect(screen.getByTestId("session")).toHaveTextContent(/^failed:/));
     expect(screen.getAllByText("recorder start failed")).toHaveLength(2);
     expect(stopTrack).toHaveBeenCalledOnce();
@@ -281,15 +281,22 @@ describe("RecorderSessionProvider", () => {
     const soniox = within(modes).getByRole("radio", { name: /실시간 전사 \(Soniox\)/ });
     expect(whisper).toBeChecked();
     expect(soniox).not.toBeChecked();
-    expect(screen.getByRole("button", { name: "Whisper로 녹음 시작" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Whisper 전사용 녹음 시작" })).toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: "번역 방식" })).not.toBeInTheDocument();
 
     await waitFor(() => expect(soniox).toBeEnabled());
     fireEvent.click(soniox);
-    expect(screen.getByRole("button", { name: "Soniox로 녹음 시작" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Soniox 실시간 전사로 녹음 시작" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "번역 방식" })).toBeEnabled();
     expect(screen.getByText(/마이크 오디오를 Soniox 서버로 전송/)).toBeInTheDocument();
     expect(screen.getByText(/종료 후에는 로컬 Whisper가 최종 스크립트/)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("combobox", { name: "번역 방식" }), {
+      target: { value: "none" },
+    });
+    expect(screen.getByText("Soniox에서 실시간 원문을 보려면 녹음을 시작하세요. 마이크 권한이 필요합니다."))
+      .toBeInTheDocument();
+    expect(screen.queryByText(/실시간 원문과 번역을 보려면/)).not.toBeInTheDocument();
   });
 
   it("keeps unconfigured Soniox unavailable and starts the default Whisper path without streaming", async () => {
@@ -307,7 +314,7 @@ describe("RecorderSessionProvider", () => {
     await waitFor(() => expect(soniox).toBeDisabled());
     expect(screen.getByText("SONIOX_API_KEY를 설정해야 사용할 수 있습니다.")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Whisper로 녹음 시작" }));
+    fireEvent.click(screen.getByRole("button", { name: "Whisper 전사용 녹음 시작" }));
 
     await waitFor(() => expect(screen.getByText("녹음 중 · 종료 후 Whisper 전사")).toBeInTheDocument());
     expect(FakeMediaRecorder.latest?.timeslice).toBeUndefined();

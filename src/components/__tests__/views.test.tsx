@@ -263,15 +263,14 @@ describe("splitBacklog — home banner counts", () => {
 describe("Recorder — responsive layout", () => {
   it("모바일에서 녹음 버튼이 본문 옆으로 밀어내지 않도록 줄바꿈 class를 가진다", () => {
     render(<RecorderSessionProvider><Recorder /></RecorderSessionProvider>);
-    const heading = screen.getByRole("heading", { name: "회의 녹음" });
+    const heading = screen.getByRole("heading", { name: "새 회의 녹음" });
     expect(heading.parentElement?.parentElement).toHaveClass("flex-col");
     expect(heading.parentElement?.parentElement).toHaveClass("sm:flex-row");
-    const start = screen.getByRole("button", { name: "회의 녹음 시작" });
+    const start = screen.getByRole("button", { name: "Whisper로 녹음 시작" });
     expect(start).toHaveClass("w-full");
     expect(start).toHaveClass("sm:w-auto");
     expect(start).toHaveClass("min-h-11");
-    expect(screen.getByText(/선택한 Whisper 모델을 처음 사용하면 먼저 내려받아/)).toBeInTheDocument();
-    expect(screen.getByText(/다운로드가 끝나기 전에는 진행률을 표시하지 않습니다/)).toBeInTheDocument();
+    expect(screen.getByText(/처음 쓰는 모델은 준비에 시간이 걸릴 수 있습니다/)).toBeInTheDocument();
   });
 });
 

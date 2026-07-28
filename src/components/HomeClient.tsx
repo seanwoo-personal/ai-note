@@ -82,7 +82,7 @@ function SummaryReadinessCard({ readiness }: { readiness: LlmReadiness }) {
         {unavailable
           ? "저장한 요약 모델을 지금 사용할 수 없습니다. 설정에서 설치와 실행 상태를 확인하세요."
           : "AI 요약을 사용하려면 로컬 CLI 또는 Ollama 모델을 먼저 설정하세요."}
-        {" "}요약 모델이 없어도 회의 녹음과 로컬 전사는 계속 사용할 수 있습니다.
+        {" "}요약 모델과 관계없이 로컬 Whisper 전사 또는 Soniox 실시간 자막과 번역을 선택할 수 있습니다.
       </p>
       <div className="mt-4 flex min-w-0 flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         <GuardedLink
@@ -322,7 +322,7 @@ export function HomeClient() {
           {scopeTitle(scope, library)}
         </h1>
         <p className="mt-2 break-words text-[15px] leading-relaxed text-inkSoft">
-          회의를 녹음하면 로컬에서 전사하고, 설정한 Claude/Codex CLI 또는 Ollama로 회의록을 요약합니다. 요약 모델이 없어도 녹음과 전사는 가능합니다.
+          원본 오디오는 로컬에 저장합니다. 전사는 로컬 Whisper와 Soniox 실시간 자막·번역 중에서 선택하고, 녹음이 끝나면 설정한 Claude/Codex CLI 또는 Ollama로 회의록을 요약할 수 있습니다.
         </p>
       </header>
       <span className="sr-only" aria-live="polite">{canonicalMessage}</span>

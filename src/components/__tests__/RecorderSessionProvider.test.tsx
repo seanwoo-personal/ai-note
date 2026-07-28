@@ -155,7 +155,7 @@ function App({
 }
 
 async function startRecording() {
-  fireEvent.click(screen.getByRole("button", { name: "회의 녹음 시작" }));
+  fireEvent.click(screen.getByRole("button", { name: /로 녹음 시작$/ }));
   await waitFor(() => expect(screen.getByTestId("session")).toHaveTextContent(/^recording:/));
 }
 
@@ -261,10 +261,60 @@ describe("RecorderSessionProvider", () => {
     vi.stubGlobal("MediaRecorder", FailingMediaRecorder);
     render(<App />);
 
-    fireEvent.click(screen.getByRole("button", { name: "회의 녹음 시작" }));
+    fireEvent.click(screen.getByRole("button", { name: "Whisper로 녹음 시작" }));
     await waitFor(() => expect(screen.getByTestId("session")).toHaveTextContent(/^failed:/));
     expect(screen.getAllByText("recorder start failed")).toHaveLength(2);
     expect(stopTrack).toHaveBeenCalledOnce();
+  });
+
+  it("separates Whisper and Soniox as explicit transcription modes", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
+      if (String(input) === "/api/soniox/temporary-key") {
+        return new Response(JSON.stringify({ configured: true }), { status: 200 });
+      }
+      return new Promise<Response>(() => {});
+    }));
+    render(<App />);
+
+    const modes = screen.getByRole("radiogroup", { name: "전사 방식" });
+    const whisper = within(modes).getByRole("radio", { name: /로컬 전사 \(Whisper\)/ });
+    const soniox = within(modes).getByRole("radio", { name: /실시간 전사 \(Soniox\)/ });
+    expect(whisper).toBeChecked();
+    expect(soniox).not.toBeChecked();
+    expect(screen.getByRole("button", { name: "Whisper로 녹음 시작" })).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "번역 방식" })).not.toBeInTheDocument();
+
+    await waitFor(() => expect(soniox).toBeEnabled());
+    fireEvent.click(soniox);
+    expect(screen.getByRole("button", { name: "Soniox로 녹음 시작" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "번역 방식" })).toBeEnabled();
+    expect(screen.getByText(/마이크 오디오를 Soniox 서버로 전송/)).toBeInTheDocument();
+    expect(screen.getByText(/종료 후에는 로컬 Whisper가 최종 스크립트/)).toBeInTheDocument();
+  });
+
+  it("keeps unconfigured Soniox unavailable and starts the default Whisper path without streaming", async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      if (String(input) === "/api/soniox/temporary-key") {
+        return new Response(JSON.stringify({ configured: false }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    const soniox = screen.getByRole("radio", { name: /실시간 전사 \(Soniox\)/ });
+    await waitFor(() => expect(soniox).toBeDisabled());
+    expect(screen.getByText("SONIOX_API_KEY를 설정해야 사용할 수 있습니다.")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Whisper로 녹음 시작" }));
+
+    await waitFor(() => expect(screen.getByText("녹음 중 · 종료 후 Whisper 전사")).toBeInTheDocument());
+    expect(FakeMediaRecorder.latest?.timeslice).toBeUndefined();
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "/api/soniox/temporary-key",
+      expect.objectContaining({ method: "POST" }),
+    );
   });
 
   it("streams one-second WebM chunks to Soniox and renders live transcript with translation", async () => {
@@ -304,21 +354,25 @@ describe("RecorderSessionProvider", () => {
     }));
 
     render(<App />);
-    const liveToggle = await screen.findByRole("checkbox", { name: "Soniox 실시간 전사" });
-    fireEvent.click(liveToggle);
-    fireEvent.change(screen.getByRole("combobox", { name: "실시간 번역" }), {
+    const sonioxMode = screen.getByRole("radio", { name: /실시간 전사 \(Soniox\)/ });
+    await waitFor(() => expect(sonioxMode).toBeEnabled());
+    fireEvent.click(sonioxMode);
+    fireEvent.change(screen.getByRole("combobox", { name: "번역 방식" }), {
       target: { value: "one_way:en" },
     });
     await startRecording();
 
     expect(FakeMediaRecorder.latest?.timeslice).toBe(1_000);
+    expect(screen.getByText("녹음 중 · Soniox 실시간 전사")).toBeInTheDocument();
     await waitFor(() => expect(FakeSonioxSocket.instance).not.toBeNull());
+    expect(screen.getByText("Soniox 연결 중…")).toBeInTheDocument();
     const socket = FakeSonioxSocket.instance!;
     expect(socket.sent).toHaveLength(0);
     const chunk = new Blob([new Uint8Array([1, 2, 3])], { type: "audio/webm" });
     act(() => FakeMediaRecorder.latest?.emitChunk(chunk));
     act(() => socket.onopen?.());
     await waitFor(() => expect(socket.sent).toHaveLength(2));
+    expect(screen.getByText("Soniox 실시간 전사 중")).toBeInTheDocument();
     expect(JSON.parse(String(socket.sent[0]))).toMatchObject({
       api_key: "temporary-key",
       translation: { type: "one_way", target_language: "en" },

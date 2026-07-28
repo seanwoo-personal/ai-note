@@ -221,6 +221,40 @@ describe("SonioxWorkspaceClient", () => {
     expect(capture.start).not.toHaveBeenCalled();
   });
 
+  it("does not arm speaker registration while finalized tokens are waiting for an endpoint", () => {
+    const view = render(<SonioxWorkspaceClient />);
+    fireEvent.click(screen.getByRole("button", { name: "화자 구분 통역" }));
+    fireEvent.click(screen.getByRole("button", { name: "화자 등록 시작" }));
+    capture.phase = "listening";
+    capture.transcript = {
+      original: { final: "이전 문장새 문장", provisional: "" },
+      translation: { final: "Previous sentenceNew sentence", provisional: "" },
+      speakers: {
+        "1": {
+          original: { final: "이전 문장새 문장", provisional: "" },
+          translation: { final: "Previous sentenceNew sentence", provisional: "" },
+          originalLanguage: "ko",
+          translationLanguage: "en",
+        },
+      },
+      activeSpeaker: "1",
+      endpointCount: 1,
+      lastEndpointSpeaker: "1",
+      endpoints: [{
+        id: 1,
+        speaker: "1",
+        originalFinal: "이전 문장",
+        translationFinal: "Previous sentence",
+      }],
+    };
+    view.rerender(<SonioxWorkspaceClient />);
+
+    fireEvent.click(screen.getAllByRole("button", { name: "목소리 등록" })[0]);
+
+    expect(screen.getByText("현재 문장이 끝난 뒤 다시 등록해 주세요.")).toBeInTheDocument();
+    expect(screen.getAllByText("미등록")).toHaveLength(2);
+  });
+
   it("maps session speakers and sends TTS only for our team's completed utterance", async () => {
     const view = render(<SonioxWorkspaceClient />);
     fireEvent.click(screen.getByRole("button", { name: "화자 구분 통역" }));
@@ -243,6 +277,12 @@ describe("SonioxWorkspaceClient", () => {
       activeSpeaker: "1",
       endpointCount: 1,
       lastEndpointSpeaker: "1",
+      endpoints: [{
+        id: 1,
+        speaker: "1",
+        originalFinal: "저는 션입니다.",
+        translationFinal: "I am Sean.",
+      }],
     };
     view.rerender(<SonioxWorkspaceClient />);
     await waitFor(() => expect(screen.getByRole("button", { name: "이 화자로 확인" })).toBeInTheDocument());
@@ -264,6 +304,15 @@ describe("SonioxWorkspaceClient", () => {
       activeSpeaker: "2",
       endpointCount: 2,
       lastEndpointSpeaker: "2",
+      endpoints: [
+        ...(capture.transcript.endpoints ?? []),
+        {
+          id: 2,
+          speaker: "2",
+          originalFinal: "I am Michelle.",
+          translationFinal: "저는 미셸입니다.",
+        },
+      ],
     };
     view.rerender(<SonioxWorkspaceClient />);
     await waitFor(() => expect(screen.getByRole("button", { name: "이 화자로 확인" })).toBeInTheDocument());
@@ -284,6 +333,15 @@ describe("SonioxWorkspaceClient", () => {
       activeSpeaker: "1",
       endpointCount: 3,
       lastEndpointSpeaker: "1",
+      endpoints: [
+        ...(capture.transcript.endpoints ?? []),
+        {
+          id: 3,
+          speaker: "1",
+          originalFinal: "저는 션입니다.",
+          translationFinal: "I am Sean.Nice to meet you.",
+        },
+      ],
     };
     view.rerender(<SonioxWorkspaceClient />);
     await waitFor(() => expect(speech.speak).toHaveBeenCalledWith(expect.objectContaining({
@@ -304,6 +362,15 @@ describe("SonioxWorkspaceClient", () => {
       activeSpeaker: "2",
       endpointCount: 4,
       lastEndpointSpeaker: "2",
+      endpoints: [
+        ...(capture.transcript.endpoints ?? []),
+        {
+          id: 4,
+          speaker: "2",
+          originalFinal: "I am Michelle.",
+          translationFinal: "저는 미셸입니다.반갑습니다.",
+        },
+      ],
     };
     view.rerender(<SonioxWorkspaceClient />);
     await waitFor(() => expect(screen.getByText("반갑습니다.", { exact: false })).toBeInTheDocument());

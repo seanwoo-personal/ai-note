@@ -27,6 +27,34 @@ function clampCount(value: string, maximum: number): number {
   return Math.max(1, Math.min(maximum, parsed));
 }
 
+function hasUtteranceAwaitingEndpoint(transcript: Capture["transcript"]): boolean {
+  const tracks = Object.values(transcript.speakers ?? {});
+  if (tracks.some((track) => (
+    track.original.provisional.trim().length > 0
+    || track.translation.provisional.trim().length > 0
+  ))) return true;
+
+  const activeSpeaker = transcript.activeSpeaker;
+  if (!activeSpeaker) {
+    return transcript.original.provisional.trim().length > 0
+      || transcript.translation.provisional.trim().length > 0;
+  }
+
+  const activeTrack = transcript.speakers?.[activeSpeaker];
+  if (!activeTrack) return false;
+  const latestEndpoint = [...(transcript.endpoints ?? [])]
+    .reverse()
+    .find((endpoint) => endpoint.speaker === activeSpeaker);
+
+  if (!latestEndpoint) {
+    return activeTrack.original.final.trim().length > 0
+      || activeTrack.translation.final.trim().length > 0;
+  }
+
+  return activeTrack.original.final !== latestEndpoint.originalFinal
+    || activeTrack.translation.final !== latestEndpoint.translationFinal;
+}
+
 export function SpeakerTranslatorPanel({ capture, speech }: { capture: Capture; speech: Speech }) {
   const preferences = useOptionalAppPreferences();
   const locale = preferences?.locale ?? "ko";
@@ -237,9 +265,7 @@ export function SpeakerTranslatorPanel({ capture, speech }: { capture: Capture; 
                       aria-label="목소리 등록"
                       disabled={Boolean(pendingProfile || candidate)}
                       onClick={() => {
-                        const utteranceInProgress = Object.values(capture.transcript.speakers ?? {})
-                          .some((track) => track.original.provisional.trim().length > 0);
-                        if (utteranceInProgress) {
+                        if (hasUtteranceAwaitingEndpoint(capture.transcript)) {
                           setRegistrationMessage(t("현재 문장이 끝난 뒤 다시 등록해 주세요."));
                           return;
                         }

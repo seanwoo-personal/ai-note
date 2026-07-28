@@ -35,8 +35,10 @@ function liveTranslation(value: string): SonioxTranslationOptions {
 
 export function Recorder({
   requestedLocation,
+  defaultTranscriptionMode = "whisper",
 }: {
   requestedLocation?: RecorderRequestedLocation;
+  defaultTranscriptionMode?: "whisper" | "soniox";
 } = {}) {
   const {
     phase,
@@ -56,8 +58,9 @@ export function Recorder({
     retry,
     probe,
   } = useRecorder();
-  const [sonioxConfigured, setSonioxConfigured] = useState(false);
-  const [transcriptionMode, setTranscriptionMode] = useState<"whisper" | "soniox">("whisper");
+  const [sonioxConfigStatus, setSonioxConfigStatus] = useState<"checking" | "configured" | "unconfigured">("checking");
+  const sonioxConfigured = sonioxConfigStatus === "configured";
+  const [transcriptionMode, setTranscriptionMode] = useState<"whisper" | "soniox">(defaultTranscriptionMode);
   const [translationValue, setTranslationValue] = useState("one_way:en");
 
   useEffect(() => {
@@ -65,10 +68,10 @@ export function Recorder({
     void fetch("/api/soniox/temporary-key", { cache: "no-store" })
       .then(async (response) => response.ok ? response.json() as Promise<{ configured?: unknown }> : null)
       .then((payload) => {
-        if (active) setSonioxConfigured(payload?.configured === true);
+        if (active) setSonioxConfigStatus(payload?.configured === true ? "configured" : "unconfigured");
       })
       .catch(() => {
-        if (active) setSonioxConfigured(false);
+        if (active) setSonioxConfigStatus("unconfigured");
       });
     return () => { active = false; };
   }, []);
@@ -91,8 +94,13 @@ export function Recorder({
   const statusLabel = serverStatus
     ? (STATUS_LABELS[serverStatus.status] ?? serverStatus.status)
     : null;
+  const sonioxUnavailable = transcriptionMode === "soniox" && !sonioxConfigured;
   const idleStartLabel = transcriptionMode === "soniox"
-    ? "Soniox 실시간 전사로 녹음 시작"
+    ? sonioxConfigStatus === "checking"
+      ? "Soniox 설정 확인 중…"
+      : sonioxConfigured
+        ? "Soniox 실시간 전사로 녹음 시작"
+        : "Soniox 설정 필요"
     : "Whisper 전사용 녹음 시작";
 
   return (
@@ -117,7 +125,7 @@ export function Recorder({
               : retryable
                 ? () => void retry()
                 : beginRecording}
-          disabled={busy || blocked}
+          disabled={busy || blocked || sonioxUnavailable}
           className="min-h-11 w-full shrink-0 rounded-full bg-ink px-5 text-[14px] font-semibold text-bg transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 disabled:opacity-50 sm:w-auto"
         >
           {recording
@@ -182,7 +190,12 @@ export function Recorder({
                   <span className="mt-1 block text-[12px] leading-relaxed text-inkSoft">
                     녹음 중 원문을 바로 보고, 필요한 경우 번역도 함께 표시합니다.
                   </span>
-                  {!sonioxConfigured && (
+                  {sonioxConfigStatus === "checking" && (
+                    <span className="mt-1 block text-[12px] font-medium text-inkSoft">
+                      Soniox 설정을 확인하고 있습니다.
+                    </span>
+                  )}
+                  {sonioxConfigStatus === "unconfigured" && (
                     <span className="mt-1 block text-[12px] font-medium text-error">
                       SONIOX_API_KEY를 설정해야 사용할 수 있습니다.
                     </span>

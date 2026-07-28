@@ -37,11 +37,16 @@ import {
 import { useHealth } from "@/components/useHealth";
 import type { LibraryColor, LibraryFolder, LibraryWorkspace } from "@/domain/library";
 import { folderFormSchema, workspaceFormSchema } from "@/lib/libraryClient";
+import {
+  buildSonioxToolHref,
+  resolveSonioxWorkspaceSelection,
+  type SonioxTool,
+} from "@/lib/sonioxWorkspace";
 
 type Editor =
   | { kind: "workspace-create"; trigger: HTMLElement | null }
   | { kind: "workspace-edit"; workspace: LibraryWorkspace; trigger: HTMLElement | null }
-  | { kind: "folder-create"; workspaceId: string; parent: LibraryFolder | null; trigger: HTMLElement | null }
+  | { kind: "folder-create"; workspaceId: string; parent: LibraryFolder | null; returnProduct?: "soniox"; trigger: HTMLElement | null }
   | { kind: "folder-edit"; folder: LibraryFolder; trigger: HTMLElement | null }
   | { kind: "folder-move"; folder: LibraryFolder; trigger: HTMLElement | null }
   | { kind: "folder-delete"; folder: LibraryFolder; trigger: HTMLElement | null }
@@ -71,6 +76,10 @@ export function LibraryNavigation() {
   const generationEpochRef = useRef(library.generationEpoch);
 
   const detailPath = pathname.startsWith("/meetings/");
+  const sonioxPath = pathname.startsWith("/soniox");
+  const sonioxSelection = sonioxPath && library.library
+    ? resolveSonioxWorkspaceSelection(new URLSearchParams(search.toString()), library.library)
+    : null;
   const validatedDetailSource = (() => {
     if (!detailPath || !library.library) return null;
     const keys = ["sourceWorkspace", "sourceView", "sourceFolder"];
@@ -90,14 +99,18 @@ export function LibraryNavigation() {
       ? { workspaceId, folderId, view }
       : null;
   })();
-  const currentWorkspaceId = detailPath
-    ? validatedDetailSource?.workspaceId ?? library.library?.defaultWorkspaceId ?? null
-    : (library.scope && library.scope.kind !== "global" ? library.scope.workspaceId : null)
-      ?? library.library?.defaultWorkspaceId
-      ?? null;
-  const currentFolderId = detailPath
-    ? validatedDetailSource?.folderId ?? null
-    : library.scope?.kind === "folder" ? library.scope.folderId : null;
+  const currentWorkspaceId = sonioxSelection
+    ? sonioxSelection.workspaceId
+    : detailPath
+      ? validatedDetailSource?.workspaceId ?? library.library?.defaultWorkspaceId ?? null
+      : (library.scope && library.scope.kind !== "global" ? library.scope.workspaceId : null)
+        ?? library.library?.defaultWorkspaceId
+        ?? null;
+  const currentFolderId = sonioxSelection
+    ? sonioxSelection.folderId
+    : detailPath
+      ? validatedDetailSource?.folderId ?? null
+      : library.scope?.kind === "folder" ? library.scope.folderId : null;
   const currentView = detailPath
     ? validatedDetailSource?.view ?? "all"
     : library.scope?.kind === "unfiled"
@@ -174,21 +187,31 @@ export function LibraryNavigation() {
   }, [currentFolderId, library]);
 
   const navigation = library.library ? (
-    <NavigationContents
-      library={library.library}
-      currentWorkspaceId={currentWorkspaceId}
-      currentFolderId={currentFolderId}
-      currentView={currentView}
-      pathname={pathname}
-      canMutate={canMutate}
-      whisper={whisper}
-      llm={llm}
-      expanded={library.expandedFolderIds}
-      toggleFolder={library.toggleFolder}
-      onEdit={setEditor}
-      onNavigationCommitted={navigationCommitted}
-      onOpenSearch={openSearch}
-    />
+    sonioxPath && sonioxSelection ? (
+      <SonioxNavigationContents
+        library={library.library}
+        selection={sonioxSelection}
+        canMutate={canMutate}
+        onEdit={setEditor}
+        onNavigationCommitted={navigationCommitted}
+      />
+    ) : (
+      <NavigationContents
+        library={library.library}
+        currentWorkspaceId={currentWorkspaceId}
+        currentFolderId={currentFolderId}
+        currentView={currentView}
+        pathname={pathname}
+        canMutate={canMutate}
+        whisper={whisper}
+        llm={llm}
+        expanded={library.expandedFolderIds}
+        toggleFolder={library.toggleFolder}
+        onEdit={setEditor}
+        onNavigationCommitted={navigationCommitted}
+        onOpenSearch={openSearch}
+      />
+    )
   ) : (
     <FallbackNavigation
       pathname={pathname}
@@ -205,7 +228,13 @@ export function LibraryNavigation() {
       className="relative w-full shrink-0 border-b border-line bg-chrome lg:min-h-screen lg:w-[272px] lg:border-b-0 lg:border-r"
     >
       <div className="flex min-h-16 items-center justify-between gap-3 px-4 lg:hidden">
-        <GuardedLink href="/" className="flex min-h-11 items-center text-[15px] font-bold text-ink">AI NOTE</GuardedLink>
+        <GuardedLink
+          href={sonioxPath && sonioxSelection ? buildSonioxToolHref(sonioxSelection) : "/"}
+          aria-label={sonioxPath ? "SONIOX 홈" : "AI NOTE 홈"}
+          className="flex min-h-11 items-center text-[15px] font-bold text-ink"
+        >
+          {sonioxPath ? "SONIOX" : "AI NOTE"}
+        </GuardedLink>
         <button
           ref={menuButtonRef}
           type="button"
@@ -299,6 +328,172 @@ export function LibraryNavigation() {
   );
 }
 
+function ProductSwitcher({
+  pathname,
+  workspaceId,
+  folderId,
+  onNavigationCommitted,
+}: {
+  pathname: string;
+  workspaceId: string;
+  folderId: string | null;
+  onNavigationCommitted: () => void;
+}) {
+  const soniox = pathname.startsWith("/soniox");
+  return (
+    <div aria-label="제품 전환" className="grid grid-cols-2 gap-1 rounded-xl border border-line bg-soft/60 p-1">
+      <GuardedLink
+        href={`/?workspace=${workspaceId}${folderId ? `&folder=${folderId}` : ""}`}
+        aria-current={!soniox ? "page" : undefined}
+        onNavigationCommitted={onNavigationCommitted}
+        className={`flex min-h-10 items-center justify-center rounded-lg px-2 text-[12px] font-bold ${!soniox ? "bg-panel text-ink shadow-sm" : "text-inkSoft hover:text-ink"}`}
+      >AI NOTE</GuardedLink>
+      <GuardedLink
+        href={buildSonioxToolHref({ workspaceId, folderId, tool: "transcription" })}
+        aria-current={soniox ? "page" : undefined}
+        onNavigationCommitted={onNavigationCommitted}
+        className={`flex min-h-10 items-center justify-center rounded-lg px-2 text-[12px] font-bold ${soniox ? "bg-panel text-ink shadow-sm" : "text-inkSoft hover:text-ink"}`}
+      >SONIOX</GuardedLink>
+    </div>
+  );
+}
+
+function SonioxNavigationContents({
+  library,
+  selection,
+  canMutate,
+  onEdit,
+  onNavigationCommitted,
+}: {
+  library: NonNullable<LibraryProviderValueLike["library"]>;
+  selection: { workspaceId: string; folderId: string | null; tool: SonioxTool };
+  canMutate: boolean;
+  onEdit: (editor: Editor | null) => void;
+  onNavigationCommitted: () => void;
+}) {
+  const router = useGuardedRouter();
+  const workspace = library.workspaces.find((item) => item.id === selection.workspaceId)
+    ?? library.workspaces.find((item) => item.id === library.defaultWorkspaceId)
+    ?? library.workspaces[0];
+  const folders = library.folders.filter((folder) => folder.workspaceId === workspace.id);
+  return (
+    <>
+      <div className="space-y-4 border-b border-line px-4 py-5">
+        <ProductSwitcher pathname="/soniox" workspaceId={workspace.id} folderId={selection.folderId} onNavigationCommitted={onNavigationCommitted} />
+        <div>
+          <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.08em] text-inkSoft">Workspace</p>
+          <span className="relative block">
+            <select
+              aria-label="Soniox 워크스페이스 선택"
+              value={workspace.id}
+              onChange={(event) => {
+                router.push(buildSonioxToolHref({ workspaceId: event.currentTarget.value, folderId: null, tool: selection.tool }), event.currentTarget);
+              }}
+              className="min-h-11 w-full appearance-none truncate rounded-lg border border-inkFaint bg-panel pl-3 pr-12 text-[14px] font-semibold text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              {library.workspaces.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
+            <span className="pointer-events-none absolute right-4 top-1/2 flex -translate-y-1/2 text-inkSoft" aria-hidden="true"><ChevronDownIcon className="h-4 w-4" /></span>
+          </span>
+        </div>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
+        <div className="flex items-center justify-between gap-2 px-2">
+          <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-inkSoft">Folder</p>
+          <button
+            type="button"
+            aria-label="새 폴더"
+            disabled={!canMutate}
+            onClick={(event) => onEdit({ kind: "folder-create", workspaceId: workspace.id, parent: null, returnProduct: "soniox", trigger: event.currentTarget })}
+            className="flex min-h-11 min-w-11 items-center justify-center rounded-full text-accent hover:bg-panel disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            <PlusIcon />
+          </button>
+        </div>
+        {folders.length > 0 ? (
+          <SonioxFolderList folders={folders} parentId={null} depth={0} selection={selection} onNavigationCommitted={onNavigationCommitted} />
+        ) : (
+          <div className="mt-3 rounded-xl border border-line bg-panel p-3">
+            <p className="text-[12px] text-inkSoft">폴더가 없어 Workspace에 바로 연결합니다.</p>
+            <div className="mt-2 space-y-1"><SonioxToolLinks selection={{ ...selection, folderId: null }} onNavigationCommitted={onNavigationCommitted} /></div>
+          </div>
+        )}
+      </div>
+      <div className="border-t border-line p-3">
+        <p className="px-2 text-[11px] font-bold uppercase tracking-[0.08em] text-inkSoft">단축키</p>
+        <div className="mt-2 space-y-1 rounded-xl bg-soft/70 p-2 text-[11px] text-inkSoft">
+          <div className="flex min-h-8 items-center justify-between gap-2"><span>받아쓰기 토글</span><kbd className="rounded border border-line bg-panel px-1.5 py-0.5 font-mono text-ink">Fn</kbd></div>
+          <div className="flex min-h-8 items-center justify-between gap-2"><span>번역 입력</span><kbd className="rounded border border-line bg-panel px-1.5 py-0.5 font-mono text-ink">Fn + Shift</kbd></div>
+          <p className="pt-1 leading-4">웹 대체키: F8 / Shift+F8</p>
+        </div>
+        <NavigationRow href="/settings" active={false} label="설정" onNavigationCommitted={onNavigationCommitted} />
+      </div>
+    </>
+  );
+}
+
+function SonioxFolderList({
+  folders,
+  parentId,
+  depth,
+  selection,
+  onNavigationCommitted,
+}: {
+  folders: LibraryFolder[];
+  parentId: string | null;
+  depth: number;
+  selection: { workspaceId: string; folderId: string | null; tool: SonioxTool };
+  onNavigationCommitted: () => void;
+}) {
+  const children = folders
+    .filter((folder) => folder.parentFolderId === parentId)
+    .sort((left, right) => left.order - right.order || left.id.localeCompare(right.id, "en"));
+  if (children.length === 0) return null;
+  return (
+    <ul className={depth > 0 ? "ml-3 border-l border-line pl-2" : "mt-2 space-y-1"}>
+      {children.map((folder) => {
+        const selected = selection.folderId === folder.id;
+        return (
+          <li key={folder.id}>
+            <GuardedLink
+              href={buildSonioxToolHref({ workspaceId: folder.workspaceId, folderId: folder.id, tool: "transcription" })}
+              onNavigationCommitted={onNavigationCommitted}
+              className={`flex min-h-11 items-center gap-2 rounded-lg px-3 text-[13px] font-semibold ${selected ? "bg-soft text-ink" : "text-inkSoft hover:bg-panel hover:text-ink"}`}
+            >
+              <ColorDot color={folder.color} /><span className="truncate">{folder.name}</span>
+            </GuardedLink>
+            {selected && <div className="ml-5 space-y-1 border-l border-line py-1 pl-2"><SonioxToolLinks selection={selection} onNavigationCommitted={onNavigationCommitted} /></div>}
+            <SonioxFolderList folders={folders} parentId={folder.id} depth={depth + 1} selection={selection} onNavigationCommitted={onNavigationCommitted} />
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function SonioxToolLinks({
+  selection,
+  onNavigationCommitted,
+}: {
+  selection: { workspaceId: string; folderId: string | null; tool: SonioxTool };
+  onNavigationCommitted: () => void;
+}) {
+  const tools: Array<{ tool: SonioxTool; label: string }> = [
+    { tool: "transcription", label: "전사" },
+    { tool: "translator", label: "번역" },
+    { tool: "voice-typing", label: "Voice Typing" },
+  ];
+  return <>{tools.map((item) => (
+    <NavigationRow
+      key={item.tool}
+      href={buildSonioxToolHref({ ...selection, tool: item.tool })}
+      active={selection.tool === item.tool}
+      label={item.label}
+      onNavigationCommitted={onNavigationCommitted}
+    />
+  ))}</>;
+}
+
 function NavigationContents({
   library,
   currentWorkspaceId,
@@ -337,10 +532,8 @@ function NavigationContents({
   return (
     <>
       <div className="space-y-3 border-b border-line px-4 py-5">
-        <GuardedLink href={`/?workspace=${workspace.id}`} className="flex min-h-11 flex-col justify-center text-[15px] font-bold text-ink" onNavigationCommitted={onNavigationCommitted}>
-          AI NOTE
-          <span className="mt-0.5 block text-[12px] font-medium text-inkSoft">로컬 회의록</span>
-        </GuardedLink>
+        <ProductSwitcher pathname={pathname} workspaceId={workspace.id} folderId={currentFolderId} onNavigationCommitted={onNavigationCommitted} />
+        <p className="px-1 text-[12px] font-medium text-inkSoft">로컬 회의록</p>
         <label className="block">
           <span className="sr-only">워크스페이스 선택</span>
           <span className="relative block">
@@ -746,7 +939,9 @@ function LibraryEditorDialog({
         if (created) {
           onCreateNavigation();
           window.sessionStorage.setItem("ai-note-focus-scope", "1");
-          router.push(`/?workspace=${created.workspaceId}&folder=${created.id}`);
+          router.push(editor.returnProduct === "soniox"
+            ? buildSonioxToolHref({ workspaceId: created.workspaceId, folderId: created.id, tool: "transcription" })
+            : `/?workspace=${created.workspaceId}&folder=${created.id}`);
           navigated = true;
         }
       }

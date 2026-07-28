@@ -35,6 +35,23 @@ describe("Soniox real-time transcript", () => {
     expect(second.translation).toEqual({ final: "Hello there", provisional: "!" });
   });
 
+  it("filters Soniox endpoint and manual-finalize sentinels from visible text", () => {
+    const transcript = applySonioxResult(emptySonioxTranscript(), {
+      tokens: [
+        { text: "완료", is_final: true, translation_status: "original" },
+        { text: "<fin>", is_final: true, translation_status: "original" },
+        { text: "<end>", is_final: true, translation_status: "original" },
+      ],
+    });
+    expect(transcript.original.final).toBe("완료");
+  });
+
+  it("uses caller-provided language hints for multilingual workspace tools", () => {
+    expect(buildSonioxConfig("temporary-key", { mode: "none" }, ["ko", "en", "ja", "zh"])).toMatchObject({
+      language_hints: ["ko", "en", "ja", "zh"],
+    });
+  });
+
   it("builds one-way and two-way translation configurations without exposing long-lived keys", () => {
     expect(buildSonioxConfig("temporary-key", {
       mode: "one_way",
@@ -125,6 +142,8 @@ describe("Soniox real-time transcript", () => {
     expect(socket.sent[2]).toBe("");
     await vi.advanceTimersByTimeAsync(10_000);
     expect(socket.readyState).toBe(3);
+    expect(errors).toEqual(["Soniox 실시간 전사 완료 응답이 지연되어 연결을 종료했습니다."]);
+    socket.onerror?.();
     expect(errors).toEqual(["Soniox 실시간 전사 완료 응답이 지연되어 연결을 종료했습니다."]);
     vi.useRealTimers();
   });

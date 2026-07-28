@@ -217,6 +217,63 @@ describe("activated library navigation", () => {
     vi.restoreAllMocks();
   });
 
+  it("renders the Soniox product switcher and folder-scoped tools", () => {
+    navigation.pathname = "/soniox";
+    navigation.search = `workspace=${DEFAULT_WORKSPACE}&folder=${FOLDER}&tool=translator`;
+    renderShell();
+
+    const nav = screen.getByRole("navigation", { name: "라이브러리" });
+    expect(within(nav).getByRole("link", { name: "AI NOTE" })).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: "SONIOX" })).toHaveAttribute("aria-current", "page");
+    expect(within(nav).getByText("Workspace")).toBeInTheDocument();
+    expect(within(nav).getByText("Folder")).toBeInTheDocument();
+    const newFolderButton = within(nav).getByRole("button", { name: "새 폴더" });
+    expect(newFolderButton).toBeInTheDocument();
+    fireEvent.click(newFolderButton);
+    expect(screen.getByRole("dialog", { name: "새 폴더" })).toBeInTheDocument();
+    expect(within(nav).getByText("프로젝트")).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: "전사" })).toHaveAttribute(
+      "href",
+      `/soniox?workspace=${DEFAULT_WORKSPACE}&folder=${FOLDER}&tool=transcription`,
+    );
+    expect(within(nav).getByRole("link", { name: "번역" })).toHaveAttribute("aria-current", "page");
+    expect(within(nav).getByRole("link", { name: "Voice Typing" })).toBeInTheDocument();
+    expect(within(nav).getByText("단축키")).toBeInTheDocument();
+    expect(within(nav).getByText("Fn + Shift")).toBeInTheDocument();
+  });
+
+  it("keeps a Soniox folder create inside the Soniox product", async () => {
+    const base = readyState();
+    const createdFolder = {
+      ...base.library!.folders[0],
+      id: "60000000-0000-4000-8000-000000000006",
+      name: "고객사 통역",
+      parentFolderId: null,
+      order: 2,
+    };
+    const nextLibrary = { ...base.library!, folders: [...base.library!.folders, createdFolder] };
+    const nextVersion = { ...VERSION, revision: VERSION.revision + 1 };
+    libraryState = readyState({
+      runLibraryMutation: vi.fn(async () => ({
+        response: new Response(JSON.stringify({ mode: "ready", version: nextVersion, library: nextLibrary }), { status: 200 }),
+        payload: { mode: "ready" as const, version: nextVersion, library: nextLibrary },
+        accepted: true,
+      })),
+    });
+    navigation.pathname = "/soniox";
+    navigation.search = `workspace=${DEFAULT_WORKSPACE}&folder=${FOLDER}&tool=translator`;
+    renderShell();
+
+    fireEvent.click(screen.getByRole("button", { name: "새 폴더" }));
+    const input = screen.getByRole("textbox", { name: "폴더 이름" });
+    fireEvent.change(input, { target: { value: createdFolder.name } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => expect(navigation.push).toHaveBeenCalledWith(
+      `/soniox?workspace=${DEFAULT_WORKSPACE}&folder=${createdFolder.id}&tool=transcription`,
+    ));
+  });
+
   it("renders workspace/all/unfiled/folder navigation with Phase 15 move actions but no delete/rebuild", () => {
     renderShell();
     const nav = screen.getByRole("navigation", { name: "라이브러리" });

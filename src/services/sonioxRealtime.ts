@@ -50,7 +50,7 @@ export function applySonioxResult(
     translation: { final: current.translation.final, provisional: "" },
   };
   for (const token of result.tokens ?? []) {
-    if (!token.text || token.text === "<end>") continue;
+    if (!token.text || token.text === "<end>" || token.text === "<fin>") continue;
     const track = tokenTrack(token);
     if (token.is_final) next[track].final += token.text;
     else next[track].provisional += token.text;
@@ -61,12 +61,13 @@ export function applySonioxResult(
 export function buildSonioxConfig(
   temporaryApiKey: string,
   translation: SonioxTranslationOptions,
+  languageHints: string[] = ["ko", "en"],
 ): Record<string, unknown> {
   const config: Record<string, unknown> = {
     api_key: temporaryApiKey,
     model: "stt-rt-v5",
     audio_format: "auto",
-    language_hints: ["ko", "en"],
+    language_hints: languageHints,
     enable_language_identification: true,
     enable_speaker_diarization: true,
     enable_endpoint_detection: true,
@@ -94,6 +95,7 @@ export interface SonioxRealtimeSession {
 
 export interface ConnectSonioxRealtimeOptions {
   translation: SonioxTranslationOptions;
+  languageHints?: string[];
   onTranscript: (transcript: SonioxTranscript) => void;
   onError?: (message: string) => void;
   onFinished?: () => void;
@@ -156,7 +158,11 @@ export async function connectSonioxRealtime(
     socket.onopen = () => {
       clearTimeout(timeout);
       options.signal?.removeEventListener("abort", abortSocket);
-      socket.send(JSON.stringify(buildSonioxConfig(keyPayload.apiKey as string, options.translation)));
+      socket.send(JSON.stringify(buildSonioxConfig(
+        keyPayload.apiKey as string,
+        options.translation,
+        options.languageHints,
+      )));
       resolve();
     };
     socket.onerror = () => fail("soniox_websocket_unavailable");
@@ -182,7 +188,9 @@ export async function connectSonioxRealtime(
       options.onError?.("실시간 전사 응답을 확인할 수 없습니다.");
     }
   };
-  socket.onerror = () => options.onError?.("실시간 전사 연결에 오류가 발생했습니다.");
+  socket.onerror = () => {
+    if (!closing) options.onError?.("실시간 전사 연결에 오류가 발생했습니다.");
+  };
   socket.onclose = () => {
     clearFinishTimeout();
     if (!closing) options.onError?.("실시간 전사 연결이 종료되었습니다.");

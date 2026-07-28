@@ -2,15 +2,75 @@
 @tailwind components;
 @tailwind utilities;
 
+@font-face {
+  font-family: "SUIT";
+  src: url("/fonts/SUIT/SUIT-Medium.otf") format("opentype");
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "SUIT";
+  src: url("/fonts/SUIT/SUIT-Bold.otf") format("opentype");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
 :root {
-  /* Pretendard font stack (font files loaded later; variable prepared now). */
-  --font-pretendard: "Pretendard", -apple-system, BlinkMacSystemFont,
-    "Apple SD Gothic Neo", system-ui, sans-serif;
+  /* HeyHome semantic aliases. Official palette values remain source-controlled upstream. */
+  --hej-color-background-canvas: #f7f8f7;
+  --hej-color-background-surface: #ffffff;
+  --hej-color-background-subtle: #f1f4f2;
+  --hej-color-background-navigation: #f8faf9;
+  --hej-color-text-primary: #202522;
+  --hej-color-text-secondary: #5f6963;
+  --hej-color-text-disabled: #89928d;
+  --hej-color-action-primary: #385448;
+  --hej-color-border-default: #dce2de;
+  --hej-color-brand-green: #00a872;
+  --hej-color-status-success: #287a55;
+  --hej-color-status-success-surface: #e5f4ec;
+  --hej-color-status-warning: #9b670c;
+  --hej-color-status-warning-surface: #fff4d9;
+  --hej-color-status-error: #b42318;
+  --font-suit: "SUIT", "Noto Sans KR", "Noto Sans JP", ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
 }
 
+:root[data-theme="dark"] {
+  --hej-color-background-canvas: #111512;
+  --hej-color-background-surface: #191e1b;
+  --hej-color-background-subtle: #222925;
+  --hej-color-background-navigation: #151a17;
+  --hej-color-text-primary: #f2f5f3;
+  --hej-color-text-secondary: #b8c2bc;
+  --hej-color-text-disabled: #7f8b84;
+  --hej-color-action-primary: #b8dac9;
+  --hej-color-border-default: #38433d;
+  --hej-color-brand-green: #36d39d;
+  --hej-color-status-success: #71d49e;
+  --hej-color-status-success-surface: #173c2a;
+  --hej-color-status-warning: #f0c36a;
+  --hej-color-status-warning-surface: #3d2f13;
+  --hej-color-status-error: #ff8a80;
+}
+
 body {
-  background-color: #faf8f4;
-  color: #2a2420;
-  font-family: var(--font-pretendard);
+  background-color: var(--hej-color-background-canvas);
+  color: var(--hej-color-text-primary);
+  font-family: var(--font-suit);
+  font-weight: 500;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--hej-color-brand-green) 20%, transparent);
 }

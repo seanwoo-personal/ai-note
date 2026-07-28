@@ -424,7 +424,7 @@ export function ChatClient({
               <section key={turn.answerKey} className="min-w-0 border-b border-line py-6 first:pt-5">
                 <header className="min-w-0">
                   <p className="text-[12px] font-semibold text-inkSoft">질문 {index + 1}</p>
-                  <h2 className="mt-1 break-words text-[16px] font-bold leading-relaxed text-ink [overflow-wrap:anywhere]">
+                  <h2 data-i18n-user-content className="mt-1 break-words text-[16px] font-bold leading-relaxed text-ink [overflow-wrap:anywhere]">
                     {turn.question}
                   </h2>
                 </header>

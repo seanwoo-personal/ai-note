@@ -7,7 +7,7 @@ import {
   resolveVoiceTypingShortcut,
 } from "@/lib/sonioxWorkspace";
 
-describe("Soniox Voice Typing shortcuts", () => {
+describe("Soniox Voice Typing legacy shortcuts", () => {
   it("maps Fn and the web fallback F8 to dictation or translation toggles", () => {
     expect(resolveVoiceTypingShortcut({ key: "Fn", shiftKey: false, repeat: false })).toBe("dictation");
     expect(resolveVoiceTypingShortcut({ key: "Fn", shiftKey: true, repeat: false })).toBe("translation");

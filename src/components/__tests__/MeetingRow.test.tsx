@@ -1,7 +1,8 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MeetingRow } from "@/components/MeetingRow";
+import { AppPreferencesProvider } from "@/components/AppPreferences";
 import type { MeetingListItem } from "@/components/MeetingList";
 
 // GuardedLink (via RecorderNavigation) reads useRouter; usePathname is stubbed for any
@@ -11,6 +12,21 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
   usePathname: () => "/",
 }));
+
+beforeEach(() => {
+  window.localStorage.clear();
+  window.localStorage.setItem("ai-note-locale", "ko");
+  vi.stubGlobal("matchMedia", vi.fn(() => ({
+    matches: false,
+    media: "(prefers-color-scheme: dark)",
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => true,
+  })));
+});
 
 function meeting(over: Partial<MeetingListItem> = {}): MeetingListItem {
   return {
@@ -26,7 +42,9 @@ function meeting(over: Partial<MeetingListItem> = {}): MeetingListItem {
 function renderRow(over: Partial<MeetingListItem> = {}) {
   return render(
     <ul>
-      <MeetingRow meeting={meeting(over)} onRenamed={vi.fn()} onDeleted={vi.fn()} />
+      <AppPreferencesProvider>
+        <MeetingRow meeting={meeting(over)} onRenamed={vi.fn()} onDeleted={vi.fn()} />
+      </AppPreferencesProvider>
     </ul>,
   );
 }

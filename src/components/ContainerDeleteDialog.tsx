@@ -200,7 +200,9 @@ export function ContainerDeleteDialog(props: ContainerDeleteDialogProps) {
                     const existing = preview?.library.folders.find((folder) => folder.id === conflict.existingFolderId);
                     return (
                       <li key={`${conflict.promotedFolderId}:${conflict.existingFolderId}`}>
-                        {promoted?.name ?? "승격 폴더"} ↔ {existing?.name ?? "기존 폴더"}
+                        {promoted ? <span data-i18n-user-content>{promoted.name}</span> : "승격 폴더"}
+                        {" ↔ "}
+                        {existing ? <span data-i18n-user-content>{existing.name}</span> : "기존 폴더"}
                       </li>
                     );
                   })}
@@ -234,13 +236,15 @@ export function ContainerDeleteDialog(props: ContainerDeleteDialogProps) {
                   >
                     <option value="">선택하세요</option>
                     {impact.destinationCandidates.map((workspace) => (
-                      <option key={workspace.id} value={workspace.id}>{workspace.name}</option>
+                      <option data-i18n-user-content key={workspace.id} value={workspace.id}>{workspace.name}</option>
                     ))}
                   </select>
                 </label>
                 <label className="block text-[13px] font-medium text-ink">
                   워크스페이스 이름 확인
-                  <span className="mt-1 block text-[12px] font-normal text-inkSoft">삭제를 확인하려면 “{props.container.name}”을 입력하세요.</span>
+                  <span className="mt-1 block text-[12px] font-normal text-inkSoft">
+                    삭제를 확인하려면 “<span data-i18n-user-content>{props.container.name}</span>”을 입력하세요.
+                  </span>
                   <input
                     aria-label="워크스페이스 이름 확인"
                     value={confirmation}

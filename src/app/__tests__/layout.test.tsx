@@ -11,6 +11,11 @@ vi.mock("@/components/RecorderSessionProvider", () => ({
   RecorderSessionProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
+vi.mock("@/components/AppPreferences", () => ({
+  AppPreferencesProvider: ({ children }: { children: React.ReactNode }) => children,
+  LocalizedText: ({ source }: { source: string }) => source,
+}));
+
 vi.mock("@/components/LibraryNavigation", () => ({
   LibraryNavigation: () => <nav aria-label="라이브러리" />,
 }));
@@ -20,6 +25,16 @@ vi.mock("@/components/ChatPanel", () => ({
 }));
 
 describe("RootLayout responsive shell", () => {
+  it("bootstraps persisted theme before the interactive provider hydrates", () => {
+    const markup = renderToStaticMarkup(<RootLayout><main>본문</main></RootLayout>);
+    const document = new DOMParser().parseFromString(markup, "text/html");
+    const script = document.querySelector("head script")?.textContent ?? "";
+
+    expect(script).toContain("ai-note-theme");
+    expect(script).toContain("prefers-color-scheme: dark");
+    expect(script).toContain("data-theme");
+  });
+
   it("내비게이션의 데스크톱 breakpoint와 같은 lg에서만 가로 배치한다", () => {
     const markup = renderToStaticMarkup(
       <RootLayout>

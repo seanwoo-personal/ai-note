@@ -142,6 +142,19 @@ export async function connectSonioxRealtime(
     if (finishTimeout !== null) clearTimeout(finishTimeout);
     finishTimeout = null;
   };
+  const detachRuntimeHandlers = () => {
+    socket.onmessage = null;
+    socket.onerror = null;
+    socket.onclose = null;
+  };
+  const failRuntimeSession = (message: string, closeSocket = true) => {
+    if (closing) return;
+    closing = true;
+    clearFinishTimeout();
+    detachRuntimeHandlers();
+    if (closeSocket) socket.close();
+    options.onError?.(message);
+  };
   await new Promise<void>((resolve, reject) => {
     const fail = (code: string) => {
       clearTimeout(timeout);
@@ -175,7 +188,7 @@ export async function connectSonioxRealtime(
     try {
       const result = JSON.parse(String(event.data)) as SonioxResult;
       if (typeof result.error_code === "number") {
-        options.onError?.(result.error_message || "실시간 전사 연결에 오류가 발생했습니다.");
+        failRuntimeSession(result.error_message || "실시간 전사 연결에 오류가 발생했습니다.");
         return;
       }
       transcript = applySonioxResult(transcript, result);
@@ -185,15 +198,12 @@ export async function connectSonioxRealtime(
         options.onFinished?.();
       }
     } catch {
-      options.onError?.("실시간 전사 응답을 확인할 수 없습니다.");
+      failRuntimeSession("실시간 전사 응답을 확인할 수 없습니다.");
     }
   };
-  socket.onerror = () => {
-    if (!closing) options.onError?.("실시간 전사 연결에 오류가 발생했습니다.");
-  };
+  socket.onerror = () => failRuntimeSession("실시간 전사 연결에 오류가 발생했습니다.");
   socket.onclose = () => {
-    clearFinishTimeout();
-    if (!closing) options.onError?.("실시간 전사 연결이 종료되었습니다.");
+    failRuntimeSession("실시간 전사 연결이 종료되었습니다.", false);
   };
 
   return {
@@ -205,14 +215,14 @@ export async function connectSonioxRealtime(
       socket.send("");
       clearFinishTimeout();
       finishTimeout = setTimeout(() => {
-        closing = true;
-        socket.close();
-        options.onError?.("Soniox 실시간 전사 완료 응답이 지연되어 연결을 종료했습니다.");
+        failRuntimeSession("Soniox 실시간 전사 완료 응답이 지연되어 연결을 종료했습니다.");
       }, CONNECT_TIMEOUT_MS);
     },
     close() {
+      if (closing) return;
       clearFinishTimeout();
       closing = true;
+      detachRuntimeHandlers();
       socket.close();
     },
   };

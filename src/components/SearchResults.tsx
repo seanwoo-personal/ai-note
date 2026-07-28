@@ -73,15 +73,19 @@ export function SearchResults({
         {response.results.map((result) => (
           <li key={result.meetingId} className="min-w-0 border-t border-line py-5 first:border-t-2 first:border-t-ink/70">
             <article className="min-w-0">
-              <h3 className="break-words text-[18px] font-bold leading-snug text-ink">
+              <h3 data-i18n-user-content className="break-words text-[18px] font-bold leading-snug text-ink">
                 {result.title}
               </h3>
               <p aria-label="회의 메타데이터" className="mt-2 flex flex-wrap gap-x-2 gap-y-1 text-[13px] text-inkSoft">
                 <span>{result.startedAt.slice(0, 10)}</span>
                 <span aria-hidden="true">·</span>
-                <span className="break-words">
-                  {result.location?.breadcrumb.join(" / ") || "위치 확인 필요"}
-                </span>
+                {result.location?.breadcrumb.length ? (
+                  <span data-i18n-user-content className="break-words">
+                    {result.location.breadcrumb.join(" / ")}
+                  </span>
+                ) : (
+                  <span className="break-words">위치 확인 필요</span>
+                )}
                 <span aria-hidden="true">·</span>
                 <span>{STATUS_LABELS[result.status]}</span>
               </p>
@@ -89,7 +93,7 @@ export function SearchResults({
                 {result.matches.map((match, index) => (
                   <li key={`${match.field}-${index}`} className="min-w-0 text-[14px] leading-relaxed text-inkSoft">
                     <span className="mr-2 inline-block font-semibold text-accent">{match.label}</span>
-                    <span className="break-words">{match.excerpt}</span>
+                    <span data-i18n-user-content className="break-words">{match.excerpt}</span>
                   </li>
                 ))}
               </ul>

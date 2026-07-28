@@ -278,7 +278,7 @@ export function Recorder({
             </p>
             <div>
               <div className="text-[12px] font-semibold text-inkSoft">Soniox 실시간 원문</div>
-              <p className="mt-2 min-h-12 whitespace-pre-wrap text-[15px] leading-relaxed text-ink">
+              <p data-i18n-user-content className="mt-2 min-h-12 whitespace-pre-wrap text-[15px] leading-relaxed text-ink">
                 {liveTranscript.original.final}
                 <span className="text-inkSoft">{liveTranscript.original.provisional}</span>
               </p>
@@ -286,7 +286,7 @@ export function Recorder({
             {(liveTranscript.translation.final || liveTranscript.translation.provisional) && (
               <div>
                 <div className="text-[12px] font-semibold text-inkSoft">Soniox 실시간 번역</div>
-                <p className="mt-2 min-h-12 whitespace-pre-wrap text-[15px] leading-relaxed text-accent">
+                <p data-i18n-user-content className="mt-2 min-h-12 whitespace-pre-wrap text-[15px] leading-relaxed text-accent">
                   {liveTranscript.translation.final}
                   <span className="text-inkSoft">{liveTranscript.translation.provisional}</span>
                 </p>
@@ -304,7 +304,11 @@ export function Recorder({
                 ? translationValue === "none"
                   ? "Soniox에서 실시간 원문을 보려면 녹음을 시작하세요. 마이크 권한이 필요합니다."
                   : "Soniox에서 실시간 원문과 번역을 보려면 녹음을 시작하세요. 마이크 권한이 필요합니다."
-                : "녹음이 끝나면 이 Mac에서 Whisper 전사를 시작합니다. 마이크 권한이 필요합니다."}
+                : <>
+                    <span>녹음이 끝나면 이 Mac에서 Whisper 전사를 시작합니다. 마이크 권한이 필요합니다. </span>
+                    <span>선택한 Whisper 모델을 처음 사용하면 먼저 내려받아 시간이 더 걸릴 수 있습니다. </span>
+                    <span>다운로드가 끝나기 전에는 진행률을 표시하지 않습니다.</span>
+                  </>}
           </p>
         )}
 

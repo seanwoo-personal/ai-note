@@ -17,7 +17,7 @@ const fixtureModule = importRuntimeModule(pathToFileURL(join(
 
 async function attachMilestone(page: Page, testInfo: TestInfo, name: string) {
   await testInfo.attach(`browser-screenshot:${name}`, {
-    body: await page.screenshot({ fullPage: true }),
+    body: await page.screenshot({ fullPage: true, caret: "initial" }),
     contentType: "image/png",
   });
 }
@@ -45,11 +45,10 @@ test("manual transcript and summary editing keeps hierarchy, freshness, and navi
   ],
 }, async ({ page }, testInfo) => {
   const {
-    MANUAL_EDITING_WORKSPACE_ID,
     manualEditingMeetingForProject,
   } = await fixtureModule;
   const fixture = manualEditingMeetingForProject(testInfo.project.name);
-  const detailPath = `/meetings/${fixture.meetingId}?sourceWorkspace=${MANUAL_EDITING_WORKSPACE_ID}&sourceView=all`;
+  const detailPath = `/meetings/${fixture.meetingId}`;
   const generationRequests: string[] = [];
   page.on("request", (request) => {
     const path = new URL(request.url()).pathname;
@@ -60,7 +59,7 @@ test("manual transcript and summary editing keeps hierarchy, freshness, and navi
   });
 
   await page.goto("/");
-  await expect(page.getByRole("heading", { level: 1, name: /· 모든 회의$/u })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "최근 작업한 문서" })).toBeVisible();
   const detailLink = page.getByRole("link").filter({ hasText: fixture.title });
   await expect(detailLink).toHaveAttribute("href", detailPath);
   await detailLink.click();
@@ -255,5 +254,5 @@ test("manual transcript and summary editing keeps hierarchy, freshness, and navi
   expect(await page.evaluate(() => (
     (window as typeof window & { __syntheticHistoryBackCount?: number }).__syntheticHistoryBackCount
   ))).toBe(1);
-  await expect(page.getByRole("heading", { level: 1, name: /· 모든 회의$/u })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "최근 작업한 문서" })).toBeVisible();
 });

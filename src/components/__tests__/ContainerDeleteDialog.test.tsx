@@ -131,6 +131,10 @@ describe("ContainerDeleteDialog", () => {
   });
 
   it("blocks a folder promotion conflict without attempting partial deletion", async () => {
+    libraryState.library?.folders.push(
+      { id: "child", workspaceId: WORKSPACE_A, parentFolderId: FOLDER, name: "설정", color: "sage", order: 0, createdAt: timestamp, updatedAt: timestamp },
+      { id: "existing", workspaceId: WORKSPACE_A, parentFolderId: PARENT, name: "설정", color: "sage", order: 1, createdAt: timestamp, updatedAt: timestamp },
+    );
     vi.stubGlobal("fetch", vi.fn(async () => response({
       mode: "ready",
       version: VERSION,
@@ -148,6 +152,10 @@ describe("ContainerDeleteDialog", () => {
       onDeleted={vi.fn()}
     />);
     expect(await screen.findByText(/같은 이름의 폴더를 먼저 이름 변경하거나 이동/)).toBeInTheDocument();
+    expect(screen.getAllByText("설정")).toHaveLength(2);
+    for (const folderName of screen.getAllByText("설정")) {
+      expect(folderName).toHaveAttribute("data-i18n-user-content");
+    }
     expect(screen.getByRole("button", { name: "폴더만 삭제하고 보존" })).toBeDisabled();
     expect(libraryState.runLibraryMutation).not.toHaveBeenCalled();
   });

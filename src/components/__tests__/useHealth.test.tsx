@@ -14,6 +14,31 @@ describe("useHealth — in-flight dedup", () => {
     vi.unstubAllGlobals();
   });
 
+  it("polls Soniox configuration with GET semantics instead of minting temporary keys", async () => {
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      void init;
+      if (url === "/api/soniox/temporary-key") {
+        return Promise.resolve(new Response(JSON.stringify({ configured: true }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }));
+      }
+      return new Promise<never>(() => {});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { useHealth } = await import("@/components/useHealth");
+    const { result } = renderHook(() => useHealth());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    const sonioxCalls = fetchMock.mock.calls.filter(([url]) => url === "/api/soniox/temporary-key");
+    expect(sonioxCalls).toHaveLength(1);
+    expect(sonioxCalls[0]?.[1]).toEqual({ cache: "no-store" });
+    expect(result.current.soniox).toEqual({ kind: "configured" });
+  });
+
   it("does not overlap LLM health fetches while one is still in flight", async () => {
     let llmCalls = 0;
     vi.stubGlobal(

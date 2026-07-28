@@ -2,9 +2,11 @@
 
 import { type KeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
 
+import { useOptionalAppPreferences } from "@/components/AppPreferences";
 import { CloseIcon } from "@/components/InlineIcons";
 import { Tabs } from "@/components/Tabs";
 import type { Correction, Glossary } from "@/domain/glossary";
+import { translateUi } from "@/lib/i18n";
 
 // 단어 관리(단어장) editor. Two tabs — 일반 용어(terms) and 교정쌍(corrections) —
 // edited in local state and saved together with one explicit "저장" button (app
@@ -41,6 +43,8 @@ function isGlossaryShape(data: unknown): data is Glossary {
 }
 
 export function GlossaryClient() {
+  const preferences = useOptionalAppPreferences();
+  const translate = preferences?.t ?? ((source: string, values = {}) => translateUi("ko", source, values));
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [terms, setTerms] = useState<string[]>([]);
   const [corrections, setCorrections] = useState<Correction[]>([]);
@@ -213,10 +217,11 @@ export function GlossaryClient() {
               key={t}
               className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-soft py-1 pl-3 pr-1 text-[13px] text-ink"
             >
-              <span className="min-w-0 break-words">{t}</span>
+              <span data-i18n-user-content className="min-w-0 break-words">{t}</span>
               <button
                 type="button"
-                aria-label={`용어 삭제: ${t}`}
+                data-i18n-user-attributes
+                aria-label={translate("용어 삭제: {term}", { term: t })}
                 onClick={() => removeTerm(t)}
                 className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-inkSoft transition-colors hover:bg-panel hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
               >
@@ -293,7 +298,7 @@ export function GlossaryClient() {
               key={c.from}
               className="flex items-start justify-between gap-3 rounded-lg border border-line bg-bg px-3 py-2 text-[14px]"
             >
-              <span className="min-w-0 flex-1 break-words text-ink">
+              <span data-i18n-user-content className="min-w-0 flex-1 break-words text-ink">
                 <span className="break-words text-inkSoft line-through">{c.from}</span>
                 <span aria-hidden="true" className="mx-2 text-inkSoft">
                   →
@@ -302,7 +307,8 @@ export function GlossaryClient() {
               </span>
               <button
                 type="button"
-                aria-label={`교정쌍 삭제: ${c.from}`}
+                data-i18n-user-attributes
+                aria-label={translate("교정쌍 삭제: {term}", { term: c.from })}
                 onClick={() => removeCorrection(c.from)}
                 className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-inkSoft transition-colors hover:bg-panel hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
               >

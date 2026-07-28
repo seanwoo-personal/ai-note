@@ -392,6 +392,22 @@ describe("RecorderSessionProvider", () => {
     ] }) }));
     expect(screen.getByText("안녕하세요")).toBeInTheDocument();
     expect(screen.getByText("Hello")).toBeInTheDocument();
+
+    const sentBeforeError = socket.sent.length;
+    act(() => socket.onmessage?.({ data: JSON.stringify({
+      error_code: 429,
+      error_message: "Soniox usage limit reached",
+    }) }));
+    expect(screen.getByText("Soniox usage limit reached")).toBeInTheDocument();
+    expect(socket.readyState).toBe(3);
+
+    act(() => FakeMediaRecorder.latest?.emitChunk(new Blob(["late"], { type: "audio/webm" })));
+    expect(socket.sent).toHaveLength(sentBeforeError);
+
+    act(() => socket.onmessage?.({ data: JSON.stringify({ tokens: [
+      { text: "stale transcript", is_final: false, translation_status: "original" },
+    ] }) }));
+    expect(screen.queryByText("stale transcript")).not.toBeInTheDocument();
   });
 
   it("retains captured audio while uploading and only confirmed explicit discard removes it", async () => {

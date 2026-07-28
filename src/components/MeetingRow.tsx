@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { EditableTitle } from "@/components/EditableTitle";
+import { useOptionalAppPreferences } from "@/components/AppPreferences";
 import { KebabVerticalIcon } from "@/components/InlineIcons";
 import { LibraryLocationPicker } from "@/components/LibraryLocationPicker";
 import { useOptionalLibrary } from "@/components/LibraryProvider";
@@ -10,6 +11,7 @@ import { GuardedLink as Link } from "@/components/RecorderNavigation";
 import type { MeetingListItem } from "@/components/MeetingList";
 import type { MeetingStatus, StatusError } from "@/domain/meeting";
 import { formatMeetingDate, STATUS_LABELS } from "@/lib/meetingLabels";
+import { translateUi } from "@/lib/i18n";
 
 type Mode = "idle" | "menu" | "editing" | "moving" | "confirming";
 
@@ -42,6 +44,8 @@ export function MeetingRow({
   onMoved?: (id: string, actual: { workspaceId: string; folderId: string | null }) => void;
 }) {
   const library = useOptionalLibrary();
+  const preferences = useOptionalAppPreferences();
+  const t = preferences?.t ?? ((source: string, values = {}) => translateUi("ko", source, values));
   const [mode, setMode] = useState<Mode>("idle");
   const [deleting, setDeleting] = useState(false);
   const [delError, setDelError] = useState<string | null>(null);
@@ -122,14 +126,14 @@ export function MeetingRow({
         className="flex w-full min-w-0 self-stretch flex-col items-start justify-between gap-2 rounded-[14px] border border-line bg-panel py-4 pl-4 pr-16 shadow-[0_1px_2px_rgba(42,36,32,.04)] transition-colors hover:bg-chrome focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 sm:flex-row sm:items-center sm:gap-4 sm:pl-6"
       >
         <span className="w-full min-w-0">
-          <span className="block truncate text-[15px] font-semibold text-ink">{meeting.title}</span>
+          <span data-i18n-user-content className="block truncate text-[15px] font-semibold text-ink">{meeting.title}</span>
           <span className="mt-0.5 block font-mono text-[12px] text-inkSoft">
             {formatMeetingDate(meeting.startedAt)}
           </span>
           {meeting.location && (
             <span className="mt-1 block truncate text-[12px] text-inkSoft">
               {meeting.location.breadcrumb.length > 0
-                ? meeting.location.breadcrumb.join(" / ")
+                ? <span data-i18n-user-content>{meeting.location.breadcrumb.join(" / ")}</span>
                 : "미분류"}
             </span>
           )}
@@ -146,7 +150,8 @@ export function MeetingRow({
         <button
           ref={triggerRef}
           type="button"
-          aria-label={`${meeting.title} 관리 메뉴`}
+          data-meeting-menu-trigger
+          aria-label={t("{title} 관리 메뉴", { title: meeting.title })}
           aria-expanded={mode === "menu"}
           onClick={() => setMode((m) => (m === "menu" ? "idle" : "menu"))}
           className="flex min-h-11 min-w-11 items-center justify-center rounded-full text-inkSoft transition-colors hover:bg-soft hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
@@ -196,8 +201,8 @@ export function MeetingRow({
           onClose={() => setMode("idle")}
           onMoved={(actual) => {
             const row = containerRef.current;
-            const next = row?.nextElementSibling?.querySelector<HTMLButtonElement>("button[aria-label$='관리 메뉴']");
-            const previous = row?.previousElementSibling?.querySelector<HTMLButtonElement>("button[aria-label$='관리 메뉴']");
+            const next = row?.nextElementSibling?.querySelector<HTMLButtonElement>("button[data-meeting-menu-trigger]");
+            const previous = row?.previousElementSibling?.querySelector<HTMLButtonElement>("button[data-meeting-menu-trigger]");
             setMode("idle");
             onMoved?.(meeting.id, actual);
             window.setTimeout(() => {
@@ -211,7 +216,7 @@ export function MeetingRow({
       {mode === "confirming" && (
         <div className="mt-2 min-w-0 rounded-[14px] border border-error/40 bg-error/5 p-4 sm:px-6">
           <p className="break-words text-[14px] text-ink">
-            ‘{meeting.title}’ 회의록을 영구 삭제할까요? 되돌릴 수 없어요.
+            ‘<span data-i18n-user-content>{meeting.title}</span>’ 회의록을 영구 삭제할까요? 되돌릴 수 없어요.
           </p>
           {delError && (
             <p role="status" aria-live="polite" className="mt-1 text-[12px] text-error">

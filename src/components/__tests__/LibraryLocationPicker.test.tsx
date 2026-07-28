@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { LibraryLocationPicker } from "@/components/LibraryLocationPicker";
 import type { LibraryProviderValue } from "@/components/LibraryProvider";
+import { AppPreferencesProvider } from "@/components/AppPreferences";
 
 const WORKSPACE_A = "10000000-0000-4000-8000-000000000001";
 const WORKSPACE_B = "20000000-0000-4000-8000-000000000002";
@@ -121,7 +122,7 @@ describe("LibraryLocationPicker", () => {
       target: { value: "개인 기록" },
     });
     fireEvent.click(screen.getByRole("radio", { name: /개인 \/ 개인 기록/ }));
-    expect(screen.getByText(/업무 \/ 고객 A \/ 회의 → 개인 \/ 개인 기록/)).toBeInTheDocument();
+    expect(screen.getByText("이동 확인:").closest("div")).toHaveTextContent("업무 / 고객 A / 회의 → 개인 / 개인 기록");
     fireEvent.click(screen.getByRole("button", { name: "이 위치로 이동" }));
     await waitFor(() => expect(onMoved).toHaveBeenCalledWith(payload.location));
     const [url, init] = vi.mocked(libraryState.runLibraryMutation).mock.calls[0];
@@ -236,5 +237,44 @@ describe("LibraryLocationPicker", () => {
     await waitFor(() => expect(screen.getByText(/이동하지 못했습니다/)).toBeInTheDocument());
     expect(destination).toBeChecked();
     expect(screen.getByRole("dialog", { name: "회의 이동" })).toBeInTheDocument();
+  });
+
+  it("preserves a user workspace name equal to a catalog key while localizing the fixed root label", async () => {
+    libraryState = state({
+      library: {
+        ...libraryState.library!,
+        workspaces: libraryState.library!.workspaces.map((workspace) => (
+          workspace.id === WORKSPACE_A ? { ...workspace, name: "설정" } : workspace
+        )),
+      },
+    });
+    window.localStorage.setItem("ai-note-locale", "en");
+    vi.stubGlobal("matchMedia", vi.fn(() => ({
+      matches: false,
+      media: "(prefers-color-scheme: dark)",
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => true,
+    })));
+
+    render(
+      <AppPreferencesProvider>
+        <LibraryLocationPicker
+          kind="meeting"
+          meetingId="meeting-1"
+          current={null}
+          trigger={null}
+          onClose={vi.fn()}
+          onMoved={vi.fn()}
+        />
+      </AppPreferencesProvider>,
+    );
+
+    expect(await screen.findByRole("radio", { name: "설정 / Unfiled" })).toBeInTheDocument();
+    expect(screen.getAllByText("설정").length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText("Settings")).not.toBeInTheDocument();
   });
 });

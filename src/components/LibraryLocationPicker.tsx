@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { LibraryDialogShell } from "@/components/LibraryPrimitives";
 import { useLibrary } from "@/components/LibraryProvider";
+import { useOptionalAppPreferences } from "@/components/AppPreferences";
+import { translateUi } from "@/lib/i18n";
 import {
   buildFolderParentOptions,
   buildMeetingLocationOptions,
@@ -40,6 +42,8 @@ function isLocation(value: unknown): value is PickerLocation {
 
 export function LibraryLocationPicker(props: LibraryLocationPickerProps) {
   const library = useLibrary();
+  const preferences = useOptionalAppPreferences();
+  const t = preferences?.t ?? ((source: string, values = {}) => translateUi("ko", source, values));
   const document = library.library;
   const initialWorkspaceId = props.kind === "meeting"
     ? props.current?.workspaceId ?? document?.defaultWorkspaceId ?? ""
@@ -71,12 +75,27 @@ export function LibraryLocationPicker(props: LibraryLocationPickerProps) {
     query,
   );
   const selected = options.find((option) => option.key === selectedKey) ?? null;
-  const currentLabel = props.kind === "meeting"
+  const currentOption = props.kind === "meeting"
     ? options.find((option) => (
         option.workspaceId === props.current?.workspaceId
         && option.folderId === props.current?.folderId
-      ))?.label ?? "위치 없음"
-    : options.find((option) => option.disabledReason === "현재 위치")?.label ?? "현재 상위 위치";
+      )) ?? null
+    : options.find((option) => option.disabledReason === "현재 위치") ?? null;
+
+  const fixedRootLabel = props.kind === "meeting" ? "미분류" : "최상위";
+  const optionUserRoot = (option: LibraryLocationOption) => (
+    document?.workspaces.find((workspace) => workspace.id === option.workspaceId)?.name ?? null
+  );
+  const localizedOptionLabel = (option: LibraryLocationOption) => {
+    if (option.folderId !== null) return option.label;
+    const root = optionUserRoot(option);
+    return `${root ?? t("워크스페이스")} / ${t(fixedRootLabel)}`;
+  };
+  const renderOptionLabel = (option: LibraryLocationOption) => {
+    if (option.folderId !== null) return <span data-i18n-user-content>{option.label}</span>;
+    const root = optionUserRoot(option);
+    return <>{root ? <span data-i18n-user-content>{root}</span> : "워크스페이스"} / {fixedRootLabel}</>;
+  };
 
   const submit = async () => {
     if (!selected || selected.disabledReason || !library.version || saving) return;
@@ -159,12 +178,12 @@ export function LibraryLocationPicker(props: LibraryLocationPickerProps) {
           >
             {[...document.workspaces]
               .sort((left, right) => left.order - right.order)
-              .map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
+              .map((workspace) => <option data-i18n-user-content key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
           </select>
         </label>
       ) : (
         <div className="rounded-[12px] border border-line bg-soft px-4 py-3 text-[13px] text-ink">
-          <p className="font-semibold">{fixedWorkspace?.name ?? "워크스페이스"} 안에서 이동</p>
+          <p className="font-semibold"><span data-i18n-user-content>{fixedWorkspace?.name ?? ""}</span>{fixedWorkspace ? " 안에서 이동" : "워크스페이스 안에서 이동"}</p>
           <p className="mt-1 text-inkSoft">다른 워크스페이스로 폴더 이동은 지원하지 않습니다.</p>
         </div>
       )}
@@ -197,12 +216,13 @@ export function LibraryLocationPicker(props: LibraryLocationPickerProps) {
               <input
                 type="radio"
                 name="library-location"
-                aria-label={`${option.label}${option.disabledReason ? ` — ${option.disabledReason}` : ""}`}
+                data-i18n-user-attributes
+                aria-label={`${localizedOptionLabel(option)}${option.disabledReason ? ` — ${t(option.disabledReason)}` : ""}`}
                 checked={selectedKey === option.key}
                 disabled={option.disabledReason !== null}
                 onChange={() => { setSelectedKey(option.key); setError(null); }}
               />
-              <span className="min-w-0 flex-1 truncate">{option.label}</span>
+              <span className="min-w-0 flex-1 truncate">{renderOptionLabel(option)}</span>
               {option.disabledReason && <span className="text-[11px]">{option.disabledReason}</span>}
             </label>
           ))}
@@ -211,7 +231,13 @@ export function LibraryLocationPicker(props: LibraryLocationPickerProps) {
 
       <div className="mt-4 rounded-[12px] border border-line bg-bg px-4 py-3 text-[13px] text-ink">
         <span className="text-inkSoft">이동 확인: </span>
-        {selected ? `${currentLabel} → ${selected.label}` : "새 위치를 선택하세요."}
+        {selected ? (
+          <span>
+            {currentOption ? renderOptionLabel(currentOption) : props.kind === "meeting" ? "위치 없음" : "현재 상위 위치"}
+            {" → "}
+            {renderOptionLabel(selected)}
+          </span>
+        ) : "새 위치를 선택하세요."}
       </div>
       {error && <p role="status" aria-live="polite" className="mt-3 text-[13px] text-error">{error}</p>}
       <button

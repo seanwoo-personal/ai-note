@@ -345,7 +345,7 @@ export function SearchPanel({
               >
                 <option value="">전체 워크스페이스</option>
                 {workspaces.map((workspace) => (
-                  <option key={workspace.id} value={workspace.id}>{workspace.name}</option>
+                  <option data-i18n-user-content key={workspace.id} value={workspace.id}>{workspace.name}</option>
                 ))}
               </select>
             </label>
@@ -360,7 +360,7 @@ export function SearchPanel({
                 <option value="">전체 폴더</option>
                 <option value="unfiled">미분류</option>
                 {availableFolders.map((folder) => (
-                  <option key={folder.id} value={folder.id}>{folder.name}</option>
+                  <option data-i18n-user-content key={folder.id} value={folder.id}>{folder.name}</option>
                 ))}
               </select>
             </label>

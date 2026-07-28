@@ -23,6 +23,12 @@ export type LlmHealthState =
   | { configured: false }
   | { configured: true; provider: LlmProvider | string; ok: boolean; detail: string; model?: string | null };
 
+export type SonioxHealthState =
+  | { kind: "checking" }
+  | { kind: "configured" }
+  | { kind: "unconfigured" }
+  | { kind: "unknown" };
+
 export type LlmReadiness = "loading" | "ready" | "unconfigured" | "unavailable";
 
 const TONE_CLASS: Record<StatusTone, Pick<StatusDisplay, "dotClass" | "textClass">> = {
@@ -148,5 +154,38 @@ export function formatLlmStatus(health: LlmHealthState | null): StatusDisplay {
     shortLabel: "연결됨",
     title: health.detail,
     tone: "success",
+  });
+}
+
+export function formatSonioxStatus(health: SonioxHealthState | null | undefined): StatusDisplay {
+  if (health == null || health.kind === "checking") {
+    return withTone({
+      label: "Soniox · 설정 확인 중",
+      shortLabel: "확인 중",
+      title: "Soniox API 키 설정 여부를 확인하고 있습니다.",
+      tone: "neutral",
+    });
+  }
+  if (health.kind === "unknown") {
+    return withTone({
+      label: "Soniox · 설정 확인 불가",
+      shortLabel: "확인 불가",
+      title: "로컬 설정 확인 요청에 실패해 Soniox 설정 여부나 인터넷 상태를 판단할 수 없습니다.",
+      tone: "warn",
+    });
+  }
+  if (health.kind === "unconfigured") {
+    return withTone({
+      label: "Soniox · 미설정",
+      shortLabel: "미설정",
+      title: "실시간 전사·번역을 사용하려면 Soniox API 설정이 필요합니다.",
+      tone: "warn",
+    });
+  }
+  return withTone({
+    label: "Soniox · 키 설정됨 · 인터넷 필요",
+    shortLabel: "인터넷 필요",
+    title: "API 키 설정만 확인했습니다. 인터넷 연결, 키 유효성, Soniox 연결은 실시간 기능을 시작할 때 확인합니다.",
+    tone: "neutral",
   });
 }

@@ -46,6 +46,7 @@ async function requestCaptureStream(inputSource: SonioxInputSource): Promise<Med
 
 export function useSonioxLiveCapture() {
   const [phase, setPhase] = useState<SonioxCapturePhase>("idle");
+  const phaseRef = useRef<SonioxCapturePhase>("idle");
   const [transcript, setTranscript] = useState<SonioxTranscript>(emptySonioxTranscript);
   const [error, setError] = useState<string | null>(null);
   const generationRef = useRef(0);
@@ -54,6 +55,11 @@ export function useSonioxLiveCapture() {
   const streamRef = useRef<MediaStream | null>(null);
   const sessionRef = useRef<SonioxRealtimeSession | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  const transitionPhase = useCallback((next: SonioxCapturePhase) => {
+    phaseRef.current = next;
+    setPhase(next);
+  }, []);
 
   const stopTracks = useCallback(() => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -81,8 +87,8 @@ export function useSonioxLiveCapture() {
     generationRef.current += 1;
     closeCurrent();
     setError(message);
-    setPhase("error");
-  }, [closeCurrent]);
+    transitionPhase("error");
+  }, [closeCurrent, transitionPhase]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -94,14 +100,14 @@ export function useSonioxLiveCapture() {
   }, [closeCurrent]);
 
   const start = useCallback(async (options: SonioxCaptureStartOptions) => {
-    if (["requesting", "connecting", "listening", "finishing"].includes(phase)) return;
+    if (["requesting", "connecting", "listening", "finishing"].includes(phaseRef.current)) return;
+    transitionPhase("requesting");
     closeCurrent();
     const generation = ++generationRef.current;
     const controller = new AbortController();
     abortRef.current = controller;
     setError(null);
     setTranscript(emptySonioxTranscript());
-    setPhase("requesting");
     try {
       const sourceStream = await requestCaptureStream(options.inputSource);
       if (!mountedRef.current || generation !== generationRef.current) {
@@ -109,7 +115,7 @@ export function useSonioxLiveCapture() {
         return;
       }
       streamRef.current = sourceStream;
-      setPhase("connecting");
+      transitionPhase("connecting");
       const session = await connectSonioxRealtime({
         translation: options.translation,
         languageHints: LANGUAGE_HINTS,
@@ -133,7 +139,7 @@ export function useSonioxLiveCapture() {
           sessionRef.current = null;
           abortRef.current = null;
           stopTracks();
-          setPhase("finished");
+          transitionPhase("finished");
         },
       });
       if (!mountedRef.current || generation !== generationRef.current) {
@@ -157,7 +163,7 @@ export function useSonioxLiveCapture() {
       recorder.onstop = () => {
         if (!mountedRef.current || generation !== generationRef.current) return;
         recorderRef.current = null;
-        setPhase("finishing");
+        transitionPhase("finishing");
         session.finish();
       };
       sourceStream.getTracks().forEach((track) => {
@@ -168,7 +174,7 @@ export function useSonioxLiveCapture() {
         }, { once: true });
       });
       recorder.start(250);
-      setPhase("listening");
+      transitionPhase("listening");
     } catch (caught) {
       if (!mountedRef.current || generation !== generationRef.current) return;
       const message = caught instanceof DOMException && caught.name === "NotAllowedError"
@@ -178,14 +184,14 @@ export function useSonioxLiveCapture() {
           : "Soniox 실시간 세션을 시작할 수 없습니다.";
       failCurrent(generation, message);
     }
-  }, [closeCurrent, failCurrent, phase, stopTracks]);
+  }, [closeCurrent, failCurrent, stopTracks, transitionPhase]);
 
   const stop = useCallback(() => {
-    if (phase === "requesting" || phase === "connecting") {
+    if (phaseRef.current === "requesting" || phaseRef.current === "connecting") {
       generationRef.current += 1;
       closeCurrent();
       setError(null);
-      setPhase("idle");
+      transitionPhase("idle");
       return;
     }
     const recorder = recorderRef.current;
@@ -193,15 +199,15 @@ export function useSonioxLiveCapture() {
     recorder.requestData?.();
     recorder.stop();
     stopTracks();
-  }, [closeCurrent, phase, stopTracks]);
+  }, [closeCurrent, stopTracks, transitionPhase]);
 
   const reset = useCallback(() => {
     generationRef.current += 1;
     closeCurrent();
     setTranscript(emptySonioxTranscript());
     setError(null);
-    setPhase("idle");
-  }, [closeCurrent]);
+    transitionPhase("idle");
+  }, [closeCurrent, transitionPhase]);
 
   return { phase, transcript, error, start, stop, reset };
 }

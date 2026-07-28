@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
+import { useOptionalAppPreferences } from "@/components/AppPreferences";
 import { useLibrary } from "@/components/LibraryProvider";
 import { Recorder } from "@/components/Recorder";
 import {
@@ -10,6 +11,7 @@ import {
   type SonioxInputSource,
   useSonioxLiveCapture,
 } from "@/components/useSonioxLiveCapture";
+import { useSonioxTts } from "@/components/useSonioxTts";
 import {
   buildSonioxToolHref,
   formatVoiceTypingText,
@@ -17,6 +19,16 @@ import {
   resolveVoiceTypingShortcut,
   type VoiceTypingShortcutMode,
 } from "@/lib/sonioxWorkspace";
+import {
+  captureSonioxShortcut,
+  formatSonioxShortcut,
+  hasDefaultSonioxShortcut,
+  matchSonioxShortcut,
+  type SonioxShortcutAction,
+  type SonioxShortcutBinding,
+} from "@/lib/sonioxShortcuts";
+import { useSonioxShortcutSettings } from "@/components/useSonioxShortcutSettings";
+import { translateUi } from "@/lib/i18n";
 import type { SonioxTranslationOptions } from "@/services/sonioxRealtime";
 
 const LANGUAGES = [
@@ -26,8 +38,10 @@ const LANGUAGES = [
   { value: "zh", label: "중국어" },
 ] as const;
 
+const TTS_VOICES = ["Maya", "Daniel", "Mina", "Kenji"] as const;
+
 const PHASE_LABELS: Record<SonioxCapturePhase, string> = {
-  idle: "준비됨",
+  idle: "시작 전",
   requesting: "오디오 권한 확인 중…",
   connecting: "Soniox 연결 중…",
   listening: "실시간 처리 중",
@@ -35,6 +49,41 @@ const PHASE_LABELS: Record<SonioxCapturePhase, string> = {
   finished: "완료",
   error: "오류",
 };
+
+const VOICE_PHASE_LABELS: Record<VoiceTypingShortcutMode, Record<SonioxCapturePhase, string>> = {
+  dictation: {
+    idle: "시작 전",
+    requesting: "받아쓰기 권한 확인 중…",
+    connecting: "받아쓰기 연결 중…",
+    listening: "받아쓰기 중",
+    finishing: "받아쓰기 정리 중…",
+    finished: "받아쓰기 추가됨",
+    error: "받아쓰기 오류",
+  },
+  translation: {
+    idle: "시작 전",
+    requesting: "번역 입력 권한 확인 중…",
+    connecting: "번역 입력 연결 중…",
+    listening: "번역 중",
+    finishing: "번역 정리 중…",
+    finished: "번역 추가됨",
+    error: "번역 입력 오류",
+  },
+};
+
+function useLatestRef<T>(value: T) {
+  const ref = useRef(value);
+  ref.current = value;
+  return ref;
+}
+
+function isShortcutEditingNavigationKey(event: KeyboardEvent): boolean {
+  if (event.code === "Tab") return true;
+  return (event.code === "Enter" || event.code === "Space")
+    && !event.altKey
+    && !event.ctrlKey
+    && !event.metaKey;
+}
 
 function TranscriptPanels({
   original,
@@ -49,13 +98,13 @@ function TranscriptPanels({
     <div className="grid gap-4 lg:grid-cols-2">
       <section className="rounded-2xl border border-line bg-panel p-5">
         <p className="text-[12px] font-bold uppercase tracking-[0.08em] text-inkSoft">실시간 원문</p>
-        <p className="mt-3 min-h-28 whitespace-pre-wrap text-[16px] leading-7 text-ink">
+        <p data-i18n-user-content className="mt-3 min-h-28 whitespace-pre-wrap text-[16px] leading-7 text-ink">
           {original.final}<span className="text-inkSoft">{original.provisional}</span>
         </p>
       </section>
       <section className="rounded-2xl border border-line bg-panel p-5">
         <p className="text-[12px] font-bold uppercase tracking-[0.08em] text-inkSoft">{translationLabel}</p>
-        <p className="mt-3 min-h-28 whitespace-pre-wrap text-[16px] leading-7 text-accent">
+        <p data-i18n-user-content className="mt-3 min-h-28 whitespace-pre-wrap text-[16px] leading-7 text-accent">
           {translation.final}<span className="text-inkSoft">{translation.provisional}</span>
         </p>
       </section>
@@ -63,66 +112,193 @@ function TranscriptPanels({
   );
 }
 
-function StatusPill({ phase }: { phase: SonioxCapturePhase }) {
+function StatusPill({ phase, labels = PHASE_LABELS }: {
+  phase: SonioxCapturePhase;
+  labels?: Record<SonioxCapturePhase, string>;
+}) {
   const active = phase === "listening";
+  const toneClass = phase === "error"
+    ? "bg-error/10 text-error"
+    : phase === "finished"
+      ? "bg-success/10 text-success"
+      : active
+        ? "bg-successBg text-success"
+        : "bg-soft text-inkSoft";
   return (
-    <span className={`inline-flex min-h-8 items-center gap-2 rounded-full px-3 text-[12px] font-semibold ${
-      active ? "bg-error/10 text-error" : "bg-soft text-inkSoft"
-    }`} role="status">
-      {active && <span className="h-2 w-2 animate-pulse rounded-full bg-error motion-reduce:animate-none" aria-hidden="true" />}
-      {PHASE_LABELS[phase]}
+    <span className={`inline-flex min-h-8 items-center gap-2 rounded-full px-3 text-[12px] font-semibold ${toneClass}`} role="status">
+      {active && <span className="h-2 w-2 animate-pulse rounded-full bg-success motion-reduce:animate-none" aria-hidden="true" />}
+      {labels[phase]}
     </span>
+  );
+}
+
+const SHORTCUT_LABELS: Record<SonioxShortcutAction, string> = {
+  translator: "Translator",
+  dictation: "받아쓰기",
+  translation: "번역 입력",
+};
+
+function ShortcutSettingCard({
+  action,
+  label,
+  description,
+  binding,
+  editing,
+  onEdit,
+}: {
+  action: SonioxShortcutAction;
+  label: string;
+  description: string;
+  binding: SonioxShortcutBinding;
+  editing: boolean;
+  onEdit(action: SonioxShortcutAction): void;
+}) {
+  const preferences = useOptionalAppPreferences();
+  const translate = preferences?.t ?? ((source: string, values = {}) => translateUi("ko", source, values));
+  return (
+    <div className={`rounded-xl border p-4 ${editing ? "border-accent bg-soft" : "border-line bg-soft/40"}`}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <span className="text-[13px] font-bold text-ink">{label}</span>
+        <kbd className="rounded-md border border-line bg-panel px-2 py-1 font-mono text-[12px] font-medium text-ink">
+          {editing ? "새 키를 누르세요" : formatSonioxShortcut(binding)}
+        </kbd>
+      </div>
+      <p className="mt-2 text-[12px] leading-5 text-inkSoft">{description}</p>
+      <button
+        type="button"
+        data-i18n-user-attributes
+        aria-label={translate("{label} 단축키: {action}", {
+          label: translate(label),
+          action: translate(editing ? "변경 취소" : "변경"),
+        })}
+        aria-pressed={editing}
+        onClick={() => onEdit(action)}
+        className="mt-3 min-h-10 rounded-lg border border-line bg-panel px-3 text-[12px] font-bold text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      >
+        {editing ? "변경 취소" : "변경"}
+      </button>
+    </div>
   );
 }
 
 function TranscriptionTool({ workspaceId, folderId }: { workspaceId: string; folderId: string | null }) {
   return (
-    <div className="space-y-5">
-      <section className="rounded-2xl border border-line bg-soft/45 p-5">
-        <h2 className="text-[15px] font-bold text-ink">Soniox 실시간 전사</h2>
-        <p className="mt-2 text-[13px] leading-6 text-inkSoft">
-          녹음 중 Soniox 원문을 확인하고, 종료 후에는 원본 오디오와 로컬 Whisper 최종 전사를 이 폴더에 저장합니다.
-        </p>
-      </section>
-      <Recorder requestedLocation={{ workspaceId, folderId }} defaultTranscriptionMode="soniox" />
-    </div>
+    <Recorder requestedLocation={{ workspaceId, folderId }} defaultTranscriptionMode="soniox" />
   );
 }
 
 function TranslatorTool() {
   const capture = useSonioxLiveCapture();
+  const speech = useSonioxTts();
+  const { settings: shortcuts, settingsRef: shortcutsRef, storageWarning, assign: assignShortcut, reset: resetShortcuts } = useSonioxShortcutSettings();
+  const [editingShortcut, setEditingShortcut] = useState(false);
+  const [shortcutError, setShortcutError] = useState<string | null>(null);
   const [inputSource, setInputSource] = useState<SonioxInputSource>("microphone");
   const [translationType, setTranslationType] = useState<"one_way" | "two_way">("one_way");
   const [targetLanguage, setTargetLanguage] = useState("en");
   const [languageA, setLanguageA] = useState("ko");
   const [languageB, setLanguageB] = useState("en");
+  const [autoPlaySpeech, setAutoPlaySpeech] = useState(false);
+  const [ttsVoice, setTtsVoice] = useState<(typeof TTS_VOICES)[number]>("Maya");
+  const [ttsSpeed, setTtsSpeed] = useState(1);
+  const lastAutoPlayedRef = useRef("");
   const pending = capture.phase === "requesting" || capture.phase === "connecting";
   const busy = ["requesting", "connecting", "finishing"].includes(capture.phase);
   const listening = capture.phase === "listening";
   const translation: SonioxTranslationOptions = translationType === "one_way"
     ? { mode: "one_way", targetLanguage }
     : { mode: "two_way", languageA, languageB };
+  const captureRef = useLatestRef(capture);
+  const speechRef = useLatestRef(speech);
+  const editingShortcutRef = useLatestRef(editingShortcut);
+  const inputSourceRef = useLatestRef(inputSource);
+  const translationRef = useLatestRef(translation);
+  const translatedSpeech = translationType === "one_way"
+    ? capture.transcript.translation.final.trim()
+    : "";
+
+  const speakTranslation = () => {
+    if (!translatedSpeech) return;
+    void speech.speak({
+      text: translatedSpeech,
+      language: targetLanguage,
+      voice: ttsVoice,
+      speed: ttsSpeed,
+    });
+  };
+
+  useEffect(() => {
+    if (!autoPlaySpeech || capture.phase !== "finished" || !translatedSpeech) return;
+    const playbackKey = `${targetLanguage}:${ttsVoice}:${ttsSpeed}:${translatedSpeech}`;
+    if (lastAutoPlayedRef.current === playbackKey) return;
+    lastAutoPlayedRef.current = playbackKey;
+    void speech.speak({
+      text: translatedSpeech,
+      language: targetLanguage,
+      voice: ttsVoice,
+      speed: ttsSpeed,
+    });
+  }, [autoPlaySpeech, capture.phase, speech, targetLanguage, translatedSpeech, ttsSpeed, ttsVoice]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (editingShortcutRef.current) {
+        if (isShortcutEditingNavigationKey(event)) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (event.code === "Escape") {
+          setEditingShortcut(false);
+          setShortcutError(null);
+          return;
+        }
+        const binding = captureSonioxShortcut(event);
+        if (!binding) {
+          setShortcutError("기능키를 누르거나 Alt, Control, Command가 포함된 조합을 입력해 주세요.");
+          return;
+        }
+        const result = assignShortcut("translator", binding);
+        if (!result.ok) {
+          setShortcutError(`${SHORTCUT_LABELS[result.conflict]}에서 사용 중인 단축키입니다.`);
+          return;
+        }
+        setEditingShortcut(false);
+        setShortcutError(null);
+        return;
+      }
+      if (!matchSonioxShortcut(event, shortcutsRef.current.translator)) return;
+      const currentCapture = captureRef.current;
+      if (currentCapture.phase === "finishing") return;
+      event.preventDefault();
+      if (["listening", "requesting", "connecting"].includes(currentCapture.phase)) currentCapture.stop();
+      else {
+        speechRef.current.stop();
+        void currentCapture.start({ inputSource: inputSourceRef.current, translation: translationRef.current });
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [assignShortcut, captureRef, editingShortcutRef, inputSourceRef, shortcutsRef, speechRef, translationRef]);
 
   return (
     <div className="space-y-5">
       <section className="rounded-2xl border border-line bg-panel p-5 shadow-[0_8px_30px_-20px_rgba(42,36,32,.3)] sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h2 className="text-[18px] font-bold text-ink">실시간 번역 설정</h2>
+            <h2 className="text-[18px] font-bold text-ink">번역 설정</h2>
             <p className="mt-1 text-[13px] leading-6 text-inkSoft">한국어·영어·일본어·중국어 음성을 자동 감지해 실시간 자막으로 번역합니다.</p>
           </div>
           <StatusPill phase={capture.phase} />
         </div>
 
         <div className="mt-5 grid gap-4 md:grid-cols-2">
-          <label className="space-y-2 text-[13px] font-semibold text-ink">
+          <label className="flex flex-col gap-2 text-[13px] font-semibold text-ink">
             <span>오디오 입력</span>
             <select aria-label="오디오 입력" value={inputSource} onChange={(event) => setInputSource(event.target.value as SonioxInputSource)} disabled={listening || busy} className="min-h-11 w-full rounded-xl border border-line bg-bg px-3 text-[14px] font-medium text-ink">
               <option value="microphone">마이크 (대면·내 발화)</option>
               <option value="browser-tab">브라우저 탭 오디오 (Zoom·Google Meet 웹)</option>
             </select>
           </label>
-          <label className="space-y-2 text-[13px] font-semibold text-ink">
+          <label className="flex flex-col gap-2 text-[13px] font-semibold text-ink">
             <span>번역 방식</span>
             <select aria-label="번역 방식" value={translationType} onChange={(event) => setTranslationType(event.target.value as "one_way" | "two_way")} disabled={listening || busy} className="min-h-11 w-full rounded-xl border border-line bg-bg px-3 text-[14px] font-medium text-ink">
               <option value="one_way">감지한 언어 → 선택 언어</option>
@@ -130,9 +306,9 @@ function TranslatorTool() {
             </select>
           </label>
           {translationType === "one_way" ? (
-            <label className="space-y-2 text-[13px] font-semibold text-ink md:col-span-2">
+            <label className="flex flex-col gap-2 text-[13px] font-semibold text-ink">
               <span>번역 언어</span>
-              <select aria-label="번역 언어" value={targetLanguage} onChange={(event) => setTargetLanguage(event.target.value)} disabled={listening || busy} className="min-h-11 w-full rounded-xl border border-line bg-bg px-3 text-[14px] font-medium text-ink md:max-w-sm">
+              <select aria-label="번역 언어" value={targetLanguage} onChange={(event) => setTargetLanguage(event.target.value)} disabled={listening || busy} className="min-h-11 w-full rounded-xl border border-line bg-bg px-3 text-[14px] font-medium text-ink">
                 {LANGUAGES.map((language) => <option key={language.value} value={language.value}>{language.label}</option>)}
               </select>
             </label>
@@ -142,19 +318,109 @@ function TranslatorTool() {
               <LanguageSelect label="언어 B" value={languageB} onChange={setLanguageB} disabled={listening || busy} />
             </div>
           )}
+          <label className="flex flex-col gap-2 text-[13px] font-semibold text-ink">
+            <span>번역 음성</span>
+            <select
+              aria-label="번역 음성"
+              value={ttsVoice}
+              onChange={(event) => setTtsVoice(event.target.value as (typeof TTS_VOICES)[number])}
+              disabled={listening || busy || translationType !== "one_way"}
+              className="min-h-11 w-full rounded-xl border border-line bg-bg px-3 text-[14px] font-medium text-ink disabled:opacity-50"
+            >
+              {TTS_VOICES.map((voice) => <option key={voice} value={voice}>{voice}</option>)}
+            </select>
+          </label>
+          <label className="flex flex-col gap-2 text-[13px] font-semibold text-ink">
+            <span>음성 속도</span>
+            <select
+              aria-label="음성 속도"
+              value={ttsSpeed}
+              onChange={(event) => setTtsSpeed(Number(event.target.value))}
+              disabled={listening || busy || translationType !== "one_way"}
+              className="min-h-11 w-full rounded-xl border border-line bg-bg px-3 text-[14px] font-medium text-ink disabled:opacity-50"
+            >
+              <option value={0.8}>느리게 (0.8×)</option>
+              <option value={1}>보통 (1.0×)</option>
+              <option value={1.2}>빠르게 (1.2×)</option>
+            </select>
+          </label>
         </div>
 
+        <label className="mt-4 flex items-start gap-3 rounded-xl border border-line bg-soft/40 p-4 text-[13px] text-ink">
+          <input
+            type="checkbox"
+            checked={autoPlaySpeech}
+            onChange={(event) => {
+              const enabled = event.target.checked;
+              setAutoPlaySpeech(enabled);
+              if (enabled) void speech.prepare();
+            }}
+            disabled={translationType !== "one_way"}
+            className="mt-0.5 h-4 w-4 accent-accent"
+          />
+          <span>
+            <span className="block font-semibold">번역 음성 자동 재생</span>
+            <span className="mt-1 block leading-5 text-inkSoft">마이크를 끄고 번역이 끝난 뒤 Soniox 음성을 로컬 스피커로 재생해 피드백을 방지합니다.</span>
+          </span>
+        </label>
+        {translationType === "two_way" && (
+          <p className="mt-2 text-[12px] leading-5 text-inkSoft">양방향 자막은 문장별 대상 언어가 섞일 수 있어 자동 음성 재생을 사용하지 않습니다. 한 방향 번역에서 음성을 재생하세요.</p>
+        )}
+
         <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-          <button type="button" disabled={capture.phase === "finishing"} onClick={listening || pending ? capture.stop : () => void capture.start({ inputSource, translation })} className="min-h-11 rounded-full bg-ink px-5 text-[14px] font-semibold text-bg hover:bg-accent disabled:opacity-50">
+          <button
+            type="button"
+            disabled={capture.phase === "finishing"}
+            onClick={listening || pending
+              ? capture.stop
+              : () => {
+                  speech.stop();
+                  void capture.start({ inputSource, translation });
+                }}
+            className="min-h-11 rounded-full bg-ink px-5 text-[14px] font-semibold text-bg hover:bg-accent disabled:opacity-50"
+          >
             {listening ? "실시간 번역 중지" : pending ? "연결 취소" : "실시간 번역 시작"}
           </button>
+          {speech.phase === "connecting" || speech.phase === "playing" ? (
+            <button type="button" aria-label="번역 음성 중지" onClick={speech.stop} className="min-h-11 rounded-full border border-line px-5 text-[14px] font-semibold text-accent">
+              {speech.phase === "connecting" ? "음성 연결 취소" : "번역 음성 중지"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              aria-label="번역 음성 듣기"
+              disabled={!translatedSpeech || translationType !== "one_way" || listening || busy}
+              onClick={speakTranslation}
+              className="min-h-11 rounded-full border border-line px-5 text-[14px] font-semibold text-accent disabled:opacity-40"
+            >
+              번역 음성 듣기
+            </button>
+          )}
           {(capture.phase === "finished" || capture.phase === "error") && (
-            <button type="button" onClick={capture.reset} className="min-h-11 rounded-full border border-line px-5 text-[14px] font-semibold text-accent">새 세션</button>
+            <button type="button" onClick={() => { speech.stop(); capture.reset(); lastAutoPlayedRef.current = ""; }} className="min-h-11 rounded-full border border-line px-5 text-[14px] font-semibold text-accent">새 세션</button>
           )}
         </div>
+        <div className="mt-5">
+          <ShortcutSettingCard
+            action="translator"
+            label="Translator"
+            description="한 번 누르면 실시간 번역을 시작하고, 다시 누르면 중지합니다. 현재 탭에 포커스가 있을 때 동작합니다."
+            binding={shortcuts.translator}
+            editing={editingShortcut}
+            onEdit={() => {
+              setEditingShortcut((current) => !current);
+              setShortcutError(null);
+            }}
+          />
+          <button type="button" onClick={() => { resetShortcuts(); setShortcutError(null); }} className="mt-3 min-h-10 px-2 text-[12px] font-bold text-accent underline-offset-4 hover:underline">
+            모든 단축키 기본값 복원
+          </button>
+        </div>
+        {(shortcutError || storageWarning) && <p className="mt-3 text-[12px] font-medium text-error" role="alert">{shortcutError || storageWarning}</p>}
         {capture.error && <p className="mt-4 text-[13px] text-error" role="alert">{capture.error}</p>}
+        {speech.error && <p className="mt-4 text-[13px] text-error" role="alert">{speech.error}</p>}
         <p className="mt-4 text-[12px] leading-5 text-inkSoft">
-          웹 버전은 번역 자막을 표시하지만 번역 음성을 회의 상대에게 자동으로 보내지는 않습니다.
+          한 방향 번역 결과는 로컬 스피커로 듣거나 완료 후 자동 재생할 수 있습니다. 회의 상대의 마이크 입력으로 자동 전송되지는 않습니다.
         </p>
       </section>
 
@@ -178,7 +444,7 @@ function TranslatorTool() {
 
 function LanguageSelect({ label, value, onChange, disabled }: { label: string; value: string; onChange(value: string): void; disabled: boolean }) {
   return (
-    <label className="space-y-2 text-[13px] font-semibold text-ink">
+    <label className="flex flex-col gap-2 text-[13px] font-semibold text-ink">
       <span>{label}</span>
       <select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled} className="min-h-11 w-full rounded-xl border border-line bg-bg px-3 text-[14px] font-medium text-ink">
         {LANGUAGES.map((language) => <option key={language.value} value={language.value}>{language.label}</option>)}
@@ -189,17 +455,34 @@ function LanguageSelect({ label, value, onChange, disabled }: { label: string; v
 
 function VoiceTypingTool() {
   const capture = useSonioxLiveCapture();
+  const { settings: shortcuts, settingsRef: shortcutsRef, storageWarning, assign: assignShortcut, reset: resetShortcuts } = useSonioxShortcutSettings();
+  const [editingShortcut, setEditingShortcut] = useState<SonioxShortcutAction | null>(null);
+  const [shortcutError, setShortcutError] = useState<string | null>(null);
   const [targetLanguage, setTargetLanguage] = useState("en");
   const [output, setOutput] = useState("");
   const [smartCleanup, setSmartCleanup] = useState(true);
+  const [activeMode, setActiveMode] = useState<VoiceTypingShortcutMode>("dictation");
   const modeRef = useRef<VoiceTypingShortcutMode>("dictation");
+  const commandPendingRef = useRef(false);
   const processedTranscriptRef = useRef<typeof capture.transcript | null>(null);
+  const captureRef = useLatestRef(capture);
+  const editingShortcutRef = useLatestRef(editingShortcut);
+  const targetLanguageRef = useLatestRef(targetLanguage);
   const pending = capture.phase === "requesting" || capture.phase === "connecting";
   const listening = capture.phase === "listening";
   const busy = ["requesting", "connecting", "finishing"].includes(capture.phase);
 
+  useEffect(() => {
+    if (!["requesting", "connecting", "listening", "finishing"].includes(capture.phase)) {
+      commandPendingRef.current = false;
+    }
+  }, [capture.phase]);
+
   const begin = (mode: VoiceTypingShortcutMode) => {
+    if (commandPendingRef.current) return;
+    commandPendingRef.current = true;
     modeRef.current = mode;
+    setActiveMode(mode);
     const translation: SonioxTranslationOptions = mode === "translation"
       ? { mode: "one_way", targetLanguage }
       : { mode: "none" };
@@ -208,15 +491,61 @@ function VoiceTypingTool() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      const mode = resolveVoiceTypingShortcut(event);
+      const editingAction = editingShortcutRef.current;
+      if (editingAction) {
+        if (isShortcutEditingNavigationKey(event)) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (event.code === "Escape") {
+          setEditingShortcut(null);
+          setShortcutError(null);
+          return;
+        }
+        const binding = captureSonioxShortcut(event);
+        if (!binding) {
+          setShortcutError("기능키를 누르거나 Alt, Control, Command가 포함된 조합을 입력해 주세요.");
+          return;
+        }
+        const result = assignShortcut(editingAction, binding);
+        if (!result.ok) {
+          setShortcutError(`${SHORTCUT_LABELS[result.conflict]}에서 사용 중인 단축키입니다.`);
+          return;
+        }
+        setEditingShortcut(null);
+        setShortcutError(null);
+        return;
+      }
+      const configuredMode = matchSonioxShortcut(event, shortcutsRef.current.dictation)
+        ? "dictation"
+        : matchSonioxShortcut(event, shortcutsRef.current.translation)
+          ? "translation"
+          : null;
+      const legacyMode = resolveVoiceTypingShortcut(event);
+      const mode = configuredMode ?? (
+        legacyMode && hasDefaultSonioxShortcut(shortcutsRef.current, legacyMode)
+          ? legacyMode
+          : null
+      );
       if (!mode) return;
+      const currentCapture = captureRef.current;
+      if (currentCapture.phase === "finishing") return;
       event.preventDefault();
-      if (capture.phase === "listening" || capture.phase === "requesting" || capture.phase === "connecting") capture.stop();
-      else if (capture.phase !== "finishing") begin(mode);
+      if (["listening", "requesting", "connecting"].includes(currentCapture.phase)) {
+        currentCapture.stop();
+        return;
+      }
+      if (commandPendingRef.current) return;
+      commandPendingRef.current = true;
+      modeRef.current = mode;
+      setActiveMode(mode);
+      const translation: SonioxTranslationOptions = mode === "translation"
+        ? { mode: "one_way", targetLanguage: targetLanguageRef.current }
+        : { mode: "none" };
+      void currentCapture.start({ inputSource: "microphone", translation });
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  });
+  }, [assignShortcut, captureRef, editingShortcutRef, shortcutsRef, targetLanguageRef]);
 
   useEffect(() => {
     if (capture.phase !== "finished" || processedTranscriptRef.current === capture.transcript) return;
@@ -231,22 +560,43 @@ function VoiceTypingTool() {
       <section className="rounded-2xl border border-line bg-panel p-5 shadow-[0_8px_30px_-20px_rgba(42,36,32,.3)] sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h2 className="text-[18px] font-bold text-ink">Voice Typing 설정</h2>
+            <h2 className="text-[18px] font-bold text-ink">입력 설정</h2>
             <p className="mt-1 text-[13px] leading-6 text-inkSoft">말한 내용을 실시간으로 받아쓰거나 선택한 언어로 번역해 편집기에 추가합니다.</p>
           </div>
-          <StatusPill phase={capture.phase} />
+          <StatusPill phase={capture.phase} labels={VOICE_PHASE_LABELS[activeMode]} />
         </div>
 
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
-          <div className="rounded-xl border border-line bg-soft/40 p-4">
-            <div className="flex items-center justify-between gap-3"><span className="text-[13px] font-semibold text-ink">일반 받아쓰기</span><kbd className="rounded-md border border-line bg-panel px-2 py-1 font-mono text-[12px] text-ink">Fn</kbd></div>
-            <p className="mt-2 text-[12px] leading-5 text-inkSoft">한 번 눌러 시작하고 다시 눌러 종료합니다. 웹 대체키는 F8입니다.</p>
-          </div>
-          <div className="rounded-xl border border-line bg-soft/40 p-4">
-            <div className="flex items-center justify-between gap-3"><span className="text-[13px] font-semibold text-ink">번역해서 입력</span><kbd className="rounded-md border border-line bg-panel px-2 py-1 font-mono text-[12px] text-ink">Fn + Shift</kbd></div>
-            <p className="mt-2 text-[12px] leading-5 text-inkSoft">선택한 언어로 번역합니다. 웹 대체키는 Shift+F8입니다.</p>
-          </div>
+          <ShortcutSettingCard
+            action="dictation"
+            label="받아쓰기"
+            description="한 번 누르면 받아쓰기를 시작하고, 다시 누르면 중지합니다."
+            binding={shortcuts.dictation}
+            editing={editingShortcut === "dictation"}
+            onEdit={(action) => {
+              setEditingShortcut((current) => current === action ? null : action);
+              setShortcutError(null);
+            }}
+          />
+          <ShortcutSettingCard
+            action="translation"
+            label="번역 입력"
+            description="선택한 언어로 번역해 입력합니다."
+            binding={shortcuts.translation}
+            editing={editingShortcut === "translation"}
+            onEdit={(action) => {
+              setEditingShortcut((current) => current === action ? null : action);
+              setShortcutError(null);
+            }}
+          />
         </div>
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-[12px] leading-5 text-inkSoft">변경을 누른 뒤 새 키 조합을 입력해 주세요. Escape를 누르면 취소합니다.</p>
+          <button type="button" onClick={() => { resetShortcuts(); setEditingShortcut(null); setShortcutError(null); }} className="min-h-10 px-2 text-[12px] font-bold text-accent underline-offset-4 hover:underline">
+            모든 단축키 기본값 복원
+          </button>
+        </div>
+        {(shortcutError || storageWarning) && <p className="mt-2 text-[12px] font-medium text-error" role="alert">{shortcutError || storageWarning}</p>}
 
         <div className="mt-5 flex flex-col gap-4 md:flex-row md:items-end">
           <LanguageSelect label="번역 대상 언어" value={targetLanguage} onChange={setTargetLanguage} disabled={listening || busy} />
@@ -268,17 +618,17 @@ function VoiceTypingTool() {
       <section className="rounded-2xl border border-line bg-panel p-5">
         <div className="flex items-center justify-between gap-3">
           <label htmlFor="voice-typing-output" className="text-[14px] font-bold text-ink">입력 결과</label>
-          <button type="button" disabled={!output} onClick={() => void navigator.clipboard?.writeText(output)} className="min-h-10 rounded-full border border-line px-4 text-[12px] font-semibold text-accent disabled:opacity-40">복사</button>
+          <button type="button" disabled={!output} onClick={() => void navigator.clipboard?.writeText(output)} className="min-h-11 rounded-full border border-line px-4 text-[12px] font-semibold text-accent disabled:opacity-40">복사</button>
         </div>
         <textarea id="voice-typing-output" value={output} onChange={(event) => setOutput(event.target.value)} placeholder="받아쓰기 또는 번역 결과가 여기에 추가됩니다." className="mt-3 min-h-48 w-full resize-y rounded-xl border border-line bg-bg p-4 text-[15px] leading-7 text-ink" />
         {(capture.transcript.original.final || capture.transcript.original.provisional) && capture.phase !== "finished" && (
-          <p className="mt-3 whitespace-pre-wrap text-[13px] text-inkSoft">{capture.transcript.original.final}{capture.transcript.original.provisional}</p>
+          <p data-i18n-user-content className="mt-3 whitespace-pre-wrap text-[13px] text-inkSoft">{capture.transcript.original.final}{capture.transcript.original.provisional}</p>
         )}
       </section>
 
       <section className="rounded-2xl border border-warn/40 bg-warnBg p-5 text-[13px] leading-6 text-ink">
         <h3 className="font-bold">웹 단축키 범위</h3>
-        <p className="mt-2 text-inkSoft">웹에서는 현재 탭에 포커스가 있을 때만 단축키를 감지할 수 있습니다. macOS가 Fn 이벤트를 브라우저에 전달하지 않을 수 있어 F8을 함께 지원합니다. 다른 앱의 커서 위치에 직접 삽입하는 전역 입력은 향후 데스크톱 앱에서 접근성 권한을 받은 뒤 지원합니다.</p>
+        <p className="mt-2 text-inkSoft">웹에서는 현재 탭에 포커스가 있을 때만 단축키를 감지할 수 있습니다. 기본값은 Option+Shift+D와 Option+Shift+V입니다. 기본 설정에서는 기존 Fn/F8과 Shift+Fn/F8도 함께 동작하지만, 브라우저가 Fn 키를 전달하지 않을 수 있습니다. 해당 기능의 단축키를 변경하면 기존 대체키는 해제됩니다. 다른 앱의 커서 위치에 직접 삽입하는 전역 입력은 향후 데스크톱 앱에서 접근성 권한을 받은 뒤 지원합니다.</p>
       </section>
       <p className="text-[12px] leading-5 text-inkSoft">받아쓰기 중 마이크 오디오가 Soniox로 전송되며 사용량 기반 비용이 발생할 수 있습니다.</p>
     </div>
@@ -312,8 +662,8 @@ export function SonioxWorkspaceClient() {
   const workspace = libraryState.library.workspaces.find((item) => item.id === selection.workspaceId);
   const folder = selection.folderId ? libraryState.library.folders.find((item) => item.id === selection.folderId) : null;
   const headings = {
-    transcription: ["전사", "회의를 녹음하면서 Soniox 실시간 원문을 확인합니다."],
-    translator: ["실시간 번역", "Zoom·Google Meet 웹 탭 또는 마이크 음성을 실시간 번역합니다."],
+    transcription: ["Smart Scribe", "회의를 녹음하고 실시간 원문을 확인한 뒤 로컬 최종 전사로 저장합니다."],
+    translator: ["Translator", "Zoom·Google Meet 웹 탭 또는 마이크 음성을 실시간 번역합니다."],
     "voice-typing": ["Voice Typing", "단축키로 받아쓰기와 번역 입력을 전환합니다."],
   } as const;
   const [title, description] = headings[selection.tool];
@@ -321,10 +671,13 @@ export function SonioxWorkspaceClient() {
   return (
     <main id="main" className="w-full max-w-6xl space-y-7 px-4 py-10 sm:px-6 lg:px-8">
       <header>
-        <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-accent">Soniox Workspace</p>
-        <p className="mt-2 text-[13px] font-medium text-inkSoft">{workspace?.name ?? "워크스페이스"} / {folder?.name ?? "폴더 없음"}</p>
-        <h1 className="mt-3 text-3xl font-bold tracking-tight text-ink">{title}</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-ink">{title}</h1>
         <p className="mt-2 text-[15px] leading-6 text-inkSoft">{description}</p>
+        {selection.tool === "transcription" && (
+          <p className="mt-3 text-[13px] font-medium text-inkSoft">
+            저장 위치 · {workspace ? <span data-i18n-user-content>{workspace.name}</span> : "워크스페이스"} / {folder ? <span data-i18n-user-content>{folder.name}</span> : "미분류"}
+          </p>
+        )}
       </header>
       {selection.tool === "transcription" && <TranscriptionTool workspaceId={selection.workspaceId} folderId={selection.folderId} />}
       {selection.tool === "translator" && <TranslatorTool />}

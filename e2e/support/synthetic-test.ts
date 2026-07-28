@@ -9,6 +9,12 @@ export const test = base.extend<SyntheticFixtures>({
     const consoleErrors: string[] = [];
     const externalRequests: string[] = [];
 
+    await page.addInitScript(() => {
+      if (!localStorage.getItem("ai-note-locale")) {
+        localStorage.setItem("ai-note-locale", "ko");
+      }
+    });
+
     page.on("pageerror", (error) => consoleErrors.push(error.message));
     page.on("console", (message) => {
       if (message.type() === "error") consoleErrors.push(message.text());
@@ -28,7 +34,7 @@ export const test = base.extend<SyntheticFixtures>({
 
     if (page.isClosed()) throw new Error("synthetic browser page closed before evidence capture");
     await testInfo.attach("browser-screenshot", {
-      body: await page.screenshot({ fullPage: true }),
+      body: await page.screenshot({ fullPage: true, caret: "initial" }),
       contentType: "image/png",
     });
     await testInfo.attach("browser-console", {

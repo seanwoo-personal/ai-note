@@ -602,6 +602,8 @@ export function RecorderSessionProvider({ children }: { children: ReactNode }) {
             || generation !== sessionGenerationRef.current
             || discardInProgressRef.current
           ) return;
+          connectedSession?.close();
+          if (sonioxSessionRef.current === connectedSession) sonioxSessionRef.current = null;
           setLiveError(message);
           setLiveStatus("error");
         },

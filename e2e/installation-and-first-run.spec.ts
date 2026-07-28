@@ -28,7 +28,7 @@ const manualFixtureModule = importRuntimeModule<ManualEditingFixtureModule>(path
 
 async function attachMilestone(page: Page, testInfo: TestInfo, name: string) {
   await testInfo.attach(`browser-screenshot:${name}`, {
-    body: await page.screenshot({ fullPage: true }),
+    body: await page.screenshot({ fullPage: true, caret: "initial" }),
     contentType: "image/png",
   });
 }
@@ -64,10 +64,7 @@ test("installation first run, provider models, summary default, and transcriptio
   ],
 }, async ({ page }, testInfo) => {
   const { firstRunMeetingForProject } = await firstRunFixtureModule;
-  const {
-    MANUAL_EDITING_WORKSPACE_ID,
-    manualEditingMeetingForProject,
-  } = await manualFixtureModule;
+  const { manualEditingMeetingForProject } = await manualFixtureModule;
   const failureMeeting = firstRunMeetingForProject(testInfo.project.name);
   const completedMeeting = manualEditingMeetingForProject(testInfo.project.name);
 
@@ -157,13 +154,13 @@ test("installation first run, provider models, summary default, and transcriptio
   const readinessCard = page.getByRole("heading", { name: "회의록 요약을 준비하세요" })
     .locator("..");
   await expect(readinessCard).toContainText(
-    "요약 모델이 없어도 회의 녹음과 로컬 전사는 계속 사용할 수 있습니다.",
+    "요약 모델과 관계없이 로컬 Whisper 전사 또는 Soniox 실시간 자막과 번역을 선택할 수 있습니다.",
   );
   const configureSummary = readinessCard.getByRole("link", { name: "AI 요약 설정" });
   const recordWithoutSummary = readinessCard.getByRole("button", {
     name: "요약 없이 회의 녹음",
   });
-  const recorderStart = page.getByRole("button", { name: "회의 녹음 시작" });
+  const recorderStart = page.getByRole("button", { name: "Whisper 전사용 녹음 시작" });
   await expect(configureSummary).toBeVisible();
   await expect(recordWithoutSummary).toBeVisible();
   await expect(recorderStart).toBeEnabled();
@@ -286,7 +283,7 @@ test("installation first run, provider models, summary default, and transcriptio
   await page.goto("/");
   const failureRow = page.getByRole("link").filter({ hasText: failureMeeting.title });
   await expect(failureRow).toContainText("전사 실패");
-  const failureDetailPath = `/meetings/${failureMeeting.meetingId}?sourceWorkspace=${MANUAL_EDITING_WORKSPACE_ID}&sourceView=all`;
+  const failureDetailPath = `/meetings/${failureMeeting.meetingId}`;
   await expect(failureRow).toHaveAttribute("href", failureDetailPath);
   await page.goto(failureDetailPath);
   await expect(page.getByRole("heading", { name: failureMeeting.title })).toBeVisible();

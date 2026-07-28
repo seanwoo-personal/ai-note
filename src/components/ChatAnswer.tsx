@@ -4,8 +4,10 @@ import { Fragment, type MouseEvent, type ReactNode } from "react";
 
 import { ChatStatus } from "@/components/ChatStatus";
 import { CopyButton } from "@/components/CopyButton";
+import { useOptionalAppPreferences } from "@/components/AppPreferences";
 import { GuardedLink } from "@/components/RecorderNavigation";
 import type { ChatMode, ChatResponse } from "@/domain/chat";
+import { translateUi } from "@/lib/i18n";
 
 type AnswerSegment = ChatResponse["answerSegments"][number];
 
@@ -76,6 +78,8 @@ export function ChatAnswer({
   onSwitchToSearch,
   onUpdateSearchData,
 }: ChatAnswerProps) {
+  const preferences = useOptionalAppPreferences();
+  const translate = preferences?.t ?? ((source: string, values = {}) => translateUi("ko", source, values));
   const references = new Map(answer.references.map((reference) => [reference.number, reference]));
   const partialSearchData = answer.warnings.includes("index_partial");
   const scopeLimited = answer.warnings.some((warning) => [
@@ -110,7 +114,8 @@ export function ChatAnswer({
           <a
             key={number}
             href={`#chat-${answerKey}-reference-${number}`}
-            aria-label={`출처 ${number}: ${reference.currentTitle}`}
+            data-i18n-user-attributes
+            aria-label={translate("출처 {number}: {title}", { number, title: reference.currentTitle })}
             onClick={(event) => focusReference(event, number)}
             className="ml-0.5 inline rounded-[2px] font-semibold text-accent underline decoration-line underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
@@ -137,7 +142,7 @@ export function ChatAnswer({
             : "확인된 출처 없음"}
       </p>
 
-      <div className="max-w-[72ch] space-y-3 break-words text-[16px] leading-[1.7] text-ink [overflow-wrap:anywhere]">
+      <div data-i18n-user-content className="max-w-[72ch] space-y-3 break-words text-[16px] leading-[1.7] text-ink [overflow-wrap:anywhere]">
         {blocks.map((block, blockIndex) => block.kind === "paragraph" ? (
           <p key={`paragraph-${blockIndex}`}>
             {renderSegment(block.segments[0], `paragraph-segment-${blockIndex}`)}
@@ -210,7 +215,7 @@ export function ChatAnswer({
                   <div className="flex min-w-0 items-start gap-3">
                     <span className="shrink-0 text-[13px] font-bold text-accent">[{reference.number}]</span>
                     <div className="min-w-0">
-                      <p className="break-words text-[14px] font-semibold leading-relaxed text-ink [overflow-wrap:anywhere]">
+                      <p data-i18n-user-content className="break-words text-[14px] font-semibold leading-relaxed text-ink [overflow-wrap:anywhere]">
                         {reference.currentTitle}
                       </p>
                       <p className="mt-0.5 text-[13px] text-inkSoft">{reference.startedAt.slice(0, 10)}</p>

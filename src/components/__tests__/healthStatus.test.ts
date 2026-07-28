@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   formatLlmStatus,
+  formatSonioxStatus,
   formatWhisperStatus,
   getLlmReadiness,
   providerLabel,
@@ -63,5 +64,26 @@ describe("healthStatus", () => {
       "unavailable",
     );
     expect(getLlmReadiness({ configured: true, provider: "claude-cli", ok: true, detail: "ready" })).toBe("ready");
+  });
+
+  it("describes Soniox configuration without claiming an unverified connection", () => {
+    expect(formatSonioxStatus({ kind: "checking" })).toMatchObject({
+      label: "Soniox · 설정 확인 중",
+      tone: "neutral",
+    });
+    expect(formatSonioxStatus({ kind: "unconfigured" })).toMatchObject({
+      label: "Soniox · 미설정",
+      tone: "warn",
+    });
+    expect(formatSonioxStatus({ kind: "unknown" })).toMatchObject({
+      label: "Soniox · 설정 확인 불가",
+      tone: "warn",
+    });
+    expect(formatSonioxStatus({ kind: "configured" })).toMatchObject({
+      label: "Soniox · 키 설정됨 · 인터넷 필요",
+      title: expect.stringContaining("시작할 때"),
+      tone: "neutral",
+    });
+    expect(formatSonioxStatus({ kind: "configured" }).label).not.toContain("연결됨");
   });
 });

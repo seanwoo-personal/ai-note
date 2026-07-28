@@ -213,6 +213,30 @@ describe("useSonioxLiveCapture", () => {
     expect(track.stop).toHaveBeenCalledTimes(1);
   });
 
+  it("coalesces rapid start requests before React can rerender", async () => {
+    const track = new FakeTrack();
+    const stream = new FakeMediaStream([track]) as unknown as MediaStream;
+    let resolveStream!: (stream: MediaStream) => void;
+    const pending = new Promise<MediaStream>((resolve) => { resolveStream = resolve; });
+    const getUserMedia = vi.fn(() => pending);
+    installMediaDevices({ getUserMedia });
+    const { result } = renderHook(() => useSonioxLiveCapture());
+
+    let first!: Promise<void>;
+    let second!: Promise<void>;
+    act(() => {
+      first = result.current.start(START_OPTIONS);
+      second = result.current.start(START_OPTIONS);
+    });
+
+    expect(getUserMedia).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      resolveStream(stream);
+      await Promise.all([first, second]);
+    });
+    expect(soniox.connect).toHaveBeenCalledTimes(1);
+  });
+
   it("cancels a pending permission request and rejects its stale stream", async () => {
     const track = new FakeTrack();
     const stream = new FakeMediaStream([track]) as unknown as MediaStream;

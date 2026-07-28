@@ -48,12 +48,17 @@ function detailHref(meetingId: string, scope: LibraryMeetingScope): string {
   return `/meetings/${meetingId}?${query.toString()}`;
 }
 
-function scopeTitle(scope: LibraryMeetingScope, library: NonNullable<ReturnType<typeof useLibrary>["library"]>): string {
-  if (scope.kind === "global") return "모든 내용";
+function ScopeTitleCopy({ scope, library }: {
+  scope: LibraryMeetingScope;
+  library: NonNullable<ReturnType<typeof useLibrary>["library"]>;
+}) {
+  if (scope.kind === "global") return <>모든 내용</>;
   const workspace = library.workspaces.find((candidate) => candidate.id === scope.workspaceId);
-  if (scope.kind === "workspace") return `${workspace?.name ?? "워크스페이스"} · 모든 내용`;
-  if (scope.kind === "unfiled") return `${workspace?.name ?? "워크스페이스"} · 미분류`;
-  return library.folders.find((candidate) => candidate.id === scope.folderId)?.name ?? "폴더";
+  const workspaceCopy = workspace ? <span data-i18n-user-content>{workspace.name}</span> : <>워크스페이스</>;
+  if (scope.kind === "workspace") return <>{workspaceCopy} · 모든 내용</>;
+  if (scope.kind === "unfiled") return <>{workspaceCopy} · 미분류</>;
+  const folder = library.folders.find((candidate) => candidate.id === scope.folderId);
+  return folder ? <span data-i18n-user-content>{folder.name}</span> : <>폴더</>;
 }
 
 function emptyCopy(scope: LibraryMeetingScope): string {
@@ -98,6 +103,52 @@ function SummaryReadinessCard({ readiness }: { readiness: LlmReadiness }) {
         >
           요약 없이 회의 녹음
         </button>
+      </div>
+    </section>
+  );
+}
+
+export function HomeQuickStart({ workspaceId }: { workspaceId: string }) {
+  const workspace = encodeURIComponent(workspaceId);
+  const tools = [
+    {
+      title: "Smart Scribe",
+      description: "Soniox 실시간 자막으로 회의를 기록합니다.",
+      href: `/soniox?workspace=${workspace}&tool=transcription`,
+    },
+    {
+      title: "Translator",
+      description: "마이크나 브라우저 탭 음성을 번역하고 음성으로 다시 듣습니다.",
+      href: `/soniox?workspace=${workspace}&tool=translator`,
+    },
+    {
+      title: "Voice Typing",
+      description: "단축키로 받아쓰기와 번역 입력을 시작합니다.",
+      href: `/soniox?workspace=${workspace}&tool=voice-typing`,
+    },
+  ] as const;
+
+  return (
+    <section className="space-y-5" aria-labelledby="home-quick-start-title">
+      <div>
+        <h2 id="home-quick-start-title" className="text-[18px] font-bold text-ink">바로 시작</h2>
+        <p className="mt-1 text-[13px] leading-6 text-inkSoft">기존 회의 녹음과 Soniox 도구를 여기서 바로 사용할 수 있습니다.</p>
+      </div>
+      <Recorder requestedLocation={{ workspaceId, folderId: null }} />
+      <div className="grid gap-3 md:grid-cols-3">
+        {tools.map((tool) => (
+          <article key={tool.title} className="flex min-w-0 flex-col rounded-2xl border border-line bg-panel p-4">
+            <h3 className="text-[15px] font-bold text-ink">{tool.title}</h3>
+            <p className="mt-2 flex-1 text-[12px] leading-5 text-inkSoft">{tool.description}</p>
+            <GuardedLink
+              href={tool.href}
+              aria-label={`${tool.title} 열기`}
+              className="mt-4 inline-flex min-h-11 items-center justify-center rounded-full border border-line px-4 text-[13px] font-semibold text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+            >
+              열기
+            </GuardedLink>
+          </article>
+        ))}
       </div>
     </section>
   );
@@ -333,6 +384,8 @@ export function HomeClient() {
           </h1>
           <p className="mt-2 text-[15px] text-inkSoft">워크스페이스와 폴더에 관계없이 최근에 작업한 기록을 모았습니다.</p>
         </header>
+        <SummaryReadinessCard readiness={getLlmReadiness(llm)} />
+        <HomeQuickStart workspaceId={library.defaultWorkspaceId} />
         {recentRows.length === 0 ? (
           <section className="rounded-[16px] border border-line bg-panel px-4 py-10 text-center sm:px-6">
             <h2 className="text-[16px] font-bold text-ink">최근 작업한 문서가 없습니다</h2>
@@ -356,7 +409,7 @@ export function HomeClient() {
     <main id="main" className="w-full max-w-5xl space-y-8 px-4 py-12 sm:px-6">
       <header>
         <h1 ref={headingRef} tabIndex={-1} className="text-2xl font-bold tracking-tight text-ink">
-          {scopeTitle(scope, library)}
+          <ScopeTitleCopy scope={scope} library={library} />
         </h1>
         <p className="mt-2 break-words text-[15px] leading-relaxed text-inkSoft">
           원본 오디오는 로컬에 저장합니다. 전사는 로컬 Whisper와 Soniox 실시간 자막·번역 중에서 선택하고, 녹음이 끝나면 설정한 Claude/Codex CLI 또는 Ollama로 회의록을 요약할 수 있습니다.
@@ -381,7 +434,8 @@ export function HomeClient() {
       {moveNotice && movedHref && (
         <section className="flex flex-col items-stretch gap-3 rounded-[14px] border border-success/40 bg-panel p-4 sm:flex-row sm:items-center sm:justify-between sm:px-6" role="status" aria-live="polite">
           <p className="min-w-0 break-words text-[13px] text-ink">
-            <span className="font-semibold">{moveNotice.title}</span>을(를) {movedLabel || "선택한 위치"}(으)로 이동했습니다.
+            <span data-i18n-user-content className="font-semibold">{moveNotice.title}</span>을(를){" "}
+            {movedLabel ? <span data-i18n-user-content>{movedLabel}</span> : "선택한 위치"}(으)로 이동했습니다.
           </p>
           <div className="flex w-full flex-col gap-2 min-[360px]:flex-row sm:w-auto">
             <GuardedLink
@@ -412,7 +466,7 @@ export function HomeClient() {
           <p className="rounded-[12px] border border-line bg-panel px-4 py-3 text-[13px] text-inkSoft">
             새 녹음은 <span className="font-semibold text-ink">
               {scope.kind === "folder"
-                ? `${scopeTitle(scope, library)} 폴더에 저장`
+                ? <><ScopeTitleCopy scope={scope} library={library} /> 폴더에 저장</>
                 : "이 워크스페이스의 미분류에 저장"}
             </span>됩니다.
           </p>
@@ -503,13 +557,16 @@ export function HomeClient() {
             {libraryState.organizationPending.rows.map((row) => (
               <li key={row.id} className="min-w-0 rounded-xl border border-warn/40 bg-panel p-4">
                 <GuardedLink href={`/meetings/${row.id}`} className="flex min-h-11 min-w-0 flex-col items-start gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 sm:flex-row sm:items-center sm:justify-between">
-                  <span className="min-w-0 break-words font-semibold text-ink">{row.title}</span>
+                  <span data-i18n-user-content className="min-w-0 break-words font-semibold text-ink">{row.title}</span>
                   <span className="shrink-0 rounded-full bg-warnBg px-3 py-1 text-[12px] font-semibold text-warn">위치 저장 안 됨</span>
                 </GuardedLink>
                 <p className="mt-1 break-words text-[12px] text-inkSoft">
-                  {row.requested
-                    ? `요청 위치: ${requestedWorkspaceName(row.requested.workspaceId)} · ${requestedFolderName(row.requested.folderId)}`
-                    : "요청 위치 없음 · 조직 정보 없이 저장됨"}
+                  {row.requested ? (
+                    <>
+                      요청 위치: <span data-i18n-user-content>{requestedWorkspaceName(row.requested.workspaceId)}</span>
+                      {" · "}<span data-i18n-user-content>{requestedFolderName(row.requested.folderId)}</span>
+                    </>
+                  ) : "요청 위치 없음 · 조직 정보 없이 저장됨"}
                 </p>
                 <button
                   type="button"

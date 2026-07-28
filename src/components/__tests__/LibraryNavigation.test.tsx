@@ -22,6 +22,7 @@ const navigation = vi.hoisted(() => ({
 let libraryState: LibraryProviderValue;
 const healthState = vi.hoisted(() => ({
   whisper: { connected: true, ready: true, model: "base" } as WhisperHealthState,
+  soniox: { kind: "configured" as const },
   llm: {
     configured: true,
     provider: "claude-cli",
@@ -57,8 +58,24 @@ vi.mock("@/components/useHealth", () => ({
   useHealth: () => ({
     whisper: healthState.whisper,
     llm: healthState.llm,
+    soniox: healthState.soniox,
   }),
 }));
+
+vi.mock("@/components/AppPreferences", () => {
+  const preferences = {
+    t: (source: string, values: Record<string, string | number> = {}) => source.replace(
+      /\{([a-zA-Z][a-zA-Z0-9_]*)\}/g,
+      (match, key: string) => Object.prototype.hasOwnProperty.call(values, key) ? String(values[key]) : match,
+    ),
+    brandName: "헤이홈",
+  };
+  return {
+    AppPreferencesControls: () => <div data-testid="app-preferences-controls" />,
+    useAppPreferences: () => preferences,
+    useOptionalAppPreferences: () => preferences,
+  };
+});
 
 const VERSION = { libraryId: "90000000-0000-4000-8000-000000000009", revision: 3 };
 const DEFAULT_WORKSPACE = "10000000-0000-4000-8000-000000000001";
@@ -223,6 +240,7 @@ describe("activated library navigation", () => {
     renderShell();
 
     const nav = screen.getByRole("navigation", { name: "라이브러리" });
+    expect(within(nav).getByTestId("app-preferences-controls")).toBeInTheDocument();
     expect(within(nav).getAllByRole("link", { name: "헤이홈 AI 기록도구 홈" })).toHaveLength(2);
     expect(within(nav).getAllByRole("link", { name: "헤이홈 AI 기록도구 홈" }).every((link) => link.getAttribute("href") === "/")).toBe(true);
     expect(within(nav).queryByLabelText("제품 전환")).not.toBeInTheDocument();
@@ -231,12 +249,16 @@ describe("activated library navigation", () => {
     expect(within(nav).getByText("내 워크스페이스")).toBeInTheDocument();
     expect(within(nav).getByRole("button", { name: "새 워크스페이스" })).toBeInTheDocument();
     expect(within(nav).getByRole("button", { name: "기본 이름 수정" })).toBeInTheDocument();
-    expect(within(nav).getByRole("link", { name: "스마트 스크라이브" })).toHaveAttribute(
+    expect(within(nav).getByRole("link", { name: "Smart Scribe" })).toHaveAttribute(
       "href",
       `/soniox?workspace=${DEFAULT_WORKSPACE}&folder=${FOLDER}&tool=transcription`,
     );
-    expect(within(nav).getByRole("link", { name: "트랜스레이터" })).toHaveAttribute("aria-current", "page");
-    expect(within(nav).getByRole("link", { name: "보이스 타이핑" })).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: "Translator" })).toHaveAttribute("aria-current", "page");
+    expect(within(nav).getByRole("link", { name: "Voice Typing" })).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: /프로젝트/ })).toHaveAttribute(
+      "href",
+      `/soniox?workspace=${DEFAULT_WORKSPACE}&folder=${FOLDER}&tool=translator`,
+    );
     expect(within(nav).getByRole("button", { name: "회의 검색" })).toBeInTheDocument();
     expect(within(nav).getByRole("link", { name: /모든 내용/ })).toBeInTheDocument();
     expect(within(nav).getByRole("link", { name: /미분류/ })).toBeInTheDocument();
@@ -299,11 +321,14 @@ describe("activated library navigation", () => {
   });
 
   it("marks the active folder scope with aria-current and leaves All inactive", () => {
+    navigation.search = `workspace=${DEFAULT_WORKSPACE}&folder=${FOLDER}`;
     libraryState = readyState({ scope: { kind: "folder", workspaceId: DEFAULT_WORKSPACE, folderId: FOLDER } });
     renderShell();
     const nav = screen.getByRole("navigation", { name: "라이브러리" });
     expect(within(nav).getByRole("link", { name: /프로젝트/ })).toHaveAttribute("aria-current", "page");
     expect(within(nav).getByRole("link", { name: /모든 내용/ })).not.toHaveAttribute("aria-current");
+    const scopeHeading = document.querySelector("#main > header h1");
+    expect(scopeHeading?.querySelector("[data-i18n-user-content]")).toHaveTextContent("프로젝트");
   });
 
   it("marks 단어 관리 active on the glossary route", () => {
@@ -389,6 +414,17 @@ describe("activated library navigation", () => {
     expect(screen.getAllByText("Whisper · 연결 안 됨").length).toBeGreaterThan(0);
     expect(observer.takeRecords().length).toBeGreaterThan(0);
     observer.disconnect();
+  });
+
+  it("separates local and live processing status without overstating Soniox connectivity", () => {
+    renderShell();
+    const nav = screen.getByRole("navigation", { name: "라이브러리" });
+
+    expect(within(nav).getByText("로컬 전사")).toBeInTheDocument();
+    expect(within(nav).getByText("요약")).toBeInTheDocument();
+    expect(within(nav).getByText("외부")).toBeInTheDocument();
+    expect(within(nav).getByText("Soniox · 키 설정됨 · 인터넷 필요")).toBeInTheDocument();
+    expect(within(nav).queryByText(/Soniox.*연결됨/)).not.toBeInTheDocument();
   });
 
   it("keeps the native workspace combobox while reserving an aria-hidden chevron inset", () => {
@@ -479,7 +515,7 @@ describe("activated library navigation", () => {
       .not.toHaveTextContent(/•••|＋|⌄|›|☰|×/);
   });
 
-  it("shows recent documents on the service home without a recorder or canonical redirect", () => {
+  it("shows recent documents while preserving the original recorder and Soniox entry points on service home", () => {
     navigation.search = "";
     const base = readyState();
     libraryState = readyState({
@@ -493,7 +529,10 @@ describe("activated library navigation", () => {
 
     expect(screen.getByRole("heading", { level: 1, name: "최근 작업한 문서" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /제품 회의/ })).toHaveAttribute("href", "/meetings/meeting-1");
-    expect(screen.queryByRole("button", { name: "Whisper 전사용 녹음 시작" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Whisper 전사용 녹음 시작" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Smart Scribe 열기" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Translator 열기" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Voice Typing 열기" })).toBeInTheDocument();
     expect(navigation.replace).not.toHaveBeenCalled();
   });
 
@@ -507,7 +546,7 @@ describe("activated library navigation", () => {
     );
     expect(screen.getByText("조직 정보 없이 발견된 회의")).toBeInTheDocument();
     expect(screen.getByText("위치 저장 안 됨")).toBeInTheDocument();
-    expect(screen.getByText(/요청 위치: 기본 · 미분류/)).toBeInTheDocument();
+    expect(screen.getByText("요청 위치:", { exact: false }).closest("p")).toHaveTextContent("요청 위치: 기본 · 미분류");
     const pendingRow = screen.getByRole("link", { name: /위치 대기 회의/ });
     expect(pendingRow).toHaveClass("flex-col", "sm:flex-row");
     expect(screen.getByText("위치 대기 회의")).toHaveClass("min-w-0", "break-words");

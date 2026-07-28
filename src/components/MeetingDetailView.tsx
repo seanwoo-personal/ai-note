@@ -1395,7 +1395,7 @@ export function MeetingDetailView({
           ← 목록
         </Link>
         <div className="mt-3 min-w-0">
-          <h1 className="break-words text-2xl font-bold tracking-tight text-ink">{status.title}</h1>
+          <h1 data-i18n-user-content className="break-words text-2xl font-bold tracking-tight text-ink">{status.title}</h1>
         </div>
         <div className="mt-3 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 text-[13px] text-inkSoft">
           <span className="font-mono text-[12px]">{formatMeetingDate(status.startedAt)}</span>
@@ -1404,11 +1404,11 @@ export function MeetingDetailView({
           </span>
           {currentLocation && library?.library && (
             <span className="min-w-0 break-words">
-              위치: {formatLocationBreadcrumb(
+              위치: <span data-i18n-user-content>{formatLocationBreadcrumb(
                 library.library,
                 currentLocation.workspaceId,
                 currentLocation.folderId,
-              ).join(" / ")}
+              ).join(" / ")}</span>
             </span>
           )}
         </div>
@@ -1639,7 +1639,7 @@ function Section({ title, items }: { title: string; items: string[] }) {
         {items.map((item, index) => (
           <li key={index} className="flex gap-2 text-[14px] leading-relaxed text-inkSoft">
             <span aria-hidden="true" className="text-inkSoft">•</span>
-            <span className="whitespace-pre-wrap break-words">{item}</span>
+            <span data-i18n-user-content className="whitespace-pre-wrap break-words">{item}</span>
           </li>
         ))}
       </ul>
@@ -1873,12 +1873,13 @@ function ScriptTab({
               <span className="shrink-0 font-mono text-[12px] text-inkSoft">
                 {formatDuration(segment.start * 1000)}
               </span>
-              <span className="whitespace-pre-wrap break-words text-ink">{segment.text}</span>
+              <span data-i18n-user-content className="whitespace-pre-wrap break-words text-ink">{segment.text}</span>
             </li>
           ))}
         </ul>
       ) : (
         <div
+          data-i18n-user-content
           data-confirmed-content="transcript"
           className="whitespace-pre-wrap break-words text-[14px] leading-relaxed text-ink"
         >
@@ -1894,6 +1895,7 @@ function SummaryTab({ summary }: { summary: Summary | null }) {
   if (summary.body !== undefined) {
     return (
       <div
+        data-i18n-user-content
         data-confirmed-content="summary"
         className="whitespace-pre-wrap break-words text-[14px] leading-relaxed text-ink"
       >
@@ -1908,13 +1910,13 @@ function SummaryTab({ summary }: { summary: Summary | null }) {
     <div data-confirmed-content="summary" className="space-y-6">
       <div>
         <h3 className="text-[14px] font-bold text-ink">요약</h3>
-        <p className="mt-2 whitespace-pre-wrap break-words text-[15px] leading-relaxed text-ink">{summary.oneLine}</p>
+        <p data-i18n-user-content className="mt-2 whitespace-pre-wrap break-words text-[15px] leading-relaxed text-ink">{summary.oneLine}</p>
         <Section title="" items={summary.highlights} />
       </div>
       {summary.purpose && (
         <div>
           <h3 className="text-[14px] font-bold text-ink">목적</h3>
-          <p className="mt-2 whitespace-pre-wrap break-words text-[14px] leading-relaxed text-inkSoft">{summary.purpose}</p>
+          <p data-i18n-user-content className="mt-2 whitespace-pre-wrap break-words text-[14px] leading-relaxed text-inkSoft">{summary.purpose}</p>
         </div>
       )}
       <Section title="논의 내용" items={summary.discussion} />

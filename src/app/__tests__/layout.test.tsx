@@ -48,6 +48,23 @@ describe("RootLayout responsive shell", () => {
     expect(shell?.classList.contains("md:flex-row")).toBe(false);
   });
 
+  it("gives desktop navigation and content independent viewport-height scroll regions", () => {
+    const markup = renderToStaticMarkup(
+      <RootLayout>
+        <main>긴 본문</main>
+      </RootLayout>,
+    );
+    const document = new DOMParser().parseFromString(markup, "text/html");
+    const content = document.getElementById("app-content");
+    const shell = content?.parentElement;
+
+    expect(shell?.classList.contains("lg:h-dvh")).toBe(true);
+    expect(shell?.classList.contains("lg:overflow-hidden")).toBe(true);
+    expect(content?.classList.contains("lg:h-dvh")).toBe(true);
+    expect(content?.classList.contains("lg:overflow-y-auto")).toBe(true);
+    expect(content?.classList.contains("lg:overscroll-contain")).toBe(true);
+  });
+
   it("does not hide horizontal layout regressions at the root shell", () => {
     const markup = renderToStaticMarkup(
       <RootLayout>

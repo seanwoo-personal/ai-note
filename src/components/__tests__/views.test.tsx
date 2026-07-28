@@ -742,6 +742,42 @@ describe("MeetingDetailView — 전체 스크립트 탭", () => {
     expect(screen.queryByText("교정 전 원문 · 자동 전사")).not.toBeInTheDocument();
   });
 
+  it("offers an explicit detail-page delete action and returns to the list after confirmation", async () => {
+    viewNavigation.push.mockReset();
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ deleted: true }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const storageSpy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("denied", "SecurityError");
+    });
+    render(
+      <MeetingDetailView
+        id="m1"
+        status={makeStatus()}
+        transcript={{ text: "교정된 회의 내용입니다.", corrected: true }}
+        segments={[]}
+        summary={null}
+        hasAudio={false}
+        backHref="/?view=global"
+      />,
+    );
+
+    const trigger = screen.getByRole("button", { name: "회의록 삭제" });
+    fireEvent.click(trigger);
+    const dialog = screen.getByRole("dialog", { name: "회의록 영구 삭제" });
+    expect(dialog).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "취소" })).toHaveFocus();
+    expect(within(dialog).getByText("테스트 회의")).toHaveAttribute("data-i18n-user-content");
+
+    fireEvent.click(screen.getByRole("button", { name: "영구 삭제" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/meetings/m1", { method: "DELETE" }));
+    await waitFor(() => expect(viewNavigation.push).toHaveBeenCalledWith("/?view=global"));
+    storageSpy.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
   it("labels raw output as pre-correction and shows segment timestamps", () => {
     render(
       <MeetingDetailView

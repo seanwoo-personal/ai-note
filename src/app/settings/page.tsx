@@ -1,4 +1,6 @@
 import { SettingsForm } from "@/components/SettingsForm";
+import { FontSizeSettingsCard } from "@/components/AppPreferences";
+import { ReleaseNotes } from "@/components/ReleaseNotes";
 import { UserProfileForm } from "@/components/UserProfileForm";
 
 // Settings live behind app-api (force-dynamic routes) read via client fetch, so this
@@ -13,8 +15,10 @@ export default function SettingsPage() {
         </p>
       </div>
       <div className="min-w-0 space-y-10">
+        <FontSizeSettingsCard />
         <SettingsForm embedded />
         <UserProfileForm />
+        <ReleaseNotes />
       </div>
     </main>
   );

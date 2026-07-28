@@ -21,7 +21,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: APP_PREFERENCES_BOOTSTRAP_SCRIPT }} />
       </head>
-      <body className="min-h-screen bg-bg font-sans text-ink antialiased">
+      <body className="min-h-screen bg-bg font-sans text-ink antialiased lg:h-dvh lg:overflow-hidden">
         <AppPreferencesProvider>
           {/* Skip past the persistent nav straight to the page's <main id="main">. */}
           <a
@@ -32,11 +32,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           </a>
           <LibraryProvider>
             <RecorderSessionProvider>
-              <div className="flex min-h-screen w-full flex-col lg:flex-row">
-                <Suspense fallback={<div className="h-16 w-full border-b border-line bg-chrome lg:h-screen lg:w-[272px] lg:border-b-0 lg:border-r" />}>
+              <div className="flex min-h-screen w-full flex-col lg:h-dvh lg:min-h-0 lg:flex-row lg:overflow-hidden">
+                <Suspense fallback={<div className="h-16 w-full border-b border-line bg-chrome lg:h-dvh lg:min-h-0 lg:w-[272px] lg:border-b-0 lg:border-r" />}>
                   <LibraryNavigation />
                 </Suspense>
-                <div id="app-content" className="min-w-0 flex-1">{children}</div>
+                <div id="app-content" className="min-w-0 flex-1 lg:h-dvh lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain">{children}</div>
                 {MEETING_ASSISTANT_ENABLED && <ChatPanel />}
               </div>
             </RecorderSessionProvider>

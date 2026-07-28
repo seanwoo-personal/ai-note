@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   AppPreferencesControls,
   AppPreferencesProvider,
+  FontSizeSettingsCard,
   LocalizedText,
   useAppPreferences,
 } from "@/components/AppPreferences";
@@ -12,6 +13,11 @@ import {
 function Probe() {
   const preferences = useAppPreferences();
   return <output data-testid="preferences">{preferences.locale}:{preferences.theme}:{preferences.resolvedTheme}:{preferences.brandName}</output>;
+}
+
+function FontProbe() {
+  const { fontSize } = useAppPreferences();
+  return <output data-testid="font-size">{fontSize}</output>;
 }
 
 describe("AppPreferencesProvider", () => {
@@ -93,6 +99,29 @@ describe("AppPreferencesProvider", () => {
     act(() => listener?.({ matches: true } as MediaQueryListEvent));
     await waitFor(() => expect(document.documentElement).toHaveAttribute("data-theme", "dark"));
     expect(screen.getByTestId("preferences")).toHaveTextContent("ja:system:dark:Hejhome");
+  });
+
+  it("restores and changes the global font-size one step at a time", async () => {
+    localStorage.setItem("ai-note-locale", "ko");
+    localStorage.setItem("ai-note-font-size", "large");
+    render(
+      <AppPreferencesProvider>
+        <FontSizeSettingsCard />
+        <FontProbe />
+      </AppPreferencesProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId("font-size")).toHaveTextContent("large"));
+    expect(document.documentElement).toHaveAttribute("data-font-size", "large");
+    expect(screen.getByRole("status", { name: "현재 글자 크기" })).toHaveTextContent("크게");
+
+    fireEvent.click(screen.getByRole("button", { name: "글자 크기 한 단계 크게" }));
+    expect(screen.getByTestId("font-size")).toHaveTextContent("extra-large");
+    expect(window.localStorage.getItem("ai-note-font-size")).toBe("extra-large");
+    expect(screen.getByRole("button", { name: "글자 크기 한 단계 크게" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "글자 크기 한 단계 작게" }));
+    expect(screen.getByTestId("font-size")).toHaveTextContent("large");
   });
 
   it("keeps preferences usable in memory when browser storage is denied", async () => {

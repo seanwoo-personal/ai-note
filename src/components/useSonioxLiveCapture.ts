@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   connectSonioxRealtime,
   emptySonioxTranscript,
+  type SonioxContext,
   type SonioxRealtimeSession,
   type SonioxTranscript,
   type SonioxTranslationOptions,
@@ -23,6 +24,7 @@ export type SonioxCapturePhase =
 export interface SonioxCaptureStartOptions {
   inputSource: SonioxInputSource;
   translation: SonioxTranslationOptions;
+  context?: SonioxContext;
 }
 
 const LANGUAGE_HINTS = ["ko", "en", "ja", "zh"];
@@ -119,6 +121,7 @@ export function useSonioxLiveCapture() {
       const session = await connectSonioxRealtime({
         translation: options.translation,
         languageHints: LANGUAGE_HINTS,
+        context: options.context,
         signal: controller.signal,
         onTranscript: (next) => {
           if (mountedRef.current && generation === generationRef.current) setTranscript(next);

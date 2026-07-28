@@ -25,19 +25,43 @@ export interface SonioxTextTrack {
   provisional: string;
 }
 
+export interface SonioxSpeakerTrack {
+  original: SonioxTextTrack;
+  translation: SonioxTextTrack;
+  originalLanguage?: string;
+  translationLanguage?: string;
+}
+
+export interface SonioxEndpointEvent {
+  id: number;
+  speaker: string | null;
+  originalFinal: string;
+  translationFinal: string;
+}
+
 export interface SonioxTranscript {
   original: SonioxTextTrack;
   translation: SonioxTextTrack;
+  speakers: Record<string, SonioxSpeakerTrack>;
+  activeSpeaker: string | null;
+  endpointCount: number;
+  lastEndpointSpeaker: string | null;
+  endpoints?: SonioxEndpointEvent[];
 }
 
 export function emptySonioxTranscript(): SonioxTranscript {
   return {
     original: { final: "", provisional: "" },
     translation: { final: "", provisional: "" },
+    speakers: {},
+    activeSpeaker: null,
+    endpointCount: 0,
+    lastEndpointSpeaker: null,
+    endpoints: [],
   };
 }
 
-function tokenTrack(token: SonioxToken): keyof SonioxTranscript {
+function tokenTrack(token: SonioxToken): "original" | "translation" {
   return token.translation_status === "translation" ? "translation" : "original";
 }
 
@@ -48,23 +72,67 @@ export function applySonioxResult(
   const next: SonioxTranscript = {
     original: { final: current.original.final, provisional: "" },
     translation: { final: current.translation.final, provisional: "" },
+    speakers: Object.fromEntries(Object.entries(current.speakers).map(([speaker, track]) => [speaker, {
+      ...track,
+      original: { final: track.original.final, provisional: "" },
+      translation: { final: track.translation.final, provisional: "" },
+    }])),
+    activeSpeaker: current.activeSpeaker,
+    endpointCount: current.endpointCount,
+    lastEndpointSpeaker: current.lastEndpointSpeaker,
+    endpoints: current.endpoints ?? [],
   };
   for (const token of result.tokens ?? []) {
-    if (!token.text || token.text === "<end>" || token.text === "<fin>") continue;
+    if (!token.text) continue;
+    if (token.text === "<end>") {
+      next.endpointCount += 1;
+      const speaker = token.speaker ?? next.activeSpeaker;
+      next.lastEndpointSpeaker = speaker;
+      const speakerTrack = speaker ? next.speakers[speaker] : undefined;
+      next.endpoints = [
+        ...(next.endpoints ?? []).slice(-99),
+        {
+          id: next.endpointCount,
+          speaker,
+          originalFinal: speakerTrack?.original.final ?? next.original.final,
+          translationFinal: speakerTrack?.translation.final ?? next.translation.final,
+        },
+      ];
+      continue;
+    }
+    if (token.text === "<fin>") continue;
     const track = tokenTrack(token);
     if (token.is_final) next[track].final += token.text;
     else next[track].provisional += token.text;
+    if (track === "original" && token.speaker) next.activeSpeaker = token.speaker;
+    const speaker = token.speaker ?? next.activeSpeaker;
+    if (!speaker) continue;
+    const speakerTrack = next.speakers[speaker] ?? {
+      original: { final: "", provisional: "" },
+      translation: { final: "", provisional: "" },
+    };
+    if (token.is_final) speakerTrack[track].final += token.text;
+    else speakerTrack[track].provisional += token.text;
+    if (track === "original" && token.language) speakerTrack.originalLanguage = token.language;
+    if (track === "translation" && token.language) speakerTrack.translationLanguage = token.language;
+    next.speakers[speaker] = speakerTrack;
   }
   return next;
 }
 
+export interface SonioxContext {
+  general?: Array<{ key: string; value: string }>;
+  terms?: string[];
+}
+
 export function buildSonioxConfig(
-  temporaryApiKey: string,
+  sessionKey: string,
   translation: SonioxTranslationOptions,
   languageHints: string[] = ["ko", "en"],
+  context?: SonioxContext,
 ): Record<string, unknown> {
   const config: Record<string, unknown> = {
-    api_key: temporaryApiKey,
+    api_key: sessionKey,
     model: "stt-rt-v5",
     audio_format: "auto",
     language_hints: languageHints,
@@ -72,6 +140,9 @@ export function buildSonioxConfig(
     enable_speaker_diarization: true,
     enable_endpoint_detection: true,
   };
+  if (context && (context.general?.length || context.terms?.length)) {
+    config.context = context;
+  }
   if (translation.mode === "one_way") {
     config.translation = {
       type: "one_way",
@@ -96,6 +167,7 @@ export interface SonioxRealtimeSession {
 export interface ConnectSonioxRealtimeOptions {
   translation: SonioxTranslationOptions;
   languageHints?: string[];
+  context?: SonioxContext;
   onTranscript: (transcript: SonioxTranscript) => void;
   onError?: (message: string) => void;
   onFinished?: () => void;
@@ -175,6 +247,7 @@ export async function connectSonioxRealtime(
         keyPayload.apiKey as string,
         options.translation,
         options.languageHints,
+        options.context,
       )));
       resolve();
     };

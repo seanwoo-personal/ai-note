@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useOptionalAppPreferences } from "@/components/AppPreferences";
 import { useLibrary } from "@/components/LibraryProvider";
 import { Recorder } from "@/components/Recorder";
+import { SpeakerTranslatorPanel } from "@/components/SpeakerTranslatorPanel";
 import {
   type SonioxCapturePhase,
   type SonioxInputSource,
@@ -194,6 +195,7 @@ function TranslatorTool() {
   const [editingShortcut, setEditingShortcut] = useState(false);
   const [shortcutError, setShortcutError] = useState<string | null>(null);
   const [inputSource, setInputSource] = useState<SonioxInputSource>("microphone");
+  const [translatorMode, setTranslatorMode] = useState<"quick" | "speakers">("quick");
   const [translationType, setTranslationType] = useState<"one_way" | "two_way">("one_way");
   const [targetLanguage, setTargetLanguage] = useState("en");
   const [languageA, setLanguageA] = useState("ko");
@@ -266,6 +268,10 @@ function TranslatorTool() {
         return;
       }
       if (!matchSonioxShortcut(event, shortcutsRef.current.translator)) return;
+      if (translatorMode === "speakers") {
+        event.preventDefault();
+        return;
+      }
       const currentCapture = captureRef.current;
       if (currentCapture.phase === "finishing") return;
       event.preventDefault();
@@ -277,10 +283,28 @@ function TranslatorTool() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [assignShortcut, captureRef, editingShortcutRef, inputSourceRef, shortcutsRef, speechRef, translationRef]);
+  }, [assignShortcut, captureRef, editingShortcutRef, inputSourceRef, shortcutsRef, speechRef, translationRef, translatorMode]);
+
+  const changeTranslatorMode = (mode: "quick" | "speakers") => {
+    if (mode === translatorMode) return;
+    capture.stop();
+    speech.stop();
+    capture.reset();
+    setTranslatorMode(mode);
+  };
+
+  if (translatorMode === "speakers") {
+    return (
+      <div className="space-y-5">
+        <TranslatorModeSwitch mode={translatorMode} onChange={changeTranslatorMode} />
+        <SpeakerTranslatorPanel capture={capture} speech={speech} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
+      <TranslatorModeSwitch mode={translatorMode} onChange={changeTranslatorMode} />
       <section className="rounded-2xl border border-line bg-panel p-5 shadow-[0_8px_30px_-20px_rgba(42,36,32,.3)] sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -438,6 +462,15 @@ function TranslatorTool() {
 
       <TranscriptPanels original={capture.transcript.original} translation={capture.transcript.translation} />
       <p className="text-[12px] leading-5 text-inkSoft">실시간 처리 중 오디오가 Soniox로 전송되며 사용량 기반 비용이 발생할 수 있습니다. 이 번역 세션은 현재 회의 파일로 자동 저장하지 않습니다.</p>
+    </div>
+  );
+}
+
+function TranslatorModeSwitch({ mode, onChange }: { mode: "quick" | "speakers"; onChange(mode: "quick" | "speakers"): void }) {
+  return (
+    <div className="inline-flex rounded-xl border border-line bg-panel p-1" role="group" aria-label="Translator 모드">
+      <button type="button" aria-pressed={mode === "quick"} onClick={() => onChange("quick")} className={`min-h-11 rounded-lg px-4 text-[13px] font-bold ${mode === "quick" ? "bg-ink text-bg" : "text-inkSoft"}`}>빠른 번역</button>
+      <button type="button" aria-pressed={mode === "speakers"} onClick={() => onChange("speakers")} className={`min-h-11 rounded-lg px-4 text-[13px] font-bold ${mode === "speakers" ? "bg-ink text-bg" : "text-inkSoft"}`}>화자 구분 통역</button>
     </div>
   );
 }

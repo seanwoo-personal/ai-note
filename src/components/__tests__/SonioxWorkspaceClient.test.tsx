@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SonioxWorkspaceClient } from "@/components/SonioxWorkspaceClient";
 import { SONIOX_SHORTCUT_STORAGE_KEY } from "@/lib/sonioxShortcuts";
+import type { SonioxTranscript } from "@/services/sonioxRealtime";
 
 const navigation = vi.hoisted(() => ({
   search: "workspace=workspace-a&folder=folder-a&tool=translator",
@@ -14,7 +15,11 @@ const capture = vi.hoisted(() => ({
   transcript: {
     original: { final: "", provisional: "" },
     translation: { final: "", provisional: "" },
-  },
+    speakers: {},
+    activeSpeaker: null,
+    endpointCount: 0,
+    lastEndpointSpeaker: null,
+  } as SonioxTranscript,
   start: vi.fn(async () => {}),
   stop: vi.fn(),
   reset: vi.fn(),
@@ -76,6 +81,10 @@ describe("SonioxWorkspaceClient", () => {
     capture.transcript = {
       original: { final: "", provisional: "" },
       translation: { final: "", provisional: "" },
+      speakers: {},
+      activeSpeaker: null,
+      endpointCount: 0,
+      lastEndpointSpeaker: null,
     };
     speech.phase = "idle";
     speech.error = null;
@@ -158,11 +167,158 @@ describe("SonioxWorkspaceClient", () => {
     });
   });
 
+  it("sets up session-scoped speaker profiles and sends expected participants to Soniox", () => {
+    const view = render(<SonioxWorkspaceClient />);
+    fireEvent.click(screen.getByRole("button", { name: "화자 구분 통역" }));
+
+    expect(screen.getByText(/영구 음성 생체 등록이 아니라 현재 세션의 화자 번호와 프로필을 연결/)).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("spinbutton", { name: "우리 팀 인원" }), { target: { value: "2" } });
+    expect(screen.getByRole("textbox", { name: "우리 팀 2 이름" })).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "우리 팀 1 이름" }), { target: { value: "Sean" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "상대 팀 1 이름" }), { target: { value: "Michelle" } });
+    fireEvent.click(screen.getByRole("button", { name: "화자 등록 시작" }));
+
+    expect(capture.start).toHaveBeenCalledWith(expect.objectContaining({
+      inputSource: "microphone",
+      translation: { mode: "two_way", languageA: "ko", languageB: "en" },
+      context: expect.objectContaining({
+        general: [expect.objectContaining({ key: "speakers", value: expect.stringContaining("Sean") })],
+        terms: expect.arrayContaining(["Sean", "Michelle"]),
+      }),
+    }));
+
+    capture.phase = "listening";
+    view.rerender(<SonioxWorkspaceClient />);
+    expect(screen.getAllByRole("button", { name: "목소리 등록" })).toHaveLength(3);
+  });
+
+  it("does not let the quick-translation shortcut bypass speaker-mode setup", () => {
+    render(<SonioxWorkspaceClient />);
+    fireEvent.click(screen.getByRole("button", { name: "화자 구분 통역" }));
+    capture.start.mockClear();
+
+    window.dispatchEvent(new KeyboardEvent("keydown", {
+      code: "KeyT",
+      key: "T",
+      altKey: true,
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    }));
+
+    expect(capture.start).not.toHaveBeenCalled();
+  });
+
+  it("requires different languages for the two speaker teams", () => {
+    render(<SonioxWorkspaceClient />);
+    fireEvent.click(screen.getByRole("button", { name: "화자 구분 통역" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "우리 팀 언어" }), {
+      target: { value: "en" },
+    });
+
+    expect(screen.getByRole("alert")).toHaveTextContent("우리 팀과 상대 팀 언어를 다르게 선택해 주세요.");
+    expect(screen.getByRole("button", { name: "화자 등록 시작" })).toBeDisabled();
+    expect(capture.start).not.toHaveBeenCalled();
+  });
+
+  it("maps session speakers and sends TTS only for our team's completed utterance", async () => {
+    const view = render(<SonioxWorkspaceClient />);
+    fireEvent.click(screen.getByRole("button", { name: "화자 구분 통역" }));
+    fireEvent.click(screen.getByRole("button", { name: "화자 등록 시작" }));
+    capture.phase = "listening";
+    view.rerender(<SonioxWorkspaceClient />);
+
+    fireEvent.click(screen.getAllByRole("button", { name: "목소리 등록" })[0]);
+    capture.transcript = {
+      original: { final: "저는 션입니다.", provisional: "" },
+      translation: { final: "I am Sean.", provisional: "" },
+      speakers: {
+        "1": {
+          original: { final: "저는 션입니다.", provisional: "" },
+          translation: { final: "I am Sean.", provisional: "" },
+          originalLanguage: "ko",
+          translationLanguage: "en",
+        },
+      },
+      activeSpeaker: "1",
+      endpointCount: 1,
+      lastEndpointSpeaker: "1",
+    };
+    view.rerender(<SonioxWorkspaceClient />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "이 화자로 확인" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "이 화자로 확인" }));
+    await waitFor(() => expect(screen.getByText("등록됨 · Soniox 화자 1")).toBeInTheDocument());
+
+    fireEvent.click(screen.getAllByRole("button", { name: "목소리 등록" })[1]);
+    capture.transcript = {
+      ...capture.transcript,
+      speakers: {
+        ...capture.transcript.speakers,
+        "2": {
+          original: { final: "I am Michelle.", provisional: "" },
+          translation: { final: "저는 미셸입니다.", provisional: "" },
+          originalLanguage: "en",
+          translationLanguage: "ko",
+        },
+      },
+      activeSpeaker: "2",
+      endpointCount: 2,
+      lastEndpointSpeaker: "2",
+    };
+    view.rerender(<SonioxWorkspaceClient />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "이 화자로 확인" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "이 화자로 확인" }));
+    await waitFor(() => expect(screen.getByText("등록됨 · Soniox 화자 2")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "실시간 통역 시작" }));
+    expect(speech.prepare).toHaveBeenCalledTimes(1);
+
+    capture.transcript = {
+      ...capture.transcript,
+      speakers: {
+        ...capture.transcript.speakers,
+        "1": {
+          ...capture.transcript.speakers["1"],
+          translation: { final: "I am Sean.Nice to meet you.", provisional: "" },
+        },
+      },
+      activeSpeaker: "1",
+      endpointCount: 3,
+      lastEndpointSpeaker: "1",
+    };
+    view.rerender(<SonioxWorkspaceClient />);
+    await waitFor(() => expect(speech.speak).toHaveBeenCalledWith(expect.objectContaining({
+      text: "Nice to meet you.",
+      language: "en",
+    })));
+    const ownSpeechCalls = speech.speak.mock.calls.length;
+
+    capture.transcript = {
+      ...capture.transcript,
+      speakers: {
+        ...capture.transcript.speakers,
+        "2": {
+          ...capture.transcript.speakers["2"],
+          translation: { final: "저는 미셸입니다.반갑습니다.", provisional: "" },
+        },
+      },
+      activeSpeaker: "2",
+      endpointCount: 4,
+      lastEndpointSpeaker: "2",
+    };
+    view.rerender(<SonioxWorkspaceClient />);
+    await waitFor(() => expect(screen.getByText("반갑습니다.", { exact: false })).toBeInTheDocument());
+    expect(speech.speak).toHaveBeenCalledTimes(ownSpeechCalls);
+  });
+
   it("replays a completed one-way translation through Soniox TTS and supports stopping playback", async () => {
     capture.phase = "finished";
     capture.transcript = {
       original: { final: "안녕하세요", provisional: "" },
       translation: { final: "Hello", provisional: "" },
+      speakers: {},
+      activeSpeaker: null,
+      endpointCount: 0,
+      lastEndpointSpeaker: null,
     };
     const view = render(<SonioxWorkspaceClient />);
 
@@ -190,6 +346,7 @@ describe("SonioxWorkspaceClient", () => {
 
     capture.phase = "listening";
     capture.transcript = {
+      ...capture.transcript,
       original: { final: "안녕", provisional: "" },
       translation: { final: "Hello", provisional: "" },
     };
@@ -408,6 +565,7 @@ describe("SonioxWorkspaceClient", () => {
     expect(screen.getByRole("status")).toHaveTextContent("받아쓰기 연결 중");
 
     capture.transcript = {
+      ...capture.transcript,
       original: { final: "dictation result", provisional: "" },
       translation: { final: "translation result", provisional: "" },
     };
@@ -444,6 +602,7 @@ describe("SonioxWorkspaceClient", () => {
     navigation.search = "workspace=workspace-a&folder=folder-a&tool=voice-typing";
     capture.phase = "finished";
     capture.transcript = {
+      ...capture.transcript,
       original: { final: "hello", provisional: "" },
       translation: { final: "", provisional: "" },
     };

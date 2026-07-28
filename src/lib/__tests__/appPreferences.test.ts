@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   brandNameForLocale,
   APP_PREFERENCES_BOOTSTRAP_SCRIPT,
+  parseFontSize,
   parseLocale,
   parseTheme,
   resolveTheme,
@@ -23,6 +24,14 @@ describe("app preferences", () => {
     expect(resolveTheme("dark", false)).toBe("dark");
     expect(resolveTheme("system", true)).toBe("dark");
     expect(resolveTheme("system", false)).toBe("light");
+  });
+
+  it("accepts supported font-size steps and falls back to the default step", () => {
+    expect(["small", "default", "large", "extra-large"].map(parseFontSize)).toEqual([
+      "small", "default", "large", "extra-large",
+    ]);
+    expect(parseFontSize("huge")).toBe("default");
+    expect(parseFontSize(null)).toBe("default");
   });
 
   it("uses the exact localized Hejhome brand spelling", () => {
@@ -47,6 +56,7 @@ describe("app preferences", () => {
     });
     expect(attributes.get("data-theme")).toBe("dark");
     expect(attributes.get("data-theme-preference")).toBe("system");
+    expect(attributes.get("data-font-size")).toBe("default");
     expect(root.style.colorScheme).toBe("dark");
     expect(root.lang).toBe("ko");
   });

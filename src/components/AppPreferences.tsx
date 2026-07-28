@@ -14,10 +14,13 @@ import {
 import {
   type AppLocale,
   brandNameForLocale,
+  type FontSizePreference,
+  parseFontSize,
   parseLocale,
   parseTheme,
   type ResolvedTheme,
   resolveTheme,
+  SUPPORTED_FONT_SIZES,
   SUPPORTED_LOCALES,
   type ThemePreference,
 } from "@/lib/appPreferences";
@@ -25,15 +28,18 @@ import { translateUi, type UiValues } from "@/lib/i18n";
 
 const LOCALE_STORAGE_KEY = "ai-note-locale";
 const THEME_STORAGE_KEY = "ai-note-theme";
+const FONT_SIZE_STORAGE_KEY = "ai-note-font-size";
 const DARK_QUERY = "(prefers-color-scheme: dark)";
 
 type AppPreferencesValue = {
   locale: AppLocale;
   theme: ThemePreference;
   resolvedTheme: ResolvedTheme;
+  fontSize: FontSizePreference;
   brandName: "헤이홈" | "Hejhome";
   setLocale: (locale: AppLocale) => void;
   setTheme: (theme: ThemePreference) => void;
+  setFontSize: (fontSize: FontSizePreference) => void;
   t: (source: string, values?: UiValues) => string;
 };
 
@@ -67,6 +73,8 @@ function persistPreference(key: string, value: string): void {
 export function AppPreferencesProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<AppLocale>("ko");
   const [theme, setThemeState] = useState<ThemePreference>("system");
+  const [fontSize, setFontSizeState] = useState<FontSizePreference>("default");
+  const [fontSizeLoaded, setFontSizeLoaded] = useState(false);
   const [systemDark, setSystemDark] = useState(false);
   const textSources = useRef(new WeakMap<Text, { source: string; rendered: string }>());
   const attributeSources = useRef(new WeakMap<Element, Map<string, { source: string; rendered: string }>>());
@@ -77,6 +85,8 @@ export function AppPreferencesProvider({ children }: { children: ReactNode }) {
       ? parseLocale(storedLocale)
       : preferredBrowserLocale());
     setThemeState(parseTheme(readStoredPreference(THEME_STORAGE_KEY)));
+    setFontSizeState(parseFontSize(readStoredPreference(FONT_SIZE_STORAGE_KEY)));
+    setFontSizeLoaded(true);
     let media: MediaQueryList | null = null;
     try {
       media = typeof window.matchMedia === "function" ? window.matchMedia(DARK_QUERY) : null;
@@ -102,6 +112,11 @@ export function AppPreferencesProvider({ children }: { children: ReactNode }) {
     root.dataset.themePreference = theme;
     root.style.colorScheme = resolvedTheme;
   }, [resolvedTheme, theme]);
+
+  useEffect(() => {
+    if (!fontSizeLoaded) return;
+    document.documentElement.dataset.fontSize = fontSize;
+  }, [fontSize, fontSizeLoaded]);
 
   useEffect(() => {
     const title = translateUi(locale, "헤이홈 AI 기록도구");
@@ -199,16 +214,22 @@ export function AppPreferencesProvider({ children }: { children: ReactNode }) {
     setThemeState(next);
     persistPreference(THEME_STORAGE_KEY, next);
   }, []);
+  const setFontSize = useCallback((next: FontSizePreference) => {
+    setFontSizeState(next);
+    persistPreference(FONT_SIZE_STORAGE_KEY, next);
+  }, []);
 
   const value = useMemo<AppPreferencesValue>(() => ({
     locale,
     theme,
     resolvedTheme,
+    fontSize,
     brandName: brandNameForLocale(locale),
     setLocale,
     setTheme,
+    setFontSize,
     t: (source, values) => translateUi(locale, source, values),
-  }), [locale, resolvedTheme, setLocale, setTheme, theme]);
+  }), [fontSize, locale, resolvedTheme, setFontSize, setLocale, setTheme, theme]);
 
   return <AppPreferencesContext.Provider value={value}>{children}</AppPreferencesContext.Provider>;
 }
@@ -268,5 +289,53 @@ export function AppPreferencesControls() {
         </select>
       </label>
     </div>
+  );
+}
+
+export function FontSizeSettingsCard() {
+  const preferences = useOptionalAppPreferences();
+  const fontSize = preferences?.fontSize ?? "default";
+  const setFontSize = preferences?.setFontSize ?? (() => {});
+  const index = SUPPORTED_FONT_SIZES.indexOf(fontSize);
+  const labels: Record<FontSizePreference, string> = {
+    small: "작게",
+    default: "기본",
+    large: "크게",
+    "extra-large": "매우 크게",
+  };
+  const step = (offset: -1 | 1) => {
+    const next = SUPPORTED_FONT_SIZES[index + offset];
+    if (next) setFontSize(next);
+  };
+  return (
+    <section className="rounded-2xl border border-line bg-panel p-5 sm:p-6" aria-labelledby="font-size-heading">
+      <h2 id="font-size-heading" className="text-[18px] font-bold text-ink">글자 크기</h2>
+      <p className="mt-2 text-[13px] leading-6 text-inkSoft">
+        단축키 안내를 포함한 앱 전체 글자를 한 단계씩 조절합니다. 선택한 크기는 이 브라우저에 저장됩니다.
+      </p>
+      <div className="mt-5 flex items-center gap-3" role="group" aria-label="글자 크기 조절">
+        <button
+          type="button"
+          aria-label="글자 크기 한 단계 작게"
+          disabled={index === 0}
+          onClick={() => step(-1)}
+          className="min-h-11 min-w-11 rounded-full border border-line bg-bg text-[18px] font-bold text-ink disabled:opacity-40"
+        >
+          −
+        </button>
+        <span className="min-w-24 text-center text-[14px] font-bold text-ink" role="status" aria-label="현재 글자 크기">
+          {labels[fontSize]}
+        </span>
+        <button
+          type="button"
+          aria-label="글자 크기 한 단계 크게"
+          disabled={index === SUPPORTED_FONT_SIZES.length - 1}
+          onClick={() => step(1)}
+          className="min-h-11 min-w-11 rounded-full border border-line bg-bg text-[18px] font-bold text-ink disabled:opacity-40"
+        >
+          +
+        </button>
+      </div>
+    </section>
   );
 }

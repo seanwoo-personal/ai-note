@@ -233,7 +233,7 @@ export function LibraryNavigation() {
   return (
     <nav
       aria-label={t("라이브러리")}
-      className="relative w-full shrink-0 border-b border-line bg-chrome lg:min-h-screen lg:w-[272px] lg:border-b-0 lg:border-r"
+      className="relative w-full shrink-0 border-b border-line bg-chrome lg:h-dvh lg:min-h-0 lg:w-[272px] lg:overflow-y-auto lg:overscroll-contain lg:border-b-0 lg:border-r"
     >
       <div className="flex min-h-16 items-center justify-between gap-3 px-4 lg:hidden">
         <GuardedLink
@@ -495,7 +495,7 @@ function NavigationContents({
             </button>
           )}
         </div>
-        <div className="max-h-[calc(100vh-28rem)] overflow-y-auto overscroll-contain">
+        <div>
           {folders.length === 0 ? (
             <p className="px-2 py-3 text-[12px] text-inkSoft">{t("폴더가 없습니다.")}</p>
           ) : (

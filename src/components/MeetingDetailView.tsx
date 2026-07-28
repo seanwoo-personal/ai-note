@@ -349,6 +349,9 @@ export function MeetingDetailView({
   const [currentSource, setCurrentSource] = useState(source);
   const [currentBackHref, setCurrentBackHref] = useState(backHref);
   const [moveMessage, setMoveMessage] = useState<string | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [currentParticipants, setCurrentParticipants] = useState(() => [...status.review.participants]);
 
   const confirmedRef = useRef(confirmed);
@@ -366,6 +369,8 @@ export function MeetingDetailView({
   const generationReturnFocusRef = useRef<HTMLElement | null>(null);
   const transcriptionRetryTriggerRef = useRef<HTMLButtonElement | null>(null);
   const continueEditingRef = useRef<HTMLButtonElement>(null);
+  const deleteTriggerRef = useRef<HTMLButtonElement>(null);
+  const deleteCancelRef = useRef<HTMLButtonElement>(null);
 
   confirmedRef.current = confirmed;
   const incoming = incomingConfirmed(content, transcript, summary);
@@ -1384,6 +1389,51 @@ export function MeetingDetailView({
     },
   ];
 
+  const deleteBlocked = draftProtected
+    || editorLocked
+    || serverMutationActive
+    || generationSubmitting
+    || initialRetrying
+    || transcriptionRetrying
+    || deleting;
+
+  const deleteMeeting = async () => {
+    if (deleteBlocked) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const response = await fetch(`/api/meetings/${id}`, { method: "DELETE" });
+      if (response.ok || response.status === 404) {
+        library?.removeMeeting(id);
+        try {
+          window.sessionStorage.setItem("ai-note-focus-scope", "1");
+        } catch {
+          // Deletion already succeeded; denied browser storage must not block navigation.
+        }
+        router.push(currentBackHref);
+        return;
+      }
+      let code = "";
+      try {
+        const body = await response.json() as { error?: { code?: unknown } };
+        code = typeof body.error?.code === "string" ? body.error.code : "";
+      } catch {
+        // Keep the public status-based fallback when an error body is malformed.
+      }
+      if (response.status === 409 && code === "delete_state_ambiguous") {
+        setDeleteError("삭제 상태를 안전하게 확인할 수 없습니다. Finder에서 회의 폴더를 확인한 뒤 다시 시도해 주세요.");
+      } else if (response.status === 409) {
+        setDeleteError("회의 처리 중에는 삭제할 수 없습니다. 작업이 끝난 뒤 다시 시도해 주세요.");
+      } else {
+        setDeleteError("회의록을 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+      }
+    } catch {
+      setDeleteError("회의록을 삭제하지 못했습니다. 네트워크 연결을 확인하고 다시 시도해 주세요.");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <main id="main" className="max-w-5xl space-y-8 px-4 py-12 sm:px-6">
       <header data-detail-section="heading">
@@ -1472,6 +1522,18 @@ export function MeetingDetailView({
               회의록 다운로드(.md)
             </a>
           )}
+          <button
+            ref={deleteTriggerRef}
+            type="button"
+            disabled={deleteBlocked}
+            onClick={() => {
+              setDeleteError(null);
+              setDeleteOpen(true);
+            }}
+            className={`${ACTION_CONTROL_CLASS} border-error/40 text-error disabled:opacity-40`}
+          >
+            회의록 삭제
+          </button>
         </div>
         {moveOpen && (
           <LibraryLocationPicker
@@ -1502,6 +1564,41 @@ export function MeetingDetailView({
             }}
           />
         )}
+        <AppDialog
+          open={deleteOpen}
+          title="회의록 영구 삭제"
+          initialFocusRef={deleteCancelRef}
+          returnFocus={deleteTriggerRef}
+          dismissible={!deleting}
+          onDismiss={() => {
+            if (!deleting) setDeleteOpen(false);
+          }}
+        >
+          <p className="mt-3 text-[14px] leading-6 text-ink">
+            ‘<span data-i18n-user-content>{status.title}</span>’ 회의록과 원본 오디오, 전사, 요약을 모두 삭제합니다.
+          </p>
+          <p className="mt-2 text-[13px] font-semibold text-error">삭제 후에는 되돌릴 수 없습니다.</p>
+          {deleteError && <p className="mt-3 text-[13px] text-error" role="alert">{deleteError}</p>}
+          <div className="mt-5 flex justify-end gap-2">
+            <button
+              ref={deleteCancelRef}
+              type="button"
+              disabled={deleting}
+              onClick={() => setDeleteOpen(false)}
+              className={ACTION_CONTROL_CLASS}
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              disabled={deleting}
+              onClick={() => void deleteMeeting()}
+              className="min-h-11 rounded-full bg-error px-5 text-[13px] font-bold text-white disabled:opacity-50"
+            >
+              {deleting ? "삭제 중…" : "영구 삭제"}
+            </button>
+          </div>
+        </AppDialog>
       </div>
 
       <section

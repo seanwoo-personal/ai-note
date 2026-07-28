@@ -35,6 +35,53 @@ describe("Soniox real-time transcript", () => {
     expect(second.translation).toEqual({ final: "Hello there", provisional: "!" });
   });
 
+  it("groups live original and translation text by session speaker and records utterance endpoints", () => {
+    const first = applySonioxResult(emptySonioxTranscript(), {
+      tokens: [
+        { text: "안녕하세요", is_final: true, speaker: "1", language: "ko", translation_status: "original" },
+        { text: "Hello", is_final: true, language: "en", source_language: "ko", translation_status: "translation" },
+        { text: "<end>", is_final: true, speaker: "1", translation_status: "original" },
+      ],
+    });
+
+    expect(first.speakers["1"]).toMatchObject({
+      original: { final: "안녕하세요", provisional: "" },
+      translation: { final: "Hello", provisional: "" },
+      originalLanguage: "ko",
+      translationLanguage: "en",
+    });
+    expect(first.endpointCount).toBe(1);
+    expect(first.lastEndpointSpeaker).toBe("1");
+
+    const second = applySonioxResult(first, {
+      tokens: [
+        { text: "你好", is_final: false, speaker: "2", language: "zh", translation_status: "original" },
+        { text: "안녕하세요", is_final: false, language: "ko", source_language: "zh", translation_status: "translation" },
+      ],
+    });
+    expect(second.speakers["2"].original.provisional).toBe("你好");
+    expect(second.speakers["2"].translation.provisional).toBe("안녕하세요");
+    expect(second.activeSpeaker).toBe("2");
+  });
+
+  it("keeps every endpoint event in order when Soniox batches multiple utterances", () => {
+    const transcript = applySonioxResult(emptySonioxTranscript(), {
+      tokens: [
+        { text: "안녕", is_final: true, speaker: "1", language: "ko", translation_status: "original" },
+        { text: "Hello", is_final: true, speaker: "1", language: "en", translation_status: "translation" },
+        { text: "<end>", is_final: true, speaker: "1", translation_status: "original" },
+        { text: "반가워", is_final: true, speaker: "2", language: "ko", translation_status: "original" },
+        { text: "Nice to meet you", is_final: true, speaker: "2", language: "en", translation_status: "translation" },
+        { text: "<end>", is_final: true, speaker: "2", translation_status: "original" },
+      ],
+    });
+
+    expect(transcript.endpoints).toEqual([
+      expect.objectContaining({ id: 1, speaker: "1", translationFinal: "Hello" }),
+      expect.objectContaining({ id: 2, speaker: "2", translationFinal: "Nice to meet you" }),
+    ]);
+  });
+
   it("filters Soniox endpoint and manual-finalize sentinels from visible text", () => {
     const transcript = applySonioxResult(emptySonioxTranscript(), {
       tokens: [
@@ -49,6 +96,22 @@ describe("Soniox real-time transcript", () => {
   it("uses caller-provided language hints for multilingual workspace tools", () => {
     expect(buildSonioxConfig("temporary-key", { mode: "none" }, ["ko", "en", "ja", "zh"])).toMatchObject({
       language_hints: ["ko", "en", "ja", "zh"],
+    });
+  });
+
+  it("includes expected participant context for a speaker-aware meeting", () => {
+    const config = buildSonioxConfig(
+      "temporary-key",
+      { mode: "two_way", languageA: "ko", languageB: "en" },
+      ["ko", "en"],
+      {
+        general: [{ key: "speakers", value: "2 speakers: Sean (our team), Michelle (other team)" }],
+        terms: ["Sean", "Michelle"],
+      },
+    );
+    expect(config.context).toEqual({
+      general: [{ key: "speakers", value: "2 speakers: Sean (our team), Michelle (other team)" }],
+      terms: ["Sean", "Michelle"],
     });
   });
 

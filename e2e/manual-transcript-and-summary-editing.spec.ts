@@ -80,8 +80,9 @@ test("manual transcript and summary editing keeps hierarchy, freshness, and navi
   const globalActions = page.getByRole("group", { name: "회의 작업" });
   await expect(globalActions.getByRole("button", { name: "회의 이동" })).toBeVisible();
   await expect(globalActions.getByRole("button", { name: "폴더 열기" })).toBeVisible();
+  await expect(globalActions.getByRole("button", { name: "회의록 삭제" })).toBeVisible();
   await expect(globalActions.getByRole("link", { name: "회의록 다운로드(.md)" })).toBeVisible();
-  await expect(globalActions.getByRole("button")).toHaveCount(2);
+  await expect(globalActions.getByRole("button")).toHaveCount(3);
   await expect(globalActions.getByRole("link")).toHaveCount(1);
   await expect(globalActions.getByRole("button", { name: /다시 요약|다시 만들기/ })).toHaveCount(0);
 
@@ -167,7 +168,8 @@ test("manual transcript and summary editing keeps hierarchy, freshness, and navi
   expect(projectedBody).toContain("요약\n");
   expect(projectedBody.endsWith("\n")).toBe(false);
   await expect(page.getByRole("textbox")).toHaveCount(2);
-  await expect(page.getByRole("button", { name: /추가|삭제/u })).toHaveCount(0);
+  const summaryEditorForm = summaryEditor.locator("xpath=ancestor::form[1]");
+  await expect(summaryEditorForm.getByRole("button", { name: /추가|삭제/u })).toHaveCount(0);
   const editedSummaryBody = projectedBody
     .replace(/^요약\n/u, "")
     .replace("합성 회의에서 수동 편집과 안전한 이탈 보호를 검증한다.", `수동 저장된 ${testInfo.project.name} 요약`);

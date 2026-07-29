@@ -61,9 +61,12 @@ export function SpeakerTranslatorPanel({ capture, speech }: { capture: Capture; 
   const t = useCallback((source: string, values: UiValues = {}) => translateUi(locale, source, values), [locale]);
   const [ourCount, setOurCount] = useState(1);
   const [theirCount, setTheirCount] = useState(1);
-  const [names, setNames] = useState<Record<string, string>>(() => ({ ours_1: t("나"), theirs_1: t("상대방") }));
-  const [ourLanguage, setOurLanguage] = useState("ko");
-  const [theirLanguage, setTheirLanguage] = useState("en");
+  const [names, setNames] = useState<Record<string, string>>(() => ({
+    ours_1: t("한국어 화자 {number}", { number: 1 }),
+    theirs_1: t("영어 화자 {number}", { number: 1 }),
+  }));
+  const ourLanguage = "ko";
+  const theirLanguage = "en";
   const [voice, setVoice] = useState<(typeof VOICES)[number]>("Maya");
   const [speed, setSpeed] = useState(1);
   const [speakerMap, setSpeakerMap] = useState<Record<string, string>>({});
@@ -80,11 +83,11 @@ export function SpeakerTranslatorPanel({ capture, speech }: { capture: Capture; 
     const next: Profile[] = [];
     for (let index = 1; index <= ourCount; index += 1) {
       const id = `ours_${index}`;
-      next.push({ id, team: "ours", ordinal: index, name: names[id] || (index === 1 ? t("나") : t("우리 팀 {number}", { number: index })) });
+      next.push({ id, team: "ours", ordinal: index, name: names[id] || t("한국어 화자 {number}", { number: index }) });
     }
     for (let index = 1; index <= theirCount; index += 1) {
       const id = `theirs_${index}`;
-      next.push({ id, team: "theirs", ordinal: index, name: names[id] || (index === 1 ? t("상대방") : t("상대 팀 {number}", { number: index })) });
+      next.push({ id, team: "theirs", ordinal: index, name: names[id] || t("영어 화자 {number}", { number: index }) });
     }
     return next;
   }, [names, ourCount, t, theirCount]);
@@ -93,7 +96,6 @@ export function SpeakerTranslatorPanel({ capture, speech }: { capture: Capture; 
   const pending = capture.phase === "requesting" || capture.phase === "connecting";
   const registeredCount = profiles.filter((profile) => speakerMap[profile.id]).length;
   const allRegistered = registeredCount === profiles.length;
-  const languagesDistinct = ourLanguage !== theirLanguage;
 
   useEffect(() => {
     if (!pendingProfile || capture.transcript.endpointCount <= endpointAtRegistrationRef.current) return;
@@ -137,11 +139,16 @@ export function SpeakerTranslatorPanel({ capture, speech }: { capture: Capture; 
       const speaker = endpoint.speaker;
       if (!speaker) continue;
       const profile = profiles.find((profileCandidate) => speakerMap[profileCandidate.id] === speaker);
-      if (!profile || profile.team !== "ours") continue;
+      if (!profile) continue;
       const previousLength = spokenTranslationLengthsRef.current[speaker] ?? 0;
       const nextSentence = endpoint.translationFinal.slice(previousLength).trim();
       spokenTranslationLengthsRef.current[speaker] = endpoint.translationFinal.length;
-      if (nextSentence) queued.push({ text: nextSentence, language: theirLanguage, voice, speed });
+      if (nextSentence) queued.push({
+        text: nextSentence,
+        language: profile.team === "ours" ? theirLanguage : ourLanguage,
+        voice,
+        speed,
+      });
     }
     if (queued.length) setSpeechQueue((current) => [...current, ...queued]);
   }, [capture.transcript, meetingStarted, profiles, speakerMap, speed, theirLanguage, voice]);
@@ -161,10 +168,6 @@ export function SpeakerTranslatorPanel({ capture, speech }: { capture: Capture; 
   };
 
   const beginRegistration = () => {
-    if (!languagesDistinct) {
-      setRegistrationMessage(t("우리 팀과 상대 팀 언어를 다르게 선택해 주세요."));
-      return;
-    }
     setSpeakerMap({});
     setPendingProfile(null);
     setCandidate(null);
@@ -174,7 +177,7 @@ export function SpeakerTranslatorPanel({ capture, speech }: { capture: Capture; 
     capture.reset();
     speech.stop();
     const participantDescription = profiles
-      .map((profile) => `${profile.name} (${profile.team === "ours" ? "our team" : "other team"})`)
+      .map((profile) => `${profile.name} (${profile.team === "ours" ? "Korean speaker" : "English speaker"})`)
       .join(", ");
     void capture.start({
       inputSource: "microphone",
@@ -193,7 +196,7 @@ export function SpeakerTranslatorPanel({ capture, speech }: { capture: Capture; 
       Object.entries(capture.transcript.speakers ?? {}).map(([speaker, track]) => [speaker, track.translation.final.length]),
     );
     setMeetingStarted(true);
-    setRegistrationMessage(t("실시간 통역을 시작했습니다. 우리 팀 발화의 번역만 문장 종료 후 음성으로 재생합니다."));
+    setRegistrationMessage(t("실시간 통역을 시작했습니다. 한국어와 영어 화자의 완결된 번역을 순서대로 스피커에서 재생합니다."));
     void speech.prepare();
   };
 
@@ -221,21 +224,14 @@ export function SpeakerTranslatorPanel({ capture, speech }: { capture: Capture; 
           </span>
         </div>
 
-        <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <NumberField label="우리 팀 인원" value={ourCount} maximum={Math.max(1, 15 - theirCount)} disabled={listening || pending} onChange={setOurCount} />
-          <NumberField label="상대 팀 인원" value={theirCount} maximum={Math.max(1, 15 - ourCount)} disabled={listening || pending} onChange={setTheirCount} />
-          <LanguageField label="우리 팀 언어" value={ourLanguage} disabled={listening || pending} onChange={setOurLanguage} />
-          <LanguageField label="상대 팀 언어" value={theirLanguage} disabled={listening || pending} onChange={setTheirLanguage} />
+        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          <NumberField label={t("한국어 참석 인원")} value={ourCount} maximum={Math.max(1, 15 - theirCount)} disabled={listening || pending} onChange={setOurCount} />
+          <NumberField label={t("영어 참석 인원")} value={theirCount} maximum={Math.max(1, 15 - ourCount)} disabled={listening || pending} onChange={setTheirCount} />
         </div>
-        {!languagesDistinct && (
-          <p role="alert" className="mt-3 text-[13px] font-semibold text-error">
-            {t("우리 팀과 상대 팀 언어를 다르게 선택해 주세요.")}
-          </p>
-        )}
 
         <div className="mt-5 grid gap-3 md:grid-cols-2">
           {profiles.map((profile) => {
-            const label = t("{team} {number}", { team: t(profile.team === "ours" ? "우리 팀" : "상대 팀"), number: profile.ordinal });
+            const label = t(profile.team === "ours" ? "한국어 화자 {number}" : "영어 화자 {number}", { number: profile.ordinal });
             const mappedSpeaker = speakerMap[profile.id];
             return (
               <article key={profile.id} className="rounded-xl border border-line bg-soft/40 p-4">
@@ -300,7 +296,7 @@ export function SpeakerTranslatorPanel({ capture, speech }: { capture: Capture; 
         )}
 
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          <LanguageField label="우리 팀 번역 음성" value={voice} disabled={meetingStarted} onChange={(value) => setVoice(value as (typeof VOICES)[number])} options={VOICES.map((value) => ({ value, label: value }))} />
+          <LanguageField label={t("번역 스피커 음성")} value={voice} disabled={meetingStarted} onChange={(value) => setVoice(value as (typeof VOICES)[number])} options={VOICES.map((value) => ({ value, label: value }))} />
           <label className="flex flex-col gap-2 text-[13px] font-semibold text-ink">
             음성 속도
             <select aria-label="화자 통역 음성 속도" value={speed} disabled={meetingStarted} onChange={(event) => setSpeed(Number(event.target.value))} className="min-h-11 rounded-xl border border-line bg-bg px-3">
@@ -311,7 +307,7 @@ export function SpeakerTranslatorPanel({ capture, speech }: { capture: Capture; 
 
         <div className="mt-5 flex flex-wrap gap-3">
           {!listening && !pending ? (
-            <button type="button" disabled={!languagesDistinct} onClick={beginRegistration} className="min-h-11 rounded-full bg-ink px-5 text-[14px] font-bold text-bg disabled:opacity-40">화자 등록 시작</button>
+            <button type="button" onClick={beginRegistration} className="min-h-11 rounded-full bg-ink px-5 text-[14px] font-bold text-bg disabled:opacity-40">화자 등록 시작</button>
           ) : !meetingStarted ? (
             <>
               <button type="button" disabled={!allRegistered || Boolean(pendingProfile || candidate)} onClick={beginMeeting} className="min-h-11 rounded-full bg-accent px-5 text-[14px] font-bold text-white disabled:opacity-40">실시간 통역 시작</button>
@@ -324,7 +320,7 @@ export function SpeakerTranslatorPanel({ capture, speech }: { capture: Capture; 
         {registrationMessage && <p role="status" className="mt-4 text-[13px] font-medium text-ink">{registrationMessage}</p>}
         {capture.error && <p role="alert" className="mt-4 text-[13px] text-error">{capture.error}</p>}
         {speech.error && <p role="alert" className="mt-4 text-[13px] text-error">{speech.error}</p>}
-        <p className="mt-4 text-[12px] leading-5 text-inkSoft">Soniox 실시간 화자 라벨은 대화 중 수정될 수 있습니다. 헤드폰 사용을 권장하며, 잘못 연결된 경우 세션을 다시 등록하세요. 공식 기준 최대 15명까지 설정할 수 있습니다.</p>
+        <p className="mt-4 text-[12px] leading-5 text-inkSoft">{t("Soniox 실시간 화자 라벨은 대화 중 수정될 수 있습니다. 번역은 기본 스피커로 재생되며 마이크의 에코 제거를 사용하지만, 울림이 생기면 볼륨을 낮추거나 헤드폰을 사용하세요. 잘못 연결된 경우 세션을 다시 등록할 수 있습니다. 공식 기준 최대 15명까지 설정할 수 있습니다.")}</p>
         <p className="mt-2 text-[12px] leading-5 text-inkSoft">실시간 처리 중 마이크 오디오와 입력한 참가자 이름이 Soniox로 전송되며 사용량 기반 비용이 발생할 수 있습니다. 이 통역 세션은 현재 회의 파일로 자동 저장하지 않습니다.</p>
       </section>
 
@@ -336,7 +332,7 @@ export function SpeakerTranslatorPanel({ capture, speech }: { capture: Capture; 
             <article key={profile.id} className="rounded-2xl border border-line bg-panel p-5">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="text-[16px] font-bold text-ink" data-i18n-user-content>{profile.name}</h3>
-                <span className="rounded-full bg-soft px-2 py-1 text-[11px] font-bold text-inkSoft">{profile.team === "ours" ? "우리 팀 · 상대 언어 TTS" : `상대 팀 · ${LANGUAGES.find((language) => language.value === ourLanguage)?.label ?? ourLanguage} 자막`}</span>
+                <span className="rounded-full bg-soft px-2 py-1 text-[11px] font-bold text-inkSoft">{t(profile.team === "ours" ? "한국어 → 영어 스피커 번역" : "영어 → 한국어 스피커 번역")}</span>
               </div>
               <p className="mt-4 text-[11px] font-bold uppercase tracking-wide text-inkSoft">원문 STT</p>
               <p className="mt-1 min-h-12 whitespace-pre-wrap text-[15px] leading-6 text-ink" data-i18n-user-content>{track?.original.final}<span className="text-inkSoft">{track?.original.provisional}</span></p>

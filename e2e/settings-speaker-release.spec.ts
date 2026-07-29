@@ -11,8 +11,8 @@ test("release history, font sizing, independent scrolling, and speaker setup are
   await page.goto("/settings");
 
   await expect(page.getByRole("heading", { name: "릴리즈 노트" })).toBeVisible();
-  await expect(page.getByText("v1.12", { exact: true })).toBeVisible();
-  await expect(page.getByText("기준판 이후 12회 업데이트", { exact: true })).toBeVisible();
+  await expect(page.getByText("v1.13", { exact: true })).toBeVisible();
+  await expect(page.getByText("기준판 이후 13회 업데이트", { exact: true })).toBeVisible();
   await expect(page.getByText("v1.0 · AI NOTE 오픈소스 기준판", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "글자 크기 한 단계 크게" }).click();
@@ -40,8 +40,10 @@ test("release history, font sizing, independent scrolling, and speaker setup are
   await page.goto("/soniox?tool=translator");
   await page.getByRole("button", { name: "화자 구분 통역" }).click();
   await expect(page.getByRole("region", { name: "화자별 실시간 통역" })).toBeVisible();
-  await expect(page.getByLabel("우리 팀 인원")).toHaveValue("1");
-  await expect(page.getByLabel("상대 팀 인원")).toHaveValue("1");
+  await expect(page.getByLabel("한국어 참석 인원")).toHaveValue("1");
+  await expect(page.getByLabel("영어 참석 인원")).toHaveValue("1");
+  await expect(page.getByText("한국어 → 영어 스피커 번역")).toBeVisible();
+  await expect(page.getByText("영어 → 한국어 스피커 번역")).toBeVisible();
   await expect(page.getByRole("button", { name: "화자 등록 시작" })).toBeVisible();
   await expect(page.getByText(/영구 음성 생체 등록이 아니라/)).toBeVisible();
 });

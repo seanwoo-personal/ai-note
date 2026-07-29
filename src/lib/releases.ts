@@ -10,6 +10,17 @@ export type ProductRelease = {
 // test-only, and internal repair commits stay inside their milestone release.
 export const PRODUCT_RELEASES: readonly ProductRelease[] = [
   {
+    version: "1.13",
+    date: "2026-07-29",
+    title: "언어별 화자 동시 통역",
+    changes: [
+      "Translator에서 한국어·영어 참석 인원을 각각 확인하고 화자별 등록 섹션 생성",
+      "세션 화자 번호를 한국어·영어 참가자 프로필에 확인 후 연결",
+      "양쪽 언어의 완결된 번역을 화자별 순서대로 기본 스피커에서 재생",
+      "마이크 에코 제거와 최대 15명 제한, 스피커 울림 대응 안내 추가",
+    ],
+  },
+  {
     version: "1.12",
     date: "2026-07-28",
     title: "개인·다자간 실시간 통역과 사용성 설정",

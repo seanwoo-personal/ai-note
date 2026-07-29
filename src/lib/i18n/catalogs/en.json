@@ -949,5 +949,19 @@
   "상대 팀 · 영어 자막": "Other team · English subtitles",
   "상대 팀 · 일본어 자막": "Other team · Japanese subtitles",
   "상대 팀 · 중국어 자막": "Other team · Chinese subtitles",
-  "Translator에 세션 화자 프로필과 등록 확인, 우리 팀 최종 번역 TTS, 상대 팀 번역 자막 추가": "Added session speaker profiles and registration confirmation in Translator, TTS for finalized our-team translations, and translated subtitles for the other team"
+  "Translator에 세션 화자 프로필과 등록 확인, 우리 팀 최종 번역 TTS, 상대 팀 번역 자막 추가": "Added session speaker profiles and registration confirmation in Translator, TTS for finalized our-team translations, and translated subtitles for the other team",
+  "한국어 화자 {number}": "Korean speaker {number}",
+  "영어 화자 {number}": "English speaker {number}",
+  "한국어 참석 인원": "Korean-speaking attendees",
+  "영어 참석 인원": "English-speaking attendees",
+  "번역 스피커 음성": "Translation speaker voice",
+  "한국어 → 영어 스피커 번역": "Korean → English speaker translation",
+  "영어 → 한국어 스피커 번역": "English → Korean speaker translation",
+  "실시간 통역을 시작했습니다. 한국어와 영어 화자의 완결된 번역을 순서대로 스피커에서 재생합니다.": "Live interpretation started. Finalized translations from Korean and English speakers will play through the speakers in order.",
+  "Soniox 실시간 화자 라벨은 대화 중 수정될 수 있습니다. 번역은 기본 스피커로 재생되며 마이크의 에코 제거를 사용하지만, 울림이 생기면 볼륨을 낮추거나 헤드폰을 사용하세요. 잘못 연결된 경우 세션을 다시 등록할 수 있습니다. 공식 기준 최대 15명까지 설정할 수 있습니다.": "Soniox realtime speaker labels may change during the conversation. Translations play through the default speakers and microphone echo cancellation is enabled, but lower the volume or use headphones if feedback occurs. You can register the session again if a speaker is mapped incorrectly. Soniox officially supports up to 15 speakers.",
+  "언어별 화자 동시 통역": "Simultaneous interpretation by speaker language",
+  "Translator에서 한국어·영어 참석 인원을 각각 확인하고 화자별 등록 섹션 생성": "Set Korean- and English-speaking attendance separately and create one registration section per speaker in Translator",
+  "세션 화자 번호를 한국어·영어 참가자 프로필에 확인 후 연결": "Confirm and map session speaker labels to Korean and English participant profiles",
+  "양쪽 언어의 완결된 번역을 화자별 순서대로 기본 스피커에서 재생": "Play finalized translations in both directions through the default speakers in speaker order",
+  "마이크 에코 제거와 최대 15명 제한, 스피커 울림 대응 안내 추가": "Added microphone echo cancellation guidance, the 15-speaker limit, and speaker feedback instructions"
 }

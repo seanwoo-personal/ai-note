@@ -91,6 +91,7 @@ describe("Soniox real-time transcript", () => {
       ],
     });
     expect(transcript.original.final).toBe("완료");
+    expect(transcript.endpointCount).toBe(2);
   });
 
   it("uses caller-provided language hints for multilingual workspace tools", () => {
@@ -195,6 +196,9 @@ describe("Soniox real-time transcript", () => {
     session.sendAudio(audio);
     expect(socket.sent[1]).toBe(audio);
 
+    session.finalize();
+    expect(JSON.parse(String(socket.sent[2]))).toEqual({ type: "finalize" });
+
     socket.onmessage?.({ data: JSON.stringify({
       tokens: [{ text: "안녕", is_final: false, translation_status: "original" }],
     }) });
@@ -202,7 +206,7 @@ describe("Soniox real-time transcript", () => {
 
     vi.useFakeTimers();
     session.finish();
-    expect(socket.sent[2]).toBe("");
+    expect(socket.sent[3]).toBe("");
     await vi.advanceTimersByTimeAsync(10_000);
     expect(socket.readyState).toBe(3);
     expect(errors).toEqual(["Soniox 실시간 전사 완료 응답이 지연되어 연결을 종료했습니다."]);

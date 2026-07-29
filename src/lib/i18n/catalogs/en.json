@@ -1000,5 +1000,15 @@
   "스페이스바 사이에서 완료된 발화를 찾지 못했습니다. 다시 시도해 주세요.": "No completed utterance was found between the Space presses. Try again.",
   "내 발화를 상대방 언어로 번역하지 못했습니다. 다시 시도해 주세요.": "Could not translate your speech into the other participant’s language. Try again.",
   "한국어 번역에 실패했습니다. 다음 발언은 계속 처리합니다.": "Korean translation failed. Following utterances will continue to be processed.",
-  "번역문은 표시했지만 음성 송출을 재생하지 못했습니다.": "The translation is visible, but audio output could not be played."
+  "번역문은 표시했지만 음성 송출을 재생하지 못했습니다.": "The translation is visible, but audio output could not be played.",
+  "참석자 등록 없이 Soniox가 세션 화자를 자동 구분하고, 한국어와 선택한 상대 언어를 계속 실시간 양방향 번역합니다.": "Without participant registration, Soniox automatically separates session speakers and continuously translates both ways between Korean and the selected participant language.",
+  "마이크와 실시간 번역은 계속 실행됩니다. 스페이스바로 내 송출 구간을 시작하세요.": "The microphone and live translation keep running. Press Space to mark the start of your output turn.",
+  "내 송출 구간 · 실시간 번역 및 음성 연결 준비 중… 말을 마치면 스페이스바를 다시 누르세요.": "My output turn · Live translation and speech connection are being prepared… Press Space again when you finish.",
+  "마지막 토큰 확정 중…": "Finalizing the last token…",
+  "송출 구간 시작": "Start output turn",
+  "송출 구간 확정": "Finalize output turn",
+  "발화 중 Soniox 번역과 TTS 연결을 미리 준비하고, 두 번째 Space에서 경계를 확정해 즉시 음성 송출을 시작합니다. 첫 Push-to-Talk 구간에서 감지된 활성 화자를 이 세션의 내 화자로 자동 고정하므로 첫 구간에서는 다른 참석자가 동시에 말하지 않도록 해 주세요.": "Soniox translation and the TTS connection are prepared while you speak; the second Space finalizes the boundary and starts speech output immediately. The active speaker detected in the first Push-to-Talk turn is bound as your speaker for this session, so ask other participants not to speak at the same time during that first turn.",
+  "실시간": "Live",
+  "실시간 번역 중…": "Translating live…",
+  "회의 오디오는 Soniox로 전송됩니다. Soniox 실시간 번역 결과가 없는 경우에만 전사 텍스트가 설정된 번역 모델로 전송됩니다. 번역 음성 생성을 위해 번역된 텍스트도 Soniox로 전송됩니다. 외부 제공자를 사용하면 해당 제공자의 정책과 사용량 기반 비용이 적용될 수 있습니다. 테스트 프로덕트 결과는 현재 화면에만 유지되고 자동 저장되지 않습니다. 번역 음성은 이 기기의 스피커에서 재생되며 다른 통화 앱으로 자동 전송되지는 않습니다.": "Meeting audio is sent to Soniox. Transcript text is sent to the configured translation model only when a Soniox live translation is unavailable. Translated text is also sent to Soniox to generate speech. External-provider policies and usage-based charges may apply. Test Product results remain only on this screen and are not saved automatically. Translated audio plays through this device's speaker and is not sent automatically to another calling app."
 }

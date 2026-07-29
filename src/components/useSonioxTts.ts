@@ -16,7 +16,19 @@ export interface SonioxSpeakOptions {
   speed?: number;
 }
 
+export type SonioxPrepareOptions = Omit<SonioxSpeakOptions, "text">;
+
+type WarmSession = {
+  key: string;
+  generation: number;
+  promise: Promise<SonioxTtsSession>;
+};
+
 const SAMPLE_RATE = 24_000;
+
+function sessionKey(options: SonioxPrepareOptions): string {
+  return `${options.language}:${options.voice}:${options.speed ?? 1}`;
+}
 
 function createAudioContext(): AudioContext {
   const AudioContextConstructor = window.AudioContext
@@ -32,6 +44,7 @@ export function useSonioxTts() {
   const generationRef = useRef(0);
   const contextRef = useRef<AudioContext | null>(null);
   const sessionRef = useRef<SonioxTtsSession | null>(null);
+  const warmSessionRef = useRef<WarmSession | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const sourcesRef = useRef(new Set<AudioBufferSourceNode>());
   const nextStartTimeRef = useRef(0);
@@ -50,6 +63,7 @@ export function useSonioxTts() {
     if (cancel) sessionRef.current?.cancel();
     else sessionRef.current?.close();
     sessionRef.current = null;
+    warmSessionRef.current = null;
     for (const source of sourcesRef.current) {
       try { source.stop(); } catch { /* already stopped */ }
     }
@@ -67,19 +81,6 @@ export function useSonioxTts() {
     if (context.state === "suspended") await context.resume();
     return context;
   }, []);
-
-  const prepare = useCallback(async () => {
-    try {
-      await ensureAudioContext();
-      setError(null);
-    } catch (caught) {
-      const message = caught instanceof Error
-        ? caught.message
-        : "번역 음성을 시작할 수 없습니다.";
-      setError(message);
-      setPhase("error");
-    }
-  }, [ensureAudioContext]);
 
   const scheduleAudio = useCallback((generation: number, chunk: Uint8Array) => {
     if (!mountedRef.current || generation !== generationRef.current) return;
@@ -118,6 +119,78 @@ export function useSonioxTts() {
     setPhase("playing");
   }, []);
 
+  const connectSession = useCallback((
+    options: SonioxPrepareOptions,
+    generation: number,
+    controller: AbortController,
+    context: AudioContext,
+  ) => connectSonioxTts({
+    language: options.language,
+    voice: options.voice,
+    speed: options.speed ?? 1,
+    signal: controller.signal,
+    onAudio: (chunk) => scheduleAudio(generation, chunk),
+    onTerminated: () => {
+      if (!mountedRef.current || generation !== generationRef.current) return;
+      sessionRef.current = null;
+      warmSessionRef.current = null;
+      abortRef.current = null;
+      const remainingMs = Math.max(0, (nextStartTimeRef.current - context.currentTime) * 1000);
+      clearFinishTimer();
+      finishTimerRef.current = setTimeout(() => {
+        if (mountedRef.current && generation === generationRef.current) setPhase("finished");
+      }, remainingMs);
+    },
+    onError: (message) => {
+      if (!mountedRef.current || generation !== generationRef.current) return;
+      stopResources(false);
+      setError(message);
+      setPhase("error");
+    },
+  }), [clearFinishTimer, scheduleAudio, stopResources]);
+
+  const prepare = useCallback(async (options?: SonioxPrepareOptions) => {
+    let generation = generationRef.current;
+    try {
+      const context = await ensureAudioContext();
+      setError(null);
+      if (!options) return;
+      const key = sessionKey(options);
+      const current = warmSessionRef.current;
+      if (current && current.key === key && current.generation === generationRef.current) {
+        generation = current.generation;
+        await current.promise;
+        return;
+      }
+
+      generationRef.current += 1;
+      generation = generationRef.current;
+      stopResources(true);
+      const controller = new AbortController();
+      abortRef.current = controller;
+      nextStartTimeRef.current = context.currentTime + 0.03;
+      const promise = connectSession(options, generation, controller, context);
+      warmSessionRef.current = { key, generation, promise };
+      const session = await promise;
+      if (!mountedRef.current || generation !== generationRef.current) {
+        session.cancel();
+        return;
+      }
+      sessionRef.current = session;
+    } catch (caught) {
+      if (!mountedRef.current || generation !== generationRef.current) return;
+      if ((caught as { name?: string }).name === "AbortError") return;
+      warmSessionRef.current = null;
+      abortRef.current = null;
+      const message = caught instanceof Error
+        && !caught.message.startsWith("soniox_tts_")
+        ? caught.message
+        : "번역 음성을 시작할 수 없습니다.";
+      setError(message);
+      setPhase("error");
+    }
+  }, [connectSession, ensureAudioContext, stopResources]);
+
   const stop = useCallback(() => {
     generationRef.current += 1;
     stopResources(true);
@@ -128,48 +201,42 @@ export function useSonioxTts() {
   const speak = useCallback(async (options: SonioxSpeakOptions) => {
     const text = options.text.trim();
     if (!text) return;
-    generationRef.current += 1;
-    const generation = generationRef.current;
-    stopResources(true);
     setError(null);
     setPhase("connecting");
-    const controller = new AbortController();
-    abortRef.current = controller;
+    const key = sessionKey(options);
+    const prepared = warmSessionRef.current;
+    let generation = generationRef.current;
 
     try {
       const context = await ensureAudioContext();
-      nextStartTimeRef.current = context.currentTime + 0.03;
-      const session = await connectSonioxTts({
-        language: options.language,
-        voice: options.voice,
-        speed: options.speed ?? 1,
-        signal: controller.signal,
-        onAudio: (chunk) => scheduleAudio(generation, chunk),
-        onTerminated: () => {
-          if (!mountedRef.current || generation !== generationRef.current) return;
-          sessionRef.current = null;
-          abortRef.current = null;
-          const remainingMs = Math.max(0, (nextStartTimeRef.current - context.currentTime) * 1000);
-          clearFinishTimer();
-          finishTimerRef.current = setTimeout(() => {
-            if (mountedRef.current && generation === generationRef.current) setPhase("finished");
-          }, remainingMs);
-        },
-        onError: (message) => {
-          if (!mountedRef.current || generation !== generationRef.current) return;
-          stopResources(false);
-          setError(message);
-          setPhase("error");
-        },
-      });
-      if (!mountedRef.current || generation !== generationRef.current) {
-        session.cancel();
-        return;
+      let session: SonioxTtsSession;
+      if (prepared && prepared.key === key && prepared.generation === generationRef.current) {
+        generation = prepared.generation;
+        session = await prepared.promise;
+        if (!mountedRef.current || generation !== generationRef.current) {
+          session.cancel();
+          return;
+        }
+        warmSessionRef.current = null;
+        sessionRef.current = session;
+      } else {
+        generationRef.current += 1;
+        generation = generationRef.current;
+        stopResources(true);
+        const controller = new AbortController();
+        abortRef.current = controller;
+        nextStartTimeRef.current = context.currentTime + 0.03;
+        session = await connectSession(options, generation, controller, context);
+        if (!mountedRef.current || generation !== generationRef.current) {
+          session.cancel();
+          return;
+        }
+        sessionRef.current = session;
       }
-      sessionRef.current = session;
       session.speak(text);
     } catch (caught) {
       if (!mountedRef.current || generation !== generationRef.current) return;
+      warmSessionRef.current = null;
       abortRef.current = null;
       const message = caught instanceof Error
         && caught.name !== "AbortError"
@@ -179,7 +246,7 @@ export function useSonioxTts() {
       setError(message);
       setPhase("error");
     }
-  }, [clearFinishTimer, ensureAudioContext, scheduleAudio, stopResources]);
+  }, [connectSession, ensureAudioContext, stopResources]);
 
   useEffect(() => {
     mountedRef.current = true;

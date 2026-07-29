@@ -57,6 +57,8 @@ export function useSonioxLiveCapture() {
   const streamRef = useRef<MediaStream | null>(null);
   const sessionRef = useRef<SonioxRealtimeSession | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const finalizeRequestRef = useRef<{ generation: number; stage: "pausing" | "flushing" } | null>(null);
+  const queuedFinalizeRef = useRef(false);
 
   const transitionPhase = useCallback((next: SonioxCapturePhase) => {
     phaseRef.current = next;
@@ -69,12 +71,15 @@ export function useSonioxLiveCapture() {
   }, []);
 
   const closeCurrent = useCallback(() => {
+    finalizeRequestRef.current = null;
+    queuedFinalizeRef.current = false;
     abortRef.current?.abort();
     abortRef.current = null;
     const recorder = recorderRef.current;
     recorderRef.current = null;
     if (recorder) {
       recorder.ondataavailable = null;
+      recorder.onpause = null;
       recorder.onstop = null;
       recorder.onerror = null;
       if (recorder.state !== "inactive") recorder.stop();
@@ -158,8 +163,36 @@ export function useSonioxLiveCapture() {
       const recorder = new MediaRecorder(recordingStream);
       recorderRef.current = recorder;
       recorder.ondataavailable = (event) => {
-        if (event.data.size > 0 && generation === generationRef.current) {
-          sessionRef.current?.sendAudio(event.data);
+        if (generation !== generationRef.current) return;
+        if (event.data.size > 0) sessionRef.current?.sendAudio(event.data);
+        if (finalizeRequestRef.current?.generation === generation && finalizeRequestRef.current.stage === "flushing") {
+          finalizeRequestRef.current = null;
+          sessionRef.current?.finalize();
+          if (recorder.state === "paused") recorder.resume();
+          if (queuedFinalizeRef.current) {
+            queuedFinalizeRef.current = false;
+            queueMicrotask(() => {
+              if (generation !== generationRef.current || recorder.state !== "recording") return;
+              finalizeRequestRef.current = { generation, stage: "pausing" };
+              try {
+                recorder.pause();
+              } catch {
+                finalizeRequestRef.current = null;
+                sessionRef.current?.finalize();
+              }
+            });
+          }
+        }
+      };
+      recorder.onpause = () => {
+        if (finalizeRequestRef.current?.generation !== generation || finalizeRequestRef.current.stage !== "pausing") return;
+        finalizeRequestRef.current.stage = "flushing";
+        try {
+          recorder.requestData();
+        } catch {
+          finalizeRequestRef.current = null;
+          sessionRef.current?.finalize();
+          if (recorder.state === "paused") recorder.resume();
         }
       };
       recorder.onerror = () => failCurrent(generation, "오디오 입력을 읽을 수 없습니다.");
@@ -189,6 +222,27 @@ export function useSonioxLiveCapture() {
     }
   }, [closeCurrent, failCurrent, stopTracks, transitionPhase]);
 
+  const finalize = useCallback(() => {
+    if (phaseRef.current !== "listening") return;
+    const recorder = recorderRef.current;
+    if (!recorder) {
+      sessionRef.current?.finalize();
+      return;
+    }
+    if (finalizeRequestRef.current || recorder.state === "paused") {
+      queuedFinalizeRef.current = true;
+      return;
+    }
+    if (recorder.state !== "recording") return;
+    finalizeRequestRef.current = { generation: generationRef.current, stage: "pausing" };
+    try {
+      recorder.pause();
+    } catch {
+      finalizeRequestRef.current = null;
+      sessionRef.current?.finalize();
+    }
+  }, []);
+
   const stop = useCallback(() => {
     if (phaseRef.current === "requesting" || phaseRef.current === "connecting") {
       generationRef.current += 1;
@@ -212,5 +266,5 @@ export function useSonioxLiveCapture() {
     transitionPhase("idle");
   }, [closeCurrent, transitionPhase]);
 
-  return { phase, transcript, error, start, stop, reset };
+  return { phase, transcript, error, start, finalize, stop, reset };
 }

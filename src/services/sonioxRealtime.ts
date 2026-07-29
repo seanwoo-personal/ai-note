@@ -85,7 +85,7 @@ export function applySonioxResult(
   };
   for (const token of result.tokens ?? []) {
     if (!token.text) continue;
-    if (token.text === "<end>") {
+    if (token.text === "<end>" || token.text === "<fin>") {
       next.endpointCount += 1;
       const speaker = token.speaker ?? next.activeSpeaker;
       next.lastEndpointSpeaker = speaker;
@@ -102,7 +102,7 @@ export function applySonioxResult(
       ];
       continue;
     }
-    if (token.text === "<fin>") continue;
+
     const track = tokenTrack(token);
     if (token.is_final) next[track].final += token.text;
     else next[track].provisional += token.text;
@@ -162,6 +162,7 @@ export function buildSonioxConfig(
 
 export interface SonioxRealtimeSession {
   sendAudio(chunk: Blob): void;
+  finalize(): void;
   finish(): void;
   close(): void;
 }
@@ -284,6 +285,9 @@ export async function connectSonioxRealtime(
   return {
     sendAudio(chunk) {
       if (socket.readyState === 1) socket.send(chunk);
+    },
+    finalize() {
+      if (socket.readyState === 1) socket.send(JSON.stringify({ type: "finalize" }));
     },
     finish() {
       if (socket.readyState !== 1) return;

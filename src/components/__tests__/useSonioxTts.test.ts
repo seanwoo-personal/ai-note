@@ -95,6 +95,21 @@ describe("useSonioxTts", () => {
     expect(result.current.phase).toBe("finished");
   });
 
+  it("preconnects the matching Soniox stream so speak skips the network handshake", async () => {
+    const { result } = renderHook(() => useSonioxTts());
+    const options = { language: "ja", voice: "Maya", speed: 1 };
+
+    await act(async () => { await result.current.prepare(options); });
+
+    expect(soniox.connect).toHaveBeenCalledTimes(1);
+    expect(soniox.speak).not.toHaveBeenCalled();
+
+    await act(async () => { await result.current.speak({ ...options, text: "こんにちは" }); });
+
+    expect(soniox.connect).toHaveBeenCalledTimes(1);
+    expect(soniox.speak).toHaveBeenCalledWith("こんにちは");
+  });
+
   it("reports unsupported browser playback instead of leaving an unhandled rejection", async () => {
     Object.defineProperty(window, "AudioContext", { configurable: true, value: undefined });
     Object.defineProperty(window, "webkitAudioContext", { configurable: true, value: undefined });

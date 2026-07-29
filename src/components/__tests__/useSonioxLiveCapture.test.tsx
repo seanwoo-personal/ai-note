@@ -8,6 +8,7 @@ import { useSonioxLiveCapture } from "@/components/useSonioxLiveCapture";
 const soniox = vi.hoisted(() => ({
   connect: vi.fn(),
   sendAudio: vi.fn(),
+  finalize: vi.fn(),
   finish: vi.fn(),
   close: vi.fn(),
 }));
@@ -34,6 +35,7 @@ class FakeMediaRecorder {
   static instance: FakeMediaRecorder | null = null;
   state = "inactive";
   ondataavailable: ((event: { data: Blob }) => void) | null = null;
+  onpause: (() => void) | null = null;
   onstop: (() => void) | null = null;
   onerror: (() => void) | null = null;
   start = vi.fn((timeslice?: number) => {
@@ -41,6 +43,10 @@ class FakeMediaRecorder {
     expect(timeslice).toBe(250);
   });
   requestData = vi.fn();
+  pause = vi.fn(() => {
+    this.state = "paused";
+  });
+  resume = vi.fn(() => { this.state = "recording"; });
   stop = vi.fn(() => {
     this.state = "inactive";
     this.onstop?.();
@@ -80,6 +86,7 @@ describe("useSonioxLiveCapture", () => {
     FakeMediaRecorder.instance = null;
     soniox.connect.mockResolvedValue({
       sendAudio: soniox.sendAudio,
+      finalize: soniox.finalize,
       finish: soniox.finish,
       close: soniox.close,
     });
@@ -108,6 +115,37 @@ describe("useSonioxLiveCapture", () => {
     const chunk = new Blob(["audio"], { type: "audio/webm" });
     act(() => FakeMediaRecorder.instance?.ondataavailable?.({ data: chunk }));
     expect(soniox.sendAudio).toHaveBeenCalledWith(chunk);
+
+    act(() => result.current.finalize());
+    expect(FakeMediaRecorder.instance?.pause).toHaveBeenCalledTimes(1);
+    act(() => result.current.finalize());
+    expect(FakeMediaRecorder.instance?.pause).toHaveBeenCalledTimes(1);
+    expect(FakeMediaRecorder.instance?.requestData).not.toHaveBeenCalled();
+    const alreadyQueuedChunk = new Blob(["queued-before-pause"], { type: "audio/webm" });
+    act(() => FakeMediaRecorder.instance?.ondataavailable?.({ data: alreadyQueuedChunk }));
+    expect(soniox.sendAudio).toHaveBeenLastCalledWith(alreadyQueuedChunk);
+    expect(soniox.finalize).not.toHaveBeenCalled();
+
+    act(() => FakeMediaRecorder.instance?.onpause?.());
+    expect(FakeMediaRecorder.instance?.requestData).toHaveBeenCalledTimes(1);
+    expect(soniox.finalize).not.toHaveBeenCalled();
+
+    const closingChunk = new Blob(["closing-audio"], { type: "audio/webm" });
+    act(() => FakeMediaRecorder.instance?.ondataavailable?.({ data: closingChunk }));
+    expect(soniox.sendAudio).toHaveBeenLastCalledWith(closingChunk);
+    expect(soniox.finalize).toHaveBeenCalledTimes(1);
+    expect(FakeMediaRecorder.instance?.resume).toHaveBeenCalledTimes(1);
+    expect(soniox.sendAudio.mock.invocationCallOrder.at(-1)).toBeLessThan(soniox.finalize.mock.invocationCallOrder[0]);
+    await act(async () => { await Promise.resolve(); });
+    expect(FakeMediaRecorder.instance?.pause).toHaveBeenCalledTimes(2);
+    act(() => FakeMediaRecorder.instance?.onpause?.());
+    expect(FakeMediaRecorder.instance?.requestData).toHaveBeenCalledTimes(2);
+    const secondClosingChunk = new Blob(["second-closing-audio"], { type: "audio/webm" });
+    act(() => FakeMediaRecorder.instance?.ondataavailable?.({ data: secondClosingChunk }));
+    expect(soniox.finalize).toHaveBeenCalledTimes(2);
+    expect(FakeMediaRecorder.instance?.resume).toHaveBeenCalledTimes(2);
+    expect(soniox.sendAudio).toHaveBeenLastCalledWith(secondClosingChunk);
+    expect(result.current.phase).toBe("listening");
 
     act(() => result.current.stop());
     await waitFor(() => expect(soniox.finish).toHaveBeenCalledTimes(1));

@@ -259,7 +259,7 @@ describe("activated library navigation", () => {
       `/soniox?workspace=${DEFAULT_WORKSPACE}&folder=${FOLDER}&tool=test-product`,
     );
     expect(within(nav).getByRole("link", { name: "Voice Typing" })).toBeInTheDocument();
-    expect(within(nav).getByText("제품 버전 1.15.2")).toBeInTheDocument();
+    expect(within(nav).getByText("제품 버전 1.15.3")).toBeInTheDocument();
     expect(within(nav).getByRole("link", { name: "릴리즈 노트" })).toHaveAttribute("href", "/settings/releases");
     expect(within(nav).getByRole("link", { name: /프로젝트/ })).toHaveAttribute(
       "href",

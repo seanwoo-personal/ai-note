@@ -160,6 +160,7 @@ export function useSonioxTts() {
     let generation = generationRef.current;
     try {
       const context = await ensureAudioContext();
+      if (!mountedRef.current || generation !== generationRef.current) return;
       setError(null);
       if (!options) return;
       const key = sessionKey(options);
@@ -239,6 +240,7 @@ export function useSonioxTts() {
 
     try {
       const context = await ensureAudioContext();
+      if (!mountedRef.current || generation !== generationRef.current) return;
       let session: SonioxTtsSession;
       if (prepared && prepared.key === key && prepared.generation === generationRef.current) {
         generation = prepared.generation;

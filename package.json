@@ -1,6 +1,6 @@
 {
   "name": "ai-note",
-  "version": "1.15.2",
+  "version": "1.15.3",
   "description": "Local-first meeting recorder: record → local Whisper transcription → LLM summary via your own Claude/Codex CLI or Ollama. No cloud, no accounts, no API keys stored.",
   "license": "MIT",
   "author": "Dylan",

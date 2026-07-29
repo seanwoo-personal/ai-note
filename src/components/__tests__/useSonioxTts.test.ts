@@ -143,6 +143,76 @@ describe("useSonioxTts", () => {
     expect(result.current.error).toBeNull();
   });
 
+  it("does not resurrect prepare after stop while AudioContext resume is pending", async () => {
+    let resumeContext!: () => void;
+    class SuspendedAudioContext extends FakeAudioContext {
+      state: AudioContextState = "suspended";
+      resume = vi.fn(() => new Promise<void>((resolve) => {
+        resumeContext = () => { this.state = "running"; resolve(); };
+      }));
+    }
+    vi.stubGlobal("AudioContext", SuspendedAudioContext);
+    Object.defineProperty(window, "AudioContext", { configurable: true, value: SuspendedAudioContext });
+    const { result } = renderHook(() => useSonioxTts());
+    let pending!: Promise<void>;
+
+    act(() => { pending = result.current.prepare({ language: "ja", voice: "Maya", speed: 1 }); });
+    await waitFor(() => expect(SuspendedAudioContext.instance?.resume).toHaveBeenCalledTimes(1));
+    act(() => result.current.stop());
+    resumeContext();
+    await act(async () => { await pending; });
+
+    expect(soniox.connect).not.toHaveBeenCalled();
+    expect(result.current.phase).toBe("idle");
+  });
+
+  it("does not resurrect speak after stop while AudioContext resume is pending", async () => {
+    let resumeContext!: () => void;
+    class SuspendedAudioContext extends FakeAudioContext {
+      state: AudioContextState = "suspended";
+      resume = vi.fn(() => new Promise<void>((resolve) => {
+        resumeContext = () => { this.state = "running"; resolve(); };
+      }));
+    }
+    vi.stubGlobal("AudioContext", SuspendedAudioContext);
+    Object.defineProperty(window, "AudioContext", { configurable: true, value: SuspendedAudioContext });
+    const { result } = renderHook(() => useSonioxTts());
+    let pending!: Promise<void>;
+
+    act(() => { pending = result.current.speak({ text: "こんにちは", language: "ja", voice: "Maya", speed: 1 }); });
+    await waitFor(() => expect(SuspendedAudioContext.instance?.resume).toHaveBeenCalledTimes(1));
+    act(() => result.current.stop());
+    resumeContext();
+    await act(async () => { await pending; });
+
+    expect(soniox.connect).not.toHaveBeenCalled();
+    expect(soniox.speak).not.toHaveBeenCalled();
+    expect(result.current.phase).toBe("idle");
+  });
+
+  it("does not resurrect work after unmount while AudioContext resume is pending", async () => {
+    let resumeContext!: () => void;
+    class SuspendedAudioContext extends FakeAudioContext {
+      state: AudioContextState = "suspended";
+      resume = vi.fn(() => new Promise<void>((resolve) => {
+        resumeContext = () => { this.state = "running"; resolve(); };
+      }));
+    }
+    vi.stubGlobal("AudioContext", SuspendedAudioContext);
+    Object.defineProperty(window, "AudioContext", { configurable: true, value: SuspendedAudioContext });
+    const { result, unmount } = renderHook(() => useSonioxTts());
+    let pending!: Promise<void>;
+
+    act(() => { pending = result.current.speak({ text: "こんにちは", language: "ja", voice: "Maya", speed: 1 }); });
+    await waitFor(() => expect(SuspendedAudioContext.instance?.resume).toHaveBeenCalledTimes(1));
+    unmount();
+    resumeContext();
+    await act(async () => { await pending; });
+
+    expect(soniox.connect).not.toHaveBeenCalled();
+    expect(soniox.speak).not.toHaveBeenCalled();
+  });
+
   it("reports unsupported browser playback instead of leaving an unhandled rejection", async () => {
     Object.defineProperty(window, "AudioContext", { configurable: true, value: undefined });
     Object.defineProperty(window, "webkitAudioContext", { configurable: true, value: undefined });

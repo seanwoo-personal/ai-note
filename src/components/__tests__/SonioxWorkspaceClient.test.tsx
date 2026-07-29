@@ -12,6 +12,7 @@ const navigation = vi.hoisted(() => ({
 }));
 const capture = vi.hoisted(() => ({
   phase: "idle",
+  error: null as string | null,
   transcript: {
     original: { final: "", provisional: "" },
     translation: { final: "", provisional: "" },
@@ -61,7 +62,7 @@ vi.mock("@/components/useSonioxLiveCapture", () => ({
   useSonioxLiveCapture: () => ({
     phase: capture.phase,
     transcript: capture.transcript,
-    error: null,
+    error: capture.error,
     start: capture.start,
     stop: capture.stop,
     reset: capture.reset,
@@ -83,6 +84,7 @@ describe("SonioxWorkspaceClient", () => {
     window.localStorage.clear();
     navigation.search = "workspace=workspace-a&folder=folder-a&tool=translator";
     capture.phase = "idle";
+    capture.error = null;
     capture.transcript = {
       original: { final: "", provisional: "" },
       translation: { final: "", provisional: "" },
@@ -192,6 +194,7 @@ describe("SonioxWorkspaceClient", () => {
 
     expect(screen.queryByRole("spinbutton", { name: "회의 참석자 수" })).not.toBeInTheDocument();
     expect(screen.queryByText(/그룹 A|그룹 B/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "스페인어" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "미팅 시작" }));
     expect(capture.start).toHaveBeenCalledWith({ inputSource: "microphone", translation: { mode: "none" } });
 
@@ -216,6 +219,8 @@ describe("SonioxWorkspaceClient", () => {
     await waitFor(() => expect(screen.getByRole("region", { name: "한국어 회의 내용" })).toHaveTextContent("안녕하세요"));
     expect(screen.getByRole("region", { name: "상대방 언어 회의 내용" })).toHaveTextContent("화자 2");
     expect(screen.getByRole("region", { name: "상대방 언어 회의 내용" })).toHaveTextContent("はじめまして");
+    expect(screen.getByRole("log", { name: "한국어 실시간 기록" })).toHaveAttribute("aria-live", "polite");
+    expect(screen.getByRole("log", { name: "상대방 언어 실시간 기록" })).toHaveAttribute("aria-live", "polite");
     expect(translate).toHaveBeenCalledTimes(1);
     expect(translate).toHaveBeenCalledWith("/api/translate", expect.objectContaining({ body: JSON.stringify({ text: "はじめまして", targetLanguage: "ko" }) }));
   });
@@ -258,7 +263,63 @@ describe("SonioxWorkspaceClient", () => {
     expect(screen.getByRole("region", { name: "상대방 언어 회의 내용" })).toHaveTextContent("나 · Push-to-Talk");
     expect(translate).toHaveBeenCalledWith("/api/translate", expect.objectContaining({ body: JSON.stringify({ text: "안녕하세요", targetLanguage: "ja" }) }));
     await waitFor(() => expect(speech.speak).toHaveBeenCalledWith({ text: "こんにちは", language: "ja", voice: "Maya", speed: 1 }));
+    expect(screen.getByRole("status", { name: "Push-to-Talk 상태" })).toHaveTextContent("음성 송출 중");
+    speech.phase = "finished";
+    view.rerender(<SonioxWorkspaceClient />);
     expect(screen.getByRole("status", { name: "Push-to-Talk 상태" })).toHaveTextContent("송출 완료");
+  });
+
+  it("freezes push-to-talk text and target at the closing Space before a delayed endpoint", async () => {
+    const translate = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { text: string; targetLanguage: string };
+      return new Response(JSON.stringify({ translation: `${body.targetLanguage}:${body.text}` }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", translate);
+    navigation.search = "workspace=workspace-a&tool=test-product";
+    capture.phase = "listening";
+    const view = render(<SonioxWorkspaceClient />);
+    fireEvent.change(screen.getByRole("combobox", { name: "내 송출 대상 언어" }), { target: { value: "ja" } });
+
+    fireEvent.keyDown(window, { code: "Space", key: " " });
+    capture.transcript = {
+      original: { final: "안녕하세요", provisional: "" },
+      translation: { final: "", provisional: "" },
+      speakers: {
+        "1": { original: { final: "안녕하세요", provisional: "" }, translation: { final: "", provisional: "" }, originalLanguage: "ko" },
+      },
+      activeSpeaker: "1",
+      endpointCount: 0,
+      lastEndpointSpeaker: null,
+      endpoints: [],
+    };
+    view.rerender(<SonioxWorkspaceClient />);
+    fireEvent.keyDown(window, { code: "Space", key: " " });
+    fireEvent.change(screen.getByRole("combobox", { name: "내 송출 대상 언어" }), { target: { value: "zh" } });
+
+    capture.transcript = {
+      original: { final: "안녕하세요추가 발화", provisional: "" },
+      translation: { final: "", provisional: "" },
+      speakers: {
+        "1": { original: { final: "안녕하세요", provisional: "" }, translation: { final: "", provisional: "" }, originalLanguage: "ko" },
+        "2": { original: { final: "추가 발화", provisional: "" }, translation: { final: "", provisional: "" }, originalLanguage: "ko" },
+      },
+      activeSpeaker: "2",
+      endpointCount: 2,
+      lastEndpointSpeaker: "2",
+      endpoints: [
+        { id: 1, speaker: "1", originalLanguage: "ko", originalFinal: "안녕하세요", translationFinal: "" },
+        { id: 2, speaker: "2", originalLanguage: "ko", originalFinal: "추가 발화", translationFinal: "" },
+      ],
+    };
+    view.rerender(<SonioxWorkspaceClient />);
+
+    await waitFor(() => expect(translate).toHaveBeenCalledTimes(1));
+    expect(translate).toHaveBeenCalledWith("/api/translate", expect.objectContaining({
+      body: JSON.stringify({ text: "안녕하세요", targetLanguage: "ja" }),
+    }));
   });
 
   it("stops test-product capture and speech when leaving the section", () => {
@@ -280,13 +341,38 @@ describe("SonioxWorkspaceClient", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("브라우저에서 번역 음성을 재생할 수 없습니다");
   });
 
+  it("shows microphone and Soniox capture failures in the test-product panel", () => {
+    navigation.search = "workspace=workspace-a&tool=test-product";
+    capture.phase = "error";
+    capture.error = "마이크 권한을 허용해 주세요.";
+
+    render(<SonioxWorkspaceClient />);
+
+    expect(screen.getByRole("alert")).toHaveTextContent("마이크 권한을 허용해 주세요");
+    fireEvent.click(screen.getByRole("button", { name: "미팅 시작" }));
+    expect(speech.stop).toHaveBeenCalledTimes(1);
+    expect(capture.reset).toHaveBeenCalledTimes(1);
+  });
+
   it("recovers when push-to-talk never receives an endpoint after the closing Space", () => {
     vi.useFakeTimers();
     navigation.search = "workspace=workspace-a&tool=test-product";
     capture.phase = "listening";
-    render(<SonioxWorkspaceClient />);
+    const view = render(<SonioxWorkspaceClient />);
 
     fireEvent.keyDown(window, { code: "Space", key: " " });
+    capture.transcript = {
+      original: { final: "말", provisional: "" },
+      translation: { final: "", provisional: "" },
+      speakers: {
+        "1": { original: { final: "말", provisional: "" }, translation: { final: "", provisional: "" }, originalLanguage: "ko" },
+      },
+      activeSpeaker: "1",
+      endpointCount: 0,
+      lastEndpointSpeaker: null,
+      endpoints: [],
+    };
+    view.rerender(<SonioxWorkspaceClient />);
     fireEvent.keyDown(window, { code: "Space", key: " " });
     expect(screen.getByRole("status", { name: "Push-to-Talk 상태" })).toHaveTextContent("마지막 문장 확정 중");
 

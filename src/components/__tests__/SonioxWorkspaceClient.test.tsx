@@ -383,6 +383,54 @@ describe("SonioxWorkspaceClient", () => {
     vi.useRealTimers();
   });
 
+  it("does not hijack Space from a focused navigation link", () => {
+    navigation.search = "workspace=workspace-a&tool=test-product";
+    capture.phase = "listening";
+    render(<><a href="/settings">설정 링크</a><SonioxWorkspaceClient /></>);
+
+    const link = screen.getByRole("link", { name: "설정 링크" });
+    link.focus();
+    fireEvent.keyDown(link, { code: "Space", key: " " });
+
+    expect(screen.getByRole("status", { name: "Push-to-Talk 상태" })).toHaveTextContent("스페이스바를 눌러");
+  });
+
+  it("aborts a stalled outbound translation and restores push-to-talk", async () => {
+    vi.useFakeTimers();
+    const stalledTranslation = vi.fn((_url: string, init?: RequestInit): Promise<Response> => new Promise((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(new DOMException("Timed out", "AbortError")));
+    }));
+    vi.stubGlobal("fetch", stalledTranslation);
+    navigation.search = "workspace=workspace-a&tool=test-product";
+    capture.phase = "listening";
+    const view = render(<SonioxWorkspaceClient />);
+
+    fireEvent.keyDown(window, { code: "Space", key: " " });
+    capture.transcript = {
+      original: { final: "안녕하세요", provisional: "" },
+      translation: { final: "", provisional: "" },
+      speakers: {
+        "1": { original: { final: "안녕하세요", provisional: "" }, translation: { final: "", provisional: "" }, originalLanguage: "ko" },
+      },
+      activeSpeaker: "1",
+      endpointCount: 1,
+      lastEndpointSpeaker: "1",
+      endpoints: [{ id: 1, speaker: "1", originalLanguage: "ko", originalFinal: "안녕하세요", translationFinal: "" }],
+    };
+    view.rerender(<SonioxWorkspaceClient />);
+    fireEvent.keyDown(window, { code: "Space", key: " " });
+
+    await act(async () => {
+      await Promise.resolve();
+      vi.advanceTimersByTime(20_000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole("status", { name: "Push-to-Talk 상태" })).toHaveTextContent("스페이스바를 눌러");
+    expect(screen.getByRole("alert")).toHaveTextContent("번역하지 못했습니다");
+  });
+
   it("presents One-way Translator and Real-time Global Meeting as the two top-level modes", () => {
     render(<SonioxWorkspaceClient />);
 

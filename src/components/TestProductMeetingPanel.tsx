@@ -53,7 +53,7 @@ function hasUtteranceAwaitingEndpoint(transcript: Capture["transcript"]): boolea
 }
 
 function isTextInputTarget(target: EventTarget | null): boolean {
-  return target instanceof HTMLElement && Boolean(target.closest("input, textarea, select, button, [contenteditable='true']"));
+  return target instanceof HTMLElement && Boolean(target.closest("input, textarea, select, button, a, [role='button'], [role='link'], [contenteditable='true']"));
 }
 
 export function TestProductMeetingPanel({ capture, speech }: { capture: Capture; speech: Speech }) {
@@ -74,6 +74,7 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
   const pushToTalkEndpointRef = useRef(0);
   const pushToTalkLengthsRef = useRef<Record<string, number>>({});
   const frozenPushToTalkRef = useRef<FrozenPushToTalk | null>(null);
+  const userSpeakerRef = useRef<string | null>(null);
   const outboundIdRef = useRef(1_000_000);
   captureStopRef.current = capture.stop;
   speechStopRef.current = speech.stop;
@@ -105,6 +106,11 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
     const job = translationQueue[0];
     const generation = generationRef.current;
     const controller = new AbortController();
+    let timedOut = false;
+    const timeout = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, 20_000);
     processingRef.current = true;
     abortRef.current = controller;
     void fetch("/api/translate", {
@@ -125,13 +131,14 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
         setPushToTalkPhase("speaking");
       }
     }).catch((reason: unknown) => {
-      if ((reason as { name?: string }).name !== "AbortError" && generationRef.current === generation) {
+      if (((reason as { name?: string }).name !== "AbortError" || timedOut) && generationRef.current === generation) {
         setError(job.kind === "outbound"
           ? "내 발화를 상대방 언어로 번역하지 못했습니다. 다시 시도해 주세요."
           : "한국어 번역에 실패했습니다. 다음 발언은 계속 처리합니다.");
         if (job.kind === "outbound") setPushToTalkPhase("idle");
       }
     }).finally(() => {
+      window.clearTimeout(timeout);
       if (generationRef.current === generation) {
         setTranslationQueue((current) => current[0]?.id === job.id ? current.slice(1) : current.filter((item) => item.id !== job.id));
       }
@@ -164,7 +171,11 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
   }, [pushToTalkPhase, speech.phase, speechQueue.length]);
 
   const freezePushToTalk = (): FrozenPushToTalk => {
-    const endpoints = (capture.transcript.endpoints ?? []).filter((endpoint) => endpoint.id > pushToTalkEndpointRef.current);
+    const inferredSpeaker = userSpeakerRef.current ?? capture.transcript.activeSpeaker ?? capture.transcript.lastEndpointSpeaker;
+    if (inferredSpeaker) userSpeakerRef.current = inferredSpeaker;
+    const endpointSpeaker = inferredSpeaker ?? "unknown";
+    const endpoints = (capture.transcript.endpoints ?? []).filter((endpoint) =>
+      endpoint.id > pushToTalkEndpointRef.current && (endpoint.speaker ?? "unknown") === endpointSpeaker);
     const lengths = { ...pushToTalkLengthsRef.current };
     const parts: string[] = [];
     for (const endpoint of endpoints) {
@@ -175,10 +186,14 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
       if (text) parts.push(text);
     }
     const activeSpeaker = capture.transcript.activeSpeaker;
-    if (activeSpeaker) {
+    if (activeSpeaker && activeSpeaker === inferredSpeaker) {
       const track = capture.transcript.speakers[activeSpeaker];
       const current = track ? `${track.original.final}${track.original.provisional}` : "";
       const pending = current.slice(lengths[activeSpeaker] ?? 0).trim();
+      if (pending) parts.push(pending);
+    } else if (!inferredSpeaker) {
+      const current = `${capture.transcript.original.final}${capture.transcript.original.provisional}`;
+      const pending = current.slice(lengths.unknown ?? 0).trim();
       if (pending) parts.push(pending);
     }
     return {
@@ -218,6 +233,7 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
       pushToTalkLengthsRef.current = Object.fromEntries(
         Object.entries(capture.transcript.speakers).map(([speaker, track]) => [speaker, `${track.original.final}${track.original.provisional}`.length]),
       );
+      pushToTalkLengthsRef.current.unknown = `${capture.transcript.original.final}${capture.transcript.original.provisional}`.length;
       setPushToTalkPhase("recording");
       setError(null);
       void speech.prepare();
@@ -275,6 +291,7 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
     lastEndpointRef.current = 0;
     originalLengthsRef.current = {};
     frozenPushToTalkRef.current = null;
+    userSpeakerRef.current = null;
     setEntries([]);
     setTranslationQueue([]);
     setSpeechQueue([]);
@@ -292,6 +309,7 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
     capture.stop();
     speech.stop();
     frozenPushToTalkRef.current = null;
+    userSpeakerRef.current = null;
     setTranslationQueue([]);
     setSpeechQueue([]);
     setPushToTalkPhase("idle");
@@ -332,6 +350,7 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
         <div className="mt-4 rounded-xl border border-line bg-soft/40 p-4">
           <p className="text-[12px] font-bold text-ink">Push-to-Talk · Space</p>
           <p role="status" aria-label="Push-to-Talk 상태" className="mt-1 text-[13px] leading-6 text-inkSoft">{pushToTalkLabel}</p>
+          <p className="mt-1 text-[12px] leading-5 text-inkSoft">첫 Push-to-Talk 구간에서 감지된 활성 화자를 이 세션의 내 화자로 자동 고정합니다. 첫 구간에서는 다른 참석자가 동시에 말하지 않도록 해 주세요.</p>
         </div>
       </section>
 

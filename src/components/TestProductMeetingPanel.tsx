@@ -170,7 +170,7 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
   useEffect(() => {
     const openingCount = openingBoundaryRef.current;
     if (openingCount === null || capture.transcript.endpointCount <= openingCount) return;
-    const boundary = (capture.transcript.endpoints ?? []).find((endpoint) => endpoint.id > openingCount);
+    const boundary = (capture.transcript.endpoints ?? []).find((endpoint) => endpoint.id > openingCount && endpoint.kind === "fin");
     if (!boundary) return;
     openingBoundaryRef.current = null;
     pushToTalkEndpointRef.current = boundary.id;
@@ -206,7 +206,7 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
     }
   }, [pushToTalkPhase, speech.phase, speechQueue.length]);
 
-  const freezePushToTalk = (): FrozenPushToTalk => {
+  const freezePushToTalk = (closingEndpointId = capture.transcript.endpointCount): FrozenPushToTalk => {
     const latestPushToTalkEndpoint = [...(capture.transcript.endpoints ?? [])]
       .reverse()
       .find((endpoint) => endpoint.id > pushToTalkEndpointRef.current);
@@ -217,7 +217,9 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
     if (inferredSpeaker) userSpeakerRef.current = inferredSpeaker;
     const endpointSpeaker = inferredSpeaker ?? "unknown";
     const endpoints = (capture.transcript.endpoints ?? []).filter((endpoint) =>
-      endpoint.id > pushToTalkEndpointRef.current && (endpoint.speaker ?? "unknown") === endpointSpeaker);
+      endpoint.id > pushToTalkEndpointRef.current
+      && endpoint.id <= closingEndpointId
+      && (endpoint.speaker ?? "unknown") === endpointSpeaker);
     const lengths = { ...pushToTalkLengthsRef.current };
     const translationLengths = { ...pushToTalkTranslationLengthsRef.current };
     const parts: string[] = [];
@@ -233,23 +235,7 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
       if (text) parts.push(text);
       if (translated) translationParts.push(translated);
     }
-    const activeSpeaker = capture.transcript.activeSpeaker;
-    if (activeSpeaker && activeSpeaker === inferredSpeaker) {
-      const track = capture.transcript.speakers[activeSpeaker];
-      const current = track ? `${track.original.final}${track.original.provisional}` : "";
-      const currentTranslation = track ? `${track.translation.final}${track.translation.provisional}` : "";
-      const pending = current.slice(lengths[activeSpeaker] ?? 0).trim();
-      const pendingTranslation = currentTranslation.slice(translationLengths[activeSpeaker] ?? 0).trim();
-      if (pending) parts.push(pending);
-      if (pendingTranslation) translationParts.push(pendingTranslation);
-    } else if (!inferredSpeaker) {
-      const current = `${capture.transcript.original.final}${capture.transcript.original.provisional}`;
-      const currentTranslation = `${capture.transcript.translation.final}${capture.transcript.translation.provisional}`;
-      const pending = current.slice(lengths.unknown ?? 0).trim();
-      const pendingTranslation = currentTranslation.slice(translationLengths.unknown ?? 0).trim();
-      if (pending) parts.push(pending);
-      if (pendingTranslation) translationParts.push(pendingTranslation);
-    }
+
     return {
       text: parts.join(" ").trim(),
       translation: translationParts.join(" ").trim(),
@@ -319,7 +305,8 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
   useEffect(() => {
     const frozen = frozenPushToTalkRef.current;
     if (pushToTalkPhase !== "finalizing" || !frozen || capture.transcript.endpointCount <= frozen.closingEndpointCount) return;
-    const postCloseEndpoints = (capture.transcript.endpoints ?? []).filter((endpoint) => endpoint.id > frozen.closingEndpointCount);
+    const postCloseEndpoints = (capture.transcript.endpoints ?? []).filter((endpoint) =>
+      endpoint.id > frozen.closingEndpointCount && endpoint.kind === "fin");
     let finalizedSpeaker = frozen.speaker;
     if (!finalizedSpeaker) {
       finalizedSpeaker = postCloseEndpoints.find((endpoint) => endpoint.speaker)?.speaker ?? null;
@@ -331,7 +318,10 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
     const hasMatchingEndpoint = postCloseEndpoints.some((endpoint) =>
       (endpoint.speaker ?? "unknown") === (finalizedSpeaker ?? "unknown"));
     if (!hasMatchingEndpoint) return;
-    const finalized = freezePushToTalk();
+    const closingEndpoint = postCloseEndpoints.find((endpoint) =>
+      (endpoint.speaker ?? "unknown") === (finalizedSpeaker ?? "unknown"));
+    if (!closingEndpoint) return;
+    const finalized = freezePushToTalk(closingEndpoint.id);
     enqueuePushToTalk({ ...finalized, targetLanguage: frozen.targetLanguage });
   }, [capture.transcript, pushToTalkPhase]);
 

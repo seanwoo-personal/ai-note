@@ -110,6 +110,39 @@ describe("useSonioxTts", () => {
     expect(soniox.speak).toHaveBeenCalledWith("こんにちは");
   });
 
+  it("refreshes an unused warm session before Soniox's first-stream timeout", async () => {
+    vi.useFakeTimers();
+    const { result } = renderHook(() => useSonioxTts());
+    const options = { language: "ja", voice: "Maya", speed: 1 };
+
+    await act(async () => { await result.current.prepare(options); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(6_000); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(6_000); });
+
+    expect(soniox.connect).toHaveBeenCalledTimes(3);
+    expect(soniox.close).toHaveBeenCalledTimes(2);
+    await act(async () => { await result.current.speak({ ...options, text: "こんにちは" }); });
+    expect(soniox.connect).toHaveBeenCalledTimes(3);
+    expect(soniox.speak).toHaveBeenCalledWith("こんにちは");
+  });
+
+  it("silently aborts an in-flight warm refresh when speech starts", async () => {
+    vi.useFakeTimers();
+    const { result } = renderHook(() => useSonioxTts());
+    const options = { language: "ja", voice: "Maya", speed: 1 };
+    await act(async () => { await result.current.prepare(options); });
+    soniox.connect.mockImplementationOnce(({ signal }: { signal: AbortSignal }) => new Promise((_resolve, reject) => {
+      signal.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true });
+    }));
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(6_000); });
+    await act(async () => { await result.current.speak({ ...options, text: "こんにちは" }); });
+
+    expect(soniox.connect).toHaveBeenCalledTimes(2);
+    expect(soniox.speak).toHaveBeenCalledWith("こんにちは");
+    expect(result.current.error).toBeNull();
+  });
+
   it("reports unsupported browser playback instead of leaving an unhandled rejection", async () => {
     Object.defineProperty(window, "AudioContext", { configurable: true, value: undefined });
     Object.defineProperty(window, "webkitAudioContext", { configurable: true, value: undefined });

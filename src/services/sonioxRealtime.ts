@@ -34,6 +34,7 @@ export interface SonioxSpeakerTrack {
 
 export interface SonioxEndpointEvent {
   id: number;
+  kind?: "end" | "fin";
   speaker: string | null;
   originalLanguage?: string;
   originalFinal: string;
@@ -94,6 +95,7 @@ export function applySonioxResult(
         ...(next.endpoints ?? []).slice(-99),
         {
           id: next.endpointCount,
+          kind: token.text === "<fin>" ? "fin" : "end",
           speaker,
           originalLanguage: speakerTrack?.originalLanguage,
           originalFinal: speakerTrack?.original.final ?? next.original.final,

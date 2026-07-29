@@ -75,7 +75,7 @@ vi.mock("@/components/useSonioxTts", () => ({
   useSonioxTts: () => speech,
 }));
 
-const PTT_OPENING_ENDPOINT = { id: 1, speaker: null, originalLanguage: "unknown", originalFinal: "", translationFinal: "" };
+const PTT_OPENING_ENDPOINT = { id: 1, kind: "fin" as const, speaker: null, originalLanguage: "unknown", originalFinal: "", translationFinal: "" };
 
 function completePttOpeningBoundary(view: ReturnType<typeof render>) {
   capture.transcript = {
@@ -369,7 +369,7 @@ describe("SonioxWorkspaceClient", () => {
       activeSpeaker: "2",
       endpointCount: 2,
       lastEndpointSpeaker: "2",
-      endpoints: [PTT_OPENING_ENDPOINT, { id: 2, speaker: "2", originalLanguage: "ko", originalFinal: "다른 사람", translationFinal: "Other person" }],
+      endpoints: [PTT_OPENING_ENDPOINT, { id: 2, kind: "end", speaker: "2", originalLanguage: "ko", originalFinal: "다른 사람", translationFinal: "Other person" }],
     };
     view.rerender(<SonioxWorkspaceClient />);
     expect(speech.speak).not.toHaveBeenCalled();
@@ -397,8 +397,8 @@ describe("SonioxWorkspaceClient", () => {
       lastEndpointSpeaker: "1",
       endpoints: [
         PTT_OPENING_ENDPOINT,
-        { id: 2, speaker: "2", originalLanguage: "ko", originalFinal: "다른 사람", translationFinal: "Other person" },
-        { id: 3, speaker: "1", originalLanguage: "ko", originalFinal: "안녕하세요", translationFinal: "こんにちは" },
+        { id: 2, kind: "end", speaker: "2", originalLanguage: "ko", originalFinal: "다른 사람", translationFinal: "Other person" },
+        { id: 3, kind: "fin", speaker: "1", originalLanguage: "ko", originalFinal: "안녕하세요", translationFinal: "こんにちは" },
       ],
     };
     view.rerender(<SonioxWorkspaceClient />);
@@ -444,16 +444,15 @@ describe("SonioxWorkspaceClient", () => {
       original: { final: "안녕하세요추가 발화", provisional: "" },
       translation: { final: "", provisional: "" },
       speakers: {
-        "1": { original: { final: "안녕하세요", provisional: "" }, translation: { final: "", provisional: "" }, originalLanguage: "ko" },
-        "2": { original: { final: "추가 발화", provisional: "" }, translation: { final: "", provisional: "" }, originalLanguage: "ko" },
+        "1": { original: { final: "안녕하세요추가 발화", provisional: "" }, translation: { final: "", provisional: "" }, originalLanguage: "ko" },
       },
-      activeSpeaker: "2",
+      activeSpeaker: "1",
       endpointCount: 3,
-      lastEndpointSpeaker: "2",
+      lastEndpointSpeaker: "1",
       endpoints: [
         PTT_OPENING_ENDPOINT,
-        { id: 2, speaker: "1", originalLanguage: "ko", originalFinal: "안녕하세요", translationFinal: "" },
-        { id: 3, speaker: "2", originalLanguage: "ko", originalFinal: "추가 발화", translationFinal: "" },
+        { id: 2, kind: "fin", speaker: "1", originalLanguage: "ko", originalFinal: "안녕하세요", translationFinal: "" },
+        { id: 3, kind: "end", speaker: "1", originalLanguage: "ko", originalFinal: "안녕하세요추가 발화", translationFinal: "" },
       ],
     };
     view.rerender(<SonioxWorkspaceClient />);

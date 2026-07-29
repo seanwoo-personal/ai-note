@@ -77,8 +77,8 @@ describe("Soniox real-time transcript", () => {
     });
 
     expect(transcript.endpoints).toEqual([
-      expect.objectContaining({ id: 1, speaker: "1", originalLanguage: "ko", translationFinal: "Hello" }),
-      expect.objectContaining({ id: 2, speaker: "2", originalLanguage: "ko", translationFinal: "Nice to meet you" }),
+      expect.objectContaining({ id: 1, kind: "end", speaker: "1", originalLanguage: "ko", translationFinal: "Hello" }),
+      expect.objectContaining({ id: 2, kind: "end", speaker: "2", originalLanguage: "ko", translationFinal: "Nice to meet you" }),
     ]);
   });
 
@@ -92,6 +92,7 @@ describe("Soniox real-time transcript", () => {
     });
     expect(transcript.original.final).toBe("완료");
     expect(transcript.endpointCount).toBe(2);
+    expect(transcript.endpoints?.map((endpoint) => endpoint.kind)).toEqual(["fin", "end"]);
   });
 
   it("uses caller-provided language hints for multilingual workspace tools", () => {

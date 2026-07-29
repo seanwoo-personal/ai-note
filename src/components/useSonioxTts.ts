@@ -25,6 +25,7 @@ type WarmSession = {
 };
 
 const SAMPLE_RATE = 24_000;
+const WARM_REFRESH_INTERVAL_MS = 6_000;
 
 function sessionKey(options: SonioxPrepareOptions): string {
   return `${options.language}:${options.voice}:${options.speed ?? 1}`;
@@ -46,6 +47,8 @@ export function useSonioxTts() {
   const sessionRef = useRef<SonioxTtsSession | null>(null);
   const warmSessionRef = useRef<WarmSession | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const warmRefreshAbortRef = useRef<AbortController | null>(null);
+  const warmRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sourcesRef = useRef(new Set<AudioBufferSourceNode>());
   const nextStartTimeRef = useRef(0);
   const carryByteRef = useRef<number | null>(null);
@@ -60,6 +63,10 @@ export function useSonioxTts() {
     clearFinishTimer();
     abortRef.current?.abort();
     abortRef.current = null;
+    warmRefreshAbortRef.current?.abort();
+    warmRefreshAbortRef.current = null;
+    if (warmRefreshTimerRef.current !== null) clearTimeout(warmRefreshTimerRef.current);
+    warmRefreshTimerRef.current = null;
     if (cancel) sessionRef.current?.cancel();
     else sessionRef.current?.close();
     sessionRef.current = null;
@@ -166,17 +173,36 @@ export function useSonioxTts() {
       generationRef.current += 1;
       generation = generationRef.current;
       stopResources(true);
-      const controller = new AbortController();
-      abortRef.current = controller;
       nextStartTimeRef.current = context.currentTime + 0.03;
-      const promise = connectSession(options, generation, controller, context);
-      warmSessionRef.current = { key, generation, promise };
-      const session = await promise;
-      if (!mountedRef.current || generation !== generationRef.current) {
-        session.cancel();
-        return;
-      }
-      sessionRef.current = session;
+      const connectWarm = async (refresh: boolean): Promise<void> => {
+        const controller = new AbortController();
+        if (refresh) warmRefreshAbortRef.current = controller;
+        else abortRef.current = controller;
+        const promise = connectSession(options, generation, controller, context);
+        if (!refresh) warmSessionRef.current = { key, generation, promise };
+        try {
+          const session = await promise;
+          if (!mountedRef.current || generation !== generationRef.current || controller.signal.aborted) {
+            session.cancel();
+            return;
+          }
+          const previous = sessionRef.current;
+          warmSessionRef.current = { key, generation, promise: Promise.resolve(session) };
+          sessionRef.current = session;
+          abortRef.current = controller;
+          warmRefreshAbortRef.current = null;
+          if (previous && previous !== session) previous.close();
+          warmRefreshTimerRef.current = setTimeout(() => { void connectWarm(true); }, WARM_REFRESH_INTERVAL_MS);
+        } catch (caught) {
+          if (refresh && (!mountedRef.current || generation !== generationRef.current || controller.signal.aborted)) return;
+          if (refresh) {
+            warmRefreshTimerRef.current = setTimeout(() => { void connectWarm(true); }, 1_000);
+            return;
+          }
+          throw caught;
+        }
+      };
+      await connectWarm(false);
     } catch (caught) {
       if (!mountedRef.current || generation !== generationRef.current) return;
       if ((caught as { name?: string }).name === "AbortError") return;
@@ -205,6 +231,10 @@ export function useSonioxTts() {
     setPhase("connecting");
     const key = sessionKey(options);
     const prepared = warmSessionRef.current;
+    if (warmRefreshTimerRef.current !== null) clearTimeout(warmRefreshTimerRef.current);
+    warmRefreshTimerRef.current = null;
+    warmRefreshAbortRef.current?.abort();
+    warmRefreshAbortRef.current = null;
     let generation = generationRef.current;
 
     try {

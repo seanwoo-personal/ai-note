@@ -61,10 +61,7 @@ export function SpeakerTranslatorPanel({ capture, speech }: { capture: Capture; 
   const t = useCallback((source: string, values: UiValues = {}) => translateUi(locale, source, values), [locale]);
   const [ourCount, setOurCount] = useState(1);
   const [theirCount, setTheirCount] = useState(1);
-  const [names, setNames] = useState<Record<string, string>>(() => ({
-    ours_1: t("한국어 화자 {number}", { number: 1 }),
-    theirs_1: t("영어 화자 {number}", { number: 1 }),
-  }));
+  const [names, setNames] = useState<Record<string, string>>({});
   const ourLanguage = "ko";
   const theirLanguage = "en";
   const [voice, setVoice] = useState<(typeof VOICES)[number]>("Maya");
@@ -258,7 +255,7 @@ export function SpeakerTranslatorPanel({ capture, speech }: { capture: Capture; 
                   {listening && !meetingStarted && (
                     <button
                       type="button"
-                      aria-label="목소리 등록"
+                      aria-label={t("{name} 목소리 등록", { name: profile.name })}
                       disabled={Boolean(pendingProfile || candidate)}
                       onClick={() => {
                         if (hasUtteranceAwaitingEndpoint(capture.transcript)) {

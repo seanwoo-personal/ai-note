@@ -193,7 +193,10 @@ describe("SonioxWorkspaceClient", () => {
 
     capture.phase = "listening";
     view.rerender(<SonioxWorkspaceClient />);
-    expect(screen.getAllByRole("button", { name: "목소리 등록" })).toHaveLength(4);
+    expect(screen.getByRole("button", { name: "Sean 목소리 등록" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "한국어 화자 2 목소리 등록" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Michelle 목소리 등록" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "영어 화자 2 목소리 등록" })).toBeInTheDocument();
   });
 
   it("does not let the quick-translation shortcut bypass speaker-mode setup", () => {
@@ -254,7 +257,7 @@ describe("SonioxWorkspaceClient", () => {
     };
     view.rerender(<SonioxWorkspaceClient />);
 
-    fireEvent.click(screen.getAllByRole("button", { name: "목소리 등록" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: /목소리 등록$/ })[0]);
 
     expect(screen.getByText("현재 문장이 끝난 뒤 다시 등록해 주세요.")).toBeInTheDocument();
     expect(screen.getAllByText("미등록")).toHaveLength(2);
@@ -269,7 +272,7 @@ describe("SonioxWorkspaceClient", () => {
     capture.phase = "listening";
     view.rerender(<SonioxWorkspaceClient />);
 
-    fireEvent.click(screen.getAllByRole("button", { name: "목소리 등록" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: /목소리 등록$/ })[0]);
     capture.transcript = {
       original: { final: "저는 션입니다.", provisional: "" },
       translation: { final: "I am Sean.", provisional: "" },
@@ -296,7 +299,7 @@ describe("SonioxWorkspaceClient", () => {
     fireEvent.click(screen.getByRole("button", { name: "이 화자로 확인" }));
     await waitFor(() => expect(screen.getByText("등록됨 · Soniox 화자 1")).toBeInTheDocument());
 
-    fireEvent.click(screen.getAllByRole("button", { name: "목소리 등록" })[1]);
+    fireEvent.click(screen.getAllByRole("button", { name: /목소리 등록$/ })[1]);
     capture.transcript = {
       ...capture.transcript,
       speakers: {

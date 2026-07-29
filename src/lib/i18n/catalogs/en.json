@@ -963,5 +963,6 @@
   "Translator에서 한국어·영어 참석 인원을 각각 확인하고 화자별 등록 섹션 생성": "Set Korean- and English-speaking attendance separately and create one registration section per speaker in Translator",
   "세션 화자 번호를 한국어·영어 참가자 프로필에 확인 후 연결": "Confirm and map session speaker labels to Korean and English participant profiles",
   "양쪽 언어의 완결된 번역을 화자별 순서대로 기본 스피커에서 재생": "Play finalized translations in both directions through the default speakers in speaker order",
-  "마이크 에코 제거와 최대 15명 제한, 스피커 울림 대응 안내 추가": "Added microphone echo cancellation guidance, the 15-speaker limit, and speaker feedback instructions"
+  "마이크 에코 제거와 최대 15명 제한, 스피커 울림 대응 안내 추가": "Added microphone echo cancellation guidance, the 15-speaker limit, and speaker feedback instructions",
+  "{name} 목소리 등록": "Register {name}'s voice"
 }

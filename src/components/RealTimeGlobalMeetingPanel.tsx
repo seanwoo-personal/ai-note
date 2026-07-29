@@ -232,6 +232,7 @@ export function RealTimeGlobalMeetingPanel({ capture, speech }: { capture: Captu
 
   const beginMeeting = () => {
     if (!allRegistered || candidate) return;
+    if (autoSpeak) void speech.prepare();
     lastMeetingEndpointRef.current = capture.transcript.endpointCount;
     originalLengthsRef.current = Object.fromEntries(
       Object.entries(capture.transcript.speakers ?? {}).map(([speaker, track]) => [speaker, track.original.final.length]),
@@ -465,7 +466,7 @@ function GroupWindow({ id, targetLanguage, entries }: { id: GroupId; targetLangu
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-[17px] font-bold text-ink">그룹 {id} 화면</h3>
-          <p className="mt-1 text-[12px] text-inkSoft">상대 그룹 발언을 {language}로 표시</p>
+          <p className="mt-1 text-[12px] text-inkSoft">다음 번역: {language}</p>
         </div>
         <span className="rounded-full bg-soft px-3 py-2 text-[12px] font-bold text-accent">{language}</span>
       </div>
@@ -474,7 +475,10 @@ function GroupWindow({ id, targetLanguage, entries }: { id: GroupId; targetLangu
           <article key={entry.id} className="rounded-lg border border-line bg-panel p-3">
             <p className="text-[12px] font-bold text-inkSoft" data-i18n-user-content>{entry.participantName}</p>
             <p className="mt-1 text-[13px] text-ink" data-i18n-user-content>{entry.original}</p>
-            <p className="mt-2 text-[15px] font-semibold text-accent" data-i18n-user-content>{entry.translation}</p>
+            <div className="mt-2 flex items-start justify-between gap-3">
+              <p className="text-[15px] font-semibold text-accent" data-i18n-user-content>{entry.translation}</p>
+              <span className="shrink-0 text-[11px] font-bold text-inkSoft">{LANGUAGES.find((candidate) => candidate.value === entry.targetLanguage)?.label ?? entry.targetLanguage}</span>
+            </div>
           </article>
         ))}
       </div>

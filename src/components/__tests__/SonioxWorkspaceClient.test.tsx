@@ -240,6 +240,19 @@ describe("SonioxWorkspaceClient", () => {
     expect(screen.getByText("등록됨 · 세션 화자 1")).toBeInTheDocument();
   });
 
+  it("locks mode switching while a global meeting session is active", () => {
+    const view = render(<SonioxWorkspaceClient />);
+    fireEvent.click(screen.getByRole("button", { name: "실시간 글로벌 미팅" }));
+    fireEvent.click(screen.getByRole("button", { name: "화자 등록 시작" }));
+    capture.phase = "listening";
+    view.rerender(<SonioxWorkspaceClient />);
+
+    const oneWay = screen.getByRole("button", { name: "단방향 트랜스레이터" });
+    expect(oneWay).toBeDisabled();
+    fireEvent.click(oneWay);
+    expect(screen.getByRole("heading", { name: "Real-time Global Meeting" })).toBeInTheDocument();
+  });
+
   it("routes each completed speaker utterance to the opposite group display language", async () => {
     const translate = vi.fn(async (_url: string, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body)) as { targetLanguage: string };
@@ -282,6 +295,7 @@ describe("SonioxWorkspaceClient", () => {
     await register(1, "1", 1);
     await register(2, "2", 2);
     fireEvent.click(screen.getByRole("button", { name: "글로벌 미팅 시작" }));
+    expect(speech.prepare).toHaveBeenCalledTimes(1);
 
     capture.transcript = {
       ...capture.transcript,
@@ -297,6 +311,10 @@ describe("SonioxWorkspaceClient", () => {
     };
     view.rerender(<SonioxWorkspaceClient />);
     await waitFor(() => expect(screen.getByRole("region", { name: "그룹 B 화면" })).toHaveTextContent("こんにちは。"));
+    expect(screen.getByRole("region", { name: "그룹 B 화면" })).toHaveTextContent("일본어");
+    fireEvent.change(screen.getByRole("combobox", { name: "그룹 A 상대 번역 언어" }), { target: { value: "en" } });
+    expect(screen.getByRole("region", { name: "그룹 B 화면" })).toHaveTextContent("다음 번역: 영어");
+    expect(screen.getByRole("region", { name: "그룹 B 화면" })).toHaveTextContent("일본어");
     expect(translate).toHaveBeenLastCalledWith("/api/translate", expect.objectContaining({ body: JSON.stringify({ text: "한국에서 왔습니다.", targetLanguage: "ja" }) }));
     await waitFor(() => expect(speech.speak).toHaveBeenNthCalledWith(1, { text: "こんにちは。", language: "ja", voice: "Maya", speed: 1 }));
     speech.phase = "connecting";

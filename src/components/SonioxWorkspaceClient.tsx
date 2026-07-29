@@ -278,8 +278,11 @@ function TranslatorTool() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [assignShortcut, captureRef, editingShortcutRef, inputSourceRef, shortcutsRef, speechRef, translationRef, translatorMode]);
 
+  const modeLocked = ["requesting", "connecting", "listening", "finishing"].includes(capture.phase)
+    || ["connecting", "playing"].includes(speech.phase);
+
   const changeTranslatorMode = (mode: "one-way" | "global-meeting") => {
-    if (mode === translatorMode) return;
+    if (mode === translatorMode || modeLocked) return;
     capture.stop();
     speech.stop();
     capture.reset();
@@ -289,7 +292,7 @@ function TranslatorTool() {
   if (translatorMode === "global-meeting") {
     return (
       <div className="space-y-5">
-        <TranslatorModeSwitch mode={translatorMode} onChange={changeTranslatorMode} />
+        <TranslatorModeSwitch mode={translatorMode} locked={modeLocked} onChange={changeTranslatorMode} />
         <RealTimeGlobalMeetingPanel capture={capture} speech={speech} />
       </div>
     );
@@ -297,7 +300,7 @@ function TranslatorTool() {
 
   return (
     <div className="space-y-5">
-      <TranslatorModeSwitch mode={translatorMode} onChange={changeTranslatorMode} />
+      <TranslatorModeSwitch mode={translatorMode} locked={modeLocked} onChange={changeTranslatorMode} />
       <section className="rounded-2xl border border-line bg-panel p-5 shadow-[0_8px_30px_-20px_rgba(42,36,32,.3)] sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -441,11 +444,11 @@ function TranslatorTool() {
   );
 }
 
-function TranslatorModeSwitch({ mode, onChange }: { mode: "one-way" | "global-meeting"; onChange(mode: "one-way" | "global-meeting"): void }) {
+function TranslatorModeSwitch({ mode, locked, onChange }: { mode: "one-way" | "global-meeting"; locked: boolean; onChange(mode: "one-way" | "global-meeting"): void }) {
   return (
     <div className="inline-flex rounded-xl border border-line bg-panel p-1" role="group" aria-label="Translator 모드">
-      <button type="button" aria-pressed={mode === "one-way"} onClick={() => onChange("one-way")} className={`min-h-11 rounded-lg px-4 text-[13px] font-bold ${mode === "one-way" ? "bg-ink text-bg" : "text-inkSoft"}`}>단방향 트랜스레이터</button>
-      <button type="button" aria-pressed={mode === "global-meeting"} onClick={() => onChange("global-meeting")} className={`min-h-11 rounded-lg px-4 text-[13px] font-bold ${mode === "global-meeting" ? "bg-ink text-bg" : "text-inkSoft"}`}>실시간 글로벌 미팅</button>
+      <button type="button" aria-pressed={mode === "one-way"} disabled={locked && mode !== "one-way"} onClick={() => onChange("one-way")} className={`min-h-11 rounded-lg px-4 text-[13px] font-bold disabled:cursor-not-allowed disabled:opacity-40 ${mode === "one-way" ? "bg-ink text-bg" : "text-inkSoft"}`}>단방향 트랜스레이터</button>
+      <button type="button" aria-pressed={mode === "global-meeting"} disabled={locked && mode !== "global-meeting"} onClick={() => onChange("global-meeting")} className={`min-h-11 rounded-lg px-4 text-[13px] font-bold disabled:cursor-not-allowed disabled:opacity-40 ${mode === "global-meeting" ? "bg-ink text-bg" : "text-inkSoft"}`}>실시간 글로벌 미팅</button>
     </div>
   );
 }

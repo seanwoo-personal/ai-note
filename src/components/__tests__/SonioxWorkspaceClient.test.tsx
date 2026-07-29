@@ -431,6 +431,62 @@ describe("SonioxWorkspaceClient", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("번역하지 못했습니다");
   });
 
+  it("keeps the current FIFO lock when an aborted prior-generation translation settles late", async () => {
+    let rejectFirst: ((reason?: unknown) => void) | undefined;
+    const translate = vi.fn()
+      .mockImplementationOnce(() => new Promise<Response>((_resolve, reject) => { rejectFirst = reject; }))
+      .mockImplementation(() => new Promise<Response>(() => {}));
+    vi.stubGlobal("fetch", translate);
+    navigation.search = "workspace=workspace-a&tool=test-product";
+    capture.phase = "listening";
+    capture.transcript = {
+      original: { final: "첫 발화", provisional: "" },
+      translation: { final: "", provisional: "" },
+      speakers: { "1": { original: { final: "첫 발화", provisional: "" }, translation: { final: "", provisional: "" }, originalLanguage: "ja" } },
+      activeSpeaker: "1",
+      endpointCount: 1,
+      lastEndpointSpeaker: "1",
+      endpoints: [{ id: 1, speaker: "1", originalLanguage: "ja", originalFinal: "첫 발화", translationFinal: "" }],
+    };
+    const view = render(<SonioxWorkspaceClient />);
+    await waitFor(() => expect(translate).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole("button", { name: "미팅 중지" }));
+    capture.phase = "idle";
+    view.rerender(<SonioxWorkspaceClient />);
+    fireEvent.click(screen.getByRole("button", { name: "미팅 시작" }));
+    capture.phase = "listening";
+    capture.transcript = {
+      original: { final: "두 번째", provisional: "" },
+      translation: { final: "", provisional: "" },
+      speakers: { "2": { original: { final: "두 번째", provisional: "" }, translation: { final: "", provisional: "" }, originalLanguage: "ja" } },
+      activeSpeaker: "2",
+      endpointCount: 2,
+      lastEndpointSpeaker: "2",
+      endpoints: [{ id: 2, speaker: "2", originalLanguage: "ja", originalFinal: "두 번째", translationFinal: "" }],
+    };
+    view.rerender(<SonioxWorkspaceClient />);
+    await waitFor(() => expect(translate).toHaveBeenCalledTimes(2));
+
+    await act(async () => {
+      rejectFirst?.(new DOMException("Aborted", "AbortError"));
+      await Promise.resolve();
+    });
+    capture.transcript = {
+      ...capture.transcript,
+      original: { final: "두 번째세 번째", provisional: "" },
+      endpointCount: 3,
+      endpoints: [
+        ...(capture.transcript.endpoints ?? []),
+        { id: 3, speaker: "3", originalLanguage: "ja", originalFinal: "세 번째", translationFinal: "" },
+      ],
+    };
+    view.rerender(<SonioxWorkspaceClient />);
+    await act(async () => { await Promise.resolve(); });
+
+    expect(translate).toHaveBeenCalledTimes(2);
+  });
+
   it("presents One-way Translator and Real-time Global Meeting as the two top-level modes", () => {
     render(<SonioxWorkspaceClient />);
 

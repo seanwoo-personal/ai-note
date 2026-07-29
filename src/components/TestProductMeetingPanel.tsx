@@ -142,8 +142,10 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
       if (generationRef.current === generation) {
         setTranslationQueue((current) => current[0]?.id === job.id ? current.slice(1) : current.filter((item) => item.id !== job.id));
       }
-      if (abortRef.current === controller) abortRef.current = null;
-      processingRef.current = false;
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+        processingRef.current = false;
+      }
     });
   }, [translationQueue]);
 
@@ -381,7 +383,7 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
         </section>
       </div>
       {(error || capture.error || speech.error) && <p role="alert" className="text-[13px] font-medium text-error">{error || capture.error || speech.error}</p>}
-      <p className="text-[12px] leading-5 text-inkSoft">회의 오디오는 Soniox로 전송되고, 전사 텍스트는 설정된 번역 모델로 전송됩니다. 외부 제공자를 사용하면 해당 제공자의 정책과 사용량 기반 비용이 적용될 수 있습니다. 테스트 프로덕트 결과는 현재 화면에만 유지되고 자동 저장되지 않습니다. 번역 음성은 이 기기의 스피커에서 재생되며 다른 통화 앱으로 자동 전송되지는 않습니다.</p>
+      <p className="text-[12px] leading-5 text-inkSoft">회의 오디오는 Soniox로 전송되고, 전사 텍스트는 설정된 번역 모델로 전송됩니다. 번역 음성 생성을 위해 번역된 텍스트도 Soniox로 전송됩니다. 외부 제공자를 사용하면 해당 제공자의 정책과 사용량 기반 비용이 적용될 수 있습니다. 테스트 프로덕트 결과는 현재 화면에만 유지되고 자동 저장되지 않습니다. 번역 음성은 이 기기의 스피커에서 재생되며 다른 통화 앱으로 자동 전송되지는 않습니다.</p>
     </div>
   );
 }

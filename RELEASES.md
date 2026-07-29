@@ -2,6 +2,11 @@
 
 > 이 파일은 제품 릴리즈 노트의 단일 원본입니다. 사용자에게 의미 있는 기능 묶음만 버전을 올립니다.
 
+## 1.15.4
+**2026-07-29 · 번역 fallback·TTS 오류 정리**
+- 한국어 endpoint의 Soniox 최종 상대 언어 번역이 비어 있으면 선택 언어로 fallback해 양쪽 완료 기록을 유지
+- TTS session의 동기 speak 실패 시 채택한 provider session과 오디오 자원을 즉시 취소
+
 ## 1.15.3
 **2026-07-29 · TTS 취소 경계 안정화**
 - AudioContext 재개를 기다리는 동안 미팅 중지·화면 이탈이 발생해도 늦은 prepare 또는 speak 작업이 새 Soniox TTS 연결을 다시 만들지 않도록 차단

@@ -268,8 +268,7 @@ export function useSonioxTts() {
       session.speak(text);
     } catch (caught) {
       if (!mountedRef.current || generation !== generationRef.current) return;
-      warmSessionRef.current = null;
-      abortRef.current = null;
+      stopResources(true);
       const message = caught instanceof Error
         && caught.name !== "AbortError"
         && !caught.message.startsWith("soniox_tts_")

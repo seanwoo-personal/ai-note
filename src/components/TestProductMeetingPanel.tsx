@@ -27,7 +27,7 @@ type TranslationJob = {
   id: number;
   text: string;
   targetLanguage: string;
-  kind: "incoming" | "outbound";
+  kind: "incoming" | "incoming-counterpart" | "outbound";
 };
 
 type PushToTalkPhase = "idle" | "recording" | "finalizing" | "translating" | "speaking" | "sent";
@@ -68,6 +68,7 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
   const [targetLanguage, setTargetLanguage] = useState("en");
   const [entries, setEntries] = useState<MeetingEntry[]>([]);
   const [translationQueue, setTranslationQueue] = useState<TranslationJob[]>([]);
+  const [passiveTranslationQueue, setPassiveTranslationQueue] = useState<TranslationJob[]>([]);
   const [speechQueue, setSpeechQueue] = useState<Array<{ id: number; text: string; language: string }>>([]);
   const [pushToTalkPhase, setPushToTalkPhase] = useState<PushToTalkPhase>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -75,9 +76,11 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
   const originalLengthsRef = useRef<Record<string, number>>({});
   const translationLengthsRef = useRef<Record<string, number>>({});
   const processingRef = useRef(false);
+  const passiveProcessingRef = useRef(false);
   const speechProcessingRef = useRef(false);
   const generationRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
+  const passiveAbortRef = useRef<AbortController | null>(null);
   const captureStopRef = useRef(capture.stop);
   const speechStopRef = useRef(speech.stop);
   const pushToTalkEndpointRef = useRef(0);
@@ -111,13 +114,15 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
       const korean = koreanSource ? original : liveTranslation;
       const counterpart = koreanSource ? liveTranslation : original;
       nextEntries.push({ id: endpoint.id, speaker: speakerLabel(endpoint.speaker), original: counterpart, sourceLanguage, korean, direction: "incoming" });
-      if (!koreanSource && !korean) {
+      if (koreanSource && !counterpart && !["recording", "finalizing"].includes(pushToTalkPhase)) {
+        nextJobs.push({ id: endpoint.id, text: original, targetLanguage, kind: "incoming-counterpart" });
+      } else if (!koreanSource && !korean) {
         nextJobs.push({ id: endpoint.id, text: original, targetLanguage: "ko", kind: "incoming" });
       }
     }
     if (nextEntries.length) setEntries((current) => [...current, ...nextEntries]);
-    if (nextJobs.length) setTranslationQueue((current) => [...current, ...nextJobs]);
-  }, [capture.transcript.endpointCount, capture.transcript.endpoints]);
+    if (nextJobs.length) setPassiveTranslationQueue((current) => [...current, ...nextJobs]);
+  }, [capture.transcript.endpointCount, capture.transcript.endpoints, pushToTalkPhase, targetLanguage]);
 
   useEffect(() => {
     if (processingRef.current || translationQueue.length === 0) return;
@@ -152,7 +157,9 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
       if (((reason as { name?: string }).name !== "AbortError" || timedOut) && generationRef.current === generation) {
         setError(job.kind === "outbound"
           ? "내 발화를 상대방 언어로 번역하지 못했습니다. 다시 시도해 주세요."
-          : "한국어 번역에 실패했습니다. 다음 발언은 계속 처리합니다.");
+          : job.kind === "incoming-counterpart"
+            ? "상대방 언어 번역에 실패했습니다. 다음 발언은 계속 처리합니다."
+            : "한국어 번역에 실패했습니다. 다음 발언은 계속 처리합니다.");
         if (job.kind === "outbound") setPushToTalkPhase("idle");
       }
     }).finally(() => {
@@ -166,6 +173,49 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
       }
     });
   }, [translationQueue]);
+
+  useEffect(() => {
+    if (passiveProcessingRef.current || passiveTranslationQueue.length === 0) return;
+    const job = passiveTranslationQueue[0];
+    const generation = generationRef.current;
+    const controller = new AbortController();
+    let timedOut = false;
+    const timeout = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, 20_000);
+    passiveProcessingRef.current = true;
+    passiveAbortRef.current = controller;
+    void fetch("/api/translate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: job.text, targetLanguage: job.targetLanguage }),
+      signal: controller.signal,
+    }).then(async (response) => {
+      const payload = await response.json() as { translation?: unknown };
+      if (!response.ok || typeof payload.translation !== "string" || !payload.translation.trim()) throw new Error("translation_failed");
+      if (generationRef.current !== generation) return;
+      const translated = payload.translation.trim();
+      setEntries((current) => current.map((entry) => entry.id === job.id
+        ? job.kind === "incoming" ? { ...entry, korean: translated } : { ...entry, original: translated }
+        : entry));
+    }).catch((reason: unknown) => {
+      if (((reason as { name?: string }).name !== "AbortError" || timedOut) && generationRef.current === generation) {
+        setError(job.kind === "incoming-counterpart"
+          ? "상대방 언어 번역에 실패했습니다. 다음 발언은 계속 처리합니다."
+          : "한국어 번역에 실패했습니다. 다음 발언은 계속 처리합니다.");
+      }
+    }).finally(() => {
+      window.clearTimeout(timeout);
+      if (generationRef.current === generation) {
+        setPassiveTranslationQueue((current) => current[0]?.id === job.id ? current.slice(1) : current.filter((item) => item.id !== job.id));
+      }
+      if (passiveAbortRef.current === controller) {
+        passiveAbortRef.current = null;
+        passiveProcessingRef.current = false;
+      }
+    });
+  }, [passiveTranslationQueue]);
 
   useEffect(() => {
     const openingCount = openingBoundaryRef.current;
@@ -351,6 +401,7 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
   useEffect(() => () => {
     generationRef.current += 1;
     abortRef.current?.abort();
+    passiveAbortRef.current?.abort();
     captureStopRef.current();
     speechStopRef.current();
   }, []);
@@ -358,7 +409,9 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
   const startMeeting = () => {
     generationRef.current += 1;
     abortRef.current?.abort();
+    passiveAbortRef.current?.abort();
     processingRef.current = false;
+    passiveProcessingRef.current = false;
     lastEndpointRef.current = 0;
     originalLengthsRef.current = {};
     translationLengthsRef.current = {};
@@ -367,6 +420,7 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
     userSpeakerRef.current = null;
     setEntries([]);
     setTranslationQueue([]);
+    setPassiveTranslationQueue([]);
     setSpeechQueue([]);
     setPushToTalkPhase("idle");
     setError(null);
@@ -381,13 +435,16 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
   const stopMeeting = () => {
     generationRef.current += 1;
     abortRef.current?.abort();
+    passiveAbortRef.current?.abort();
     processingRef.current = false;
+    passiveProcessingRef.current = false;
     capture.stop();
     speech.stop();
     frozenPushToTalkRef.current = null;
     openingBoundaryRef.current = null;
     userSpeakerRef.current = null;
     setTranslationQueue([]);
+    setPassiveTranslationQueue([]);
     setSpeechQueue([]);
     setPushToTalkPhase("idle");
   };

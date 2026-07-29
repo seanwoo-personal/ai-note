@@ -243,6 +243,34 @@ describe("SonioxWorkspaceClient", () => {
     expect(translate).toHaveBeenCalledWith("/api/translate", expect.objectContaining({ body: JSON.stringify({ text: "はじめまして", targetLanguage: "ko" }) }));
   });
 
+  it("falls back to the selected counterpart language when a Korean endpoint has no final translation", async () => {
+    const translate = vi.fn(async () => new Response(JSON.stringify({ translation: "Hello" }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", translate);
+    navigation.search = "workspace=workspace-a&tool=test-product";
+    capture.phase = "listening";
+    capture.transcript = {
+      original: { final: "안녕하세요", provisional: "" },
+      translation: { final: "", provisional: "" },
+      speakers: {
+        "1": { original: { final: "안녕하세요", provisional: "" }, translation: { final: "", provisional: "" }, originalLanguage: "ko" },
+      },
+      activeSpeaker: "1",
+      endpointCount: 1,
+      lastEndpointSpeaker: "1",
+      endpoints: [{ id: 1, speaker: "1", originalLanguage: "ko", originalFinal: "안녕하세요", translationFinal: "" }],
+    };
+
+    render(<SonioxWorkspaceClient />);
+
+    await waitFor(() => expect(translate).toHaveBeenCalledWith("/api/translate", expect.objectContaining({
+      body: JSON.stringify({ text: "안녕하세요", targetLanguage: "en" }),
+    })));
+    await waitFor(() => expect(screen.getByRole("region", { name: "상대방 언어 회의 내용" })).toHaveTextContent("Hello"));
+  });
+
   it("renders Soniox provisional translation while a test-product utterance is still in progress", () => {
     const translate = vi.fn();
     vi.stubGlobal("fetch", translate);

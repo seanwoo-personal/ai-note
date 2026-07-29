@@ -224,6 +224,19 @@ describe("useSonioxTts", () => {
     expect(result.current.error).toBe("이 브라우저에서는 음성 재생을 지원하지 않습니다.");
   });
 
+  it("cancels the adopted session when speak throws synchronously", async () => {
+    soniox.speak.mockImplementationOnce(() => { throw new Error("speak failed"); });
+    const { result } = renderHook(() => useSonioxTts());
+
+    await act(async () => {
+      await result.current.speak({ text: "Hello", language: "en", voice: "Maya" });
+    });
+
+    expect(soniox.cancel).toHaveBeenCalledTimes(1);
+    expect(result.current.phase).toBe("error");
+    expect(result.current.error).toBe("speak failed");
+  });
+
   it("cancels the Soniox stream and every queued source when stopped", async () => {
     const { result } = renderHook(() => useSonioxTts());
     await act(async () => {

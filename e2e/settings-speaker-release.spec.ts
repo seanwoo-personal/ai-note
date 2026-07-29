@@ -1,6 +1,6 @@
 import { expect, test } from "./support/synthetic-test";
 
-test("release history, font sizing, independent scrolling, and speaker setup are visible", async ({ page }) => {
+test("v1.14 release, independent scrolling, and global meeting setup are visible", async ({ page }) => {
   await page.addInitScript(() => {
     if (localStorage.getItem("e2e-release-initialized") !== "true") {
       localStorage.setItem("ai-note-locale", "ko");
@@ -9,18 +9,28 @@ test("release history, font sizing, independent scrolling, and speaker setup are
     }
   });
   await page.goto("/settings");
+  const viewport = page.viewportSize();
+  if ((viewport?.width ?? 0) < 1024) {
+    await page.getByRole("button", { name: "라이브러리 메뉴 열기" }).click();
+  }
+  const navigation = (viewport?.width ?? 0) < 1024
+    ? page.getByLabel("라이브러리 메뉴", { exact: true })
+    : page.getByRole("navigation", { name: "라이브러리" });
 
+  await expect(navigation.getByText("제품 버전 1.14.0", { exact: true })).toBeVisible();
+  await navigation.getByRole("link", { name: "릴리즈 노트" }).click();
+  await expect(page).toHaveURL(/\/settings\/releases$/);
   await expect(page.getByRole("heading", { name: "릴리즈 노트" })).toBeVisible();
-  await expect(page.getByText("v1.13", { exact: true })).toBeVisible();
-  await expect(page.getByText("기준판 이후 13회 업데이트", { exact: true })).toBeVisible();
-  await expect(page.getByText("v1.0 · AI NOTE 오픈소스 기준판", { exact: true })).toBeVisible();
+  await expect(page.getByText("v1.14.0", { exact: true })).toBeVisible();
+  await expect(page.getByText("기준판 이후 14회 업데이트", { exact: true })).toBeVisible();
+  await expect(page.getByText("v1.0.0 · AI NOTE 오픈소스 기준판", { exact: true })).toBeVisible();
 
+  await page.goto("/settings");
   await page.getByRole("button", { name: "글자 크기 한 단계 크게" }).click();
   await expect.poll(() => page.evaluate(() => document.documentElement.dataset.fontSize)).toBe("large");
   await page.reload();
   await expect.poll(() => page.evaluate(() => document.documentElement.dataset.fontSize)).toBe("large");
 
-  const viewport = page.viewportSize();
   const layout = await page.evaluate(() => {
     const navigation = document.querySelector("nav[aria-label]");
     const content = document.querySelector("#app-content");
@@ -38,12 +48,20 @@ test("release history, font sizing, independent scrolling, and speaker setup are
   }
 
   await page.goto("/soniox?tool=translator");
-  await page.getByRole("button", { name: "화자 구분 통역" }).click();
-  await expect(page.getByRole("region", { name: "화자별 실시간 통역" })).toBeVisible();
-  await expect(page.getByLabel("한국어 참석 인원")).toHaveValue("1");
-  await expect(page.getByLabel("영어 참석 인원")).toHaveValue("1");
-  await expect(page.getByText("한국어 → 영어 스피커 번역")).toBeVisible();
-  await expect(page.getByText("영어 → 한국어 스피커 번역")).toBeVisible();
+  await expect(page.getByRole("button", { name: "단방향 트랜스레이터" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByLabel("회의 참석자 수")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "실시간 글로벌 미팅" }).click();
+  await expect(page.getByRole("heading", { name: "Real-time Global Meeting" })).toBeVisible();
+  await expect(page.getByLabel("회의 참석자 수")).toHaveValue("4");
+  await expect(page.getByLabel("화자 1 그룹")).toHaveValue("A");
+  await expect(page.getByLabel("화자 2 그룹")).toHaveValue("A");
+  await expect(page.getByLabel("화자 3 그룹")).toHaveValue("B");
+  await expect(page.getByLabel("화자 4 그룹")).toHaveValue("B");
+  await expect(page.getByLabel("그룹 A 상대 번역 언어")).toHaveValue("ja");
+  await expect(page.getByLabel("그룹 B 상대 번역 언어")).toHaveValue("ko");
   await expect(page.getByRole("button", { name: "화자 등록 시작" })).toBeVisible();
-  await expect(page.getByText(/영구 음성 생체 등록이 아니라/)).toBeVisible();
+  await expect(page.getByRole("region", { name: "그룹 A 화면" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "그룹 B 화면" })).toBeVisible();
+  await expect(page.getByText(/목소리를 영구 학습하거나 생체정보로 저장하지 않습니다/)).toBeVisible();
 });

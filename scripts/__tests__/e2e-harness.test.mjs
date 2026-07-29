@@ -112,6 +112,7 @@ describe("E2E harness isolation", () => {
     expect(E2E_SNAPSHOT_ENTRIES).toEqual([
       "src",
       "public",
+      "RELEASES.md",
       "package.json",
       "package-lock.json",
       "next.config.mjs",

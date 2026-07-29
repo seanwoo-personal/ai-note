@@ -40,6 +40,7 @@ import {
 import { useHealth } from "@/components/useHealth";
 import type { LibraryColor, LibraryFolder, LibraryWorkspace } from "@/domain/library";
 import { folderFormSchema, workspaceFormSchema } from "@/lib/libraryClient";
+import packageMetadata from "../../package.json";
 import {
   buildSonioxToolHref,
   resolveSonioxWorkspaceSelection,
@@ -523,7 +524,8 @@ function NavigationContents({
           </GuardedLink>
         )}
         <NavigationRow href="/glossary" active={pathname.startsWith("/glossary")} label={t("단어 관리")} onNavigationCommitted={onNavigationCommitted} />
-        <NavigationRow href="/settings" active={pathname.startsWith("/settings")} label={t("설정")} onNavigationCommitted={onNavigationCommitted} />
+        <NavigationRow href="/settings" active={pathname === "/settings"} label={t("설정")} onNavigationCommitted={onNavigationCommitted} />
+        <NavigationRow href="/settings/releases" active={pathname.startsWith("/settings/releases")} label={t("릴리즈 노트")} onNavigationCommitted={onNavigationCommitted} />
       </div>
       <AppPreferencesControls />
       <SystemRows whisper={whisper} llm={llm} soniox={soniox} />
@@ -556,7 +558,8 @@ function FallbackNavigation({
       <NavigationRow href="/" active={pathname === "/"} label={t("모든 내용")} onNavigationCommitted={onNavigationCommitted} />
       <div className="mt-auto">
         <NavigationRow href="/glossary" active={pathname.startsWith("/glossary")} label={t("단어 관리")} onNavigationCommitted={onNavigationCommitted} />
-        <NavigationRow href="/settings" active={pathname.startsWith("/settings")} label={t("설정")} onNavigationCommitted={onNavigationCommitted} />
+        <NavigationRow href="/settings" active={pathname === "/settings"} label={t("설정")} onNavigationCommitted={onNavigationCommitted} />
+        <NavigationRow href="/settings/releases" active={pathname.startsWith("/settings/releases")} label={t("릴리즈 노트")} onNavigationCommitted={onNavigationCommitted} />
         <AppPreferencesControls />
         <SystemRows whisper={whisper} llm={llm} soniox={soniox} />
       </div>
@@ -711,6 +714,9 @@ function SystemRows({ whisper, llm, soniox }: {
       <SystemRow label={t("로컬 전사")} status={{ ...whisperStatus, label: t(whisperStatus.label), title: t(whisperStatus.title) }} />
       <SystemRow label={t("요약")} status={{ ...llmStatus, label: t(llmStatus.label), title: t(llmStatus.title) }} />
       <SystemRow label={t("외부")} status={{ ...sonioxStatus, label: t(sonioxStatus.label), title: t(sonioxStatus.title) }} />
+      <p className="mt-1 flex min-h-11 items-center rounded-md px-2 text-[11px] font-semibold text-inkSoft">
+        {t("제품 버전")} {packageMetadata.version}
+      </p>
     </div>
   );
 }

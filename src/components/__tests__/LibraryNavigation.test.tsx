@@ -255,6 +255,8 @@ describe("activated library navigation", () => {
     );
     expect(within(nav).getByRole("link", { name: "Translator" })).toHaveAttribute("aria-current", "page");
     expect(within(nav).getByRole("link", { name: "Voice Typing" })).toBeInTheDocument();
+    expect(within(nav).getByText("제품 버전 1.14.0")).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: "릴리즈 노트" })).toHaveAttribute("href", "/settings/releases");
     expect(within(nav).getByRole("link", { name: /프로젝트/ })).toHaveAttribute(
       "href",
       `/soniox?workspace=${DEFAULT_WORKSPACE}&folder=${FOLDER}&tool=translator`,

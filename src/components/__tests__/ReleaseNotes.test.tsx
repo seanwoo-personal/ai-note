@@ -3,26 +3,21 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { ReleaseNotes } from "@/components/ReleaseNotes";
-import {
-  CURRENT_PRODUCT_VERSION,
-  PRODUCT_RELEASES,
-  PRODUCT_UPDATE_COUNT,
-} from "@/lib/releases";
+import type { ProductRelease } from "@/lib/releaseNotes";
 
-describe("release notes", () => {
-  it("counts user-facing milestones from the AI NOTE 1.0 baseline", () => {
-    expect(PRODUCT_RELEASES.at(-1)?.version).toBe("1.0");
-    expect(CURRENT_PRODUCT_VERSION).toBe("1.13");
-    expect(PRODUCT_UPDATE_COUNT).toBe(13);
-  });
+const releases: ProductRelease[] = [
+  { version: "1.14.0", date: "2026-07-29", title: "실시간 글로벌 미팅", changes: ["두 최상위 모드 추가", "그룹별 번역 창 추가"] },
+  { version: "1.0.0", date: "2026-07-08", title: "AI NOTE 오픈소스 기준판", changes: ["기준판"] },
+];
 
-  it("shows the current version and every historical release in settings copy", () => {
-    render(<ReleaseNotes />);
+describe("product release history", () => {
+  it("shows the current semantic version and every Markdown-backed release", () => {
+    render(<ReleaseNotes releases={releases} />);
     expect(screen.getByRole("heading", { name: "릴리즈 노트" })).toBeInTheDocument();
-    expect(screen.getByText("v1.13")).toBeInTheDocument();
-    expect(screen.getByText("기준판 이후 13회 업데이트")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /v1\.13 · 언어별 화자 동시 통역/ })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /v1\.0 · AI NOTE 오픈소스 기준판/ })).toBeInTheDocument();
-    expect(screen.getAllByRole("listitem").length).toBeGreaterThan(PRODUCT_RELEASES.length);
+    expect(screen.getByText("v1.14.0")).toBeInTheDocument();
+    expect(screen.getByText("기준판 이후 1회 업데이트")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /v1\.14\.0 · 실시간 글로벌 미팅/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /v1\.0\.0 · AI NOTE 오픈소스 기준판/ })).toBeInTheDocument();
+    expect(screen.getByText("이 목록은 프로젝트 루트의 RELEASES.md에서 읽습니다.", { exact: false })).toBeInTheDocument();
   });
 });

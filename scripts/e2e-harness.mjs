@@ -4,6 +4,7 @@ import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 export const E2E_SNAPSHOT_ENTRIES = [
   "src",
   "public",
+  "RELEASES.md",
   "package.json",
   "package-lock.json",
   "next.config.mjs",

@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useOptionalAppPreferences } from "@/components/AppPreferences";
 import { useLibrary } from "@/components/LibraryProvider";
 import { Recorder } from "@/components/Recorder";
-import { SpeakerTranslatorPanel } from "@/components/SpeakerTranslatorPanel";
+import { RealTimeGlobalMeetingPanel } from "@/components/RealTimeGlobalMeetingPanel";
 import {
   type SonioxCapturePhase,
   type SonioxInputSource,
@@ -195,11 +195,8 @@ function TranslatorTool() {
   const [editingShortcut, setEditingShortcut] = useState(false);
   const [shortcutError, setShortcutError] = useState<string | null>(null);
   const [inputSource, setInputSource] = useState<SonioxInputSource>("microphone");
-  const [translatorMode, setTranslatorMode] = useState<"quick" | "speakers">("quick");
-  const [translationType, setTranslationType] = useState<"one_way" | "two_way">("one_way");
+  const [translatorMode, setTranslatorMode] = useState<"one-way" | "global-meeting">("one-way");
   const [targetLanguage, setTargetLanguage] = useState("en");
-  const [languageA, setLanguageA] = useState("ko");
-  const [languageB, setLanguageB] = useState("en");
   const [autoPlaySpeech, setAutoPlaySpeech] = useState(false);
   const [ttsVoice, setTtsVoice] = useState<(typeof TTS_VOICES)[number]>("Maya");
   const [ttsSpeed, setTtsSpeed] = useState(1);
@@ -207,17 +204,13 @@ function TranslatorTool() {
   const pending = capture.phase === "requesting" || capture.phase === "connecting";
   const busy = ["requesting", "connecting", "finishing"].includes(capture.phase);
   const listening = capture.phase === "listening";
-  const translation: SonioxTranslationOptions = translationType === "one_way"
-    ? { mode: "one_way", targetLanguage }
-    : { mode: "two_way", languageA, languageB };
+  const translation: SonioxTranslationOptions = { mode: "one_way", targetLanguage };
   const captureRef = useLatestRef(capture);
   const speechRef = useLatestRef(speech);
   const editingShortcutRef = useLatestRef(editingShortcut);
   const inputSourceRef = useLatestRef(inputSource);
   const translationRef = useLatestRef(translation);
-  const translatedSpeech = translationType === "one_way"
-    ? capture.transcript.translation.final.trim()
-    : "";
+  const translatedSpeech = capture.transcript.translation.final.trim();
 
   const speakTranslation = () => {
     if (!translatedSpeech) return;
@@ -268,7 +261,7 @@ function TranslatorTool() {
         return;
       }
       if (!matchSonioxShortcut(event, shortcutsRef.current.translator)) return;
-      if (translatorMode === "speakers") {
+      if (translatorMode === "global-meeting") {
         event.preventDefault();
         return;
       }
@@ -285,7 +278,7 @@ function TranslatorTool() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [assignShortcut, captureRef, editingShortcutRef, inputSourceRef, shortcutsRef, speechRef, translationRef, translatorMode]);
 
-  const changeTranslatorMode = (mode: "quick" | "speakers") => {
+  const changeTranslatorMode = (mode: "one-way" | "global-meeting") => {
     if (mode === translatorMode) return;
     capture.stop();
     speech.stop();
@@ -293,11 +286,11 @@ function TranslatorTool() {
     setTranslatorMode(mode);
   };
 
-  if (translatorMode === "speakers") {
+  if (translatorMode === "global-meeting") {
     return (
       <div className="space-y-5">
         <TranslatorModeSwitch mode={translatorMode} onChange={changeTranslatorMode} />
-        <SpeakerTranslatorPanel capture={capture} speech={speech} />
+        <RealTimeGlobalMeetingPanel capture={capture} speech={speech} />
       </div>
     );
   }
@@ -308,8 +301,8 @@ function TranslatorTool() {
       <section className="rounded-2xl border border-line bg-panel p-5 shadow-[0_8px_30px_-20px_rgba(42,36,32,.3)] sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h2 className="text-[18px] font-bold text-ink">번역 설정</h2>
-            <p className="mt-1 text-[13px] leading-6 text-inkSoft">한국어·영어·일본어·중국어 음성을 자동 감지해 실시간 자막으로 번역합니다.</p>
+            <h2 className="text-[18px] font-bold text-ink">One-way Translator</h2>
+            <p className="mt-1 text-[13px] leading-6 text-inkSoft">듣기만 하는 상황에서 음성을 받아쓰고 선택한 언어로 한 방향 번역합니다.</p>
           </div>
           <StatusPill phase={capture.phase} />
         </div>
@@ -323,32 +316,18 @@ function TranslatorTool() {
             </select>
           </label>
           <label className="flex flex-col gap-2 text-[13px] font-semibold text-ink">
-            <span>번역 방식</span>
-            <select aria-label="번역 방식" value={translationType} onChange={(event) => setTranslationType(event.target.value as "one_way" | "two_way")} disabled={listening || busy} className="min-h-11 w-full rounded-xl border border-line bg-bg px-3 text-[14px] font-medium text-ink">
-              <option value="one_way">감지한 언어 → 선택 언어</option>
-              <option value="two_way">지정한 두 언어 양방향</option>
+            <span>번역 언어</span>
+            <select aria-label="번역 언어" value={targetLanguage} onChange={(event) => setTargetLanguage(event.target.value)} disabled={listening || busy} className="min-h-11 w-full rounded-xl border border-line bg-bg px-3 text-[14px] font-medium text-ink">
+              {LANGUAGES.map((language) => <option key={language.value} value={language.value}>{language.label}</option>)}
             </select>
           </label>
-          {translationType === "one_way" ? (
-            <label className="flex flex-col gap-2 text-[13px] font-semibold text-ink">
-              <span>번역 언어</span>
-              <select aria-label="번역 언어" value={targetLanguage} onChange={(event) => setTargetLanguage(event.target.value)} disabled={listening || busy} className="min-h-11 w-full rounded-xl border border-line bg-bg px-3 text-[14px] font-medium text-ink">
-                {LANGUAGES.map((language) => <option key={language.value} value={language.value}>{language.label}</option>)}
-              </select>
-            </label>
-          ) : (
-            <div className="grid gap-4 md:col-span-2 md:grid-cols-2">
-              <LanguageSelect label="언어 A" value={languageA} onChange={setLanguageA} disabled={listening || busy} />
-              <LanguageSelect label="언어 B" value={languageB} onChange={setLanguageB} disabled={listening || busy} />
-            </div>
-          )}
           <label className="flex flex-col gap-2 text-[13px] font-semibold text-ink">
             <span>번역 음성</span>
             <select
               aria-label="번역 음성"
               value={ttsVoice}
               onChange={(event) => setTtsVoice(event.target.value as (typeof TTS_VOICES)[number])}
-              disabled={listening || busy || translationType !== "one_way"}
+              disabled={listening || busy}
               className="min-h-11 w-full rounded-xl border border-line bg-bg px-3 text-[14px] font-medium text-ink disabled:opacity-50"
             >
               {TTS_VOICES.map((voice) => <option key={voice} value={voice}>{voice}</option>)}
@@ -360,7 +339,7 @@ function TranslatorTool() {
               aria-label="음성 속도"
               value={ttsSpeed}
               onChange={(event) => setTtsSpeed(Number(event.target.value))}
-              disabled={listening || busy || translationType !== "one_way"}
+              disabled={listening || busy}
               className="min-h-11 w-full rounded-xl border border-line bg-bg px-3 text-[14px] font-medium text-ink disabled:opacity-50"
             >
               <option value={0.8}>느리게 (0.8×)</option>
@@ -379,7 +358,6 @@ function TranslatorTool() {
               setAutoPlaySpeech(enabled);
               if (enabled) void speech.prepare();
             }}
-            disabled={translationType !== "one_way"}
             className="mt-0.5 h-4 w-4 accent-accent"
           />
           <span>
@@ -387,9 +365,6 @@ function TranslatorTool() {
             <span className="mt-1 block leading-5 text-inkSoft">마이크를 끄고 번역이 끝난 뒤 Soniox 음성을 로컬 스피커로 재생해 피드백을 방지합니다.</span>
           </span>
         </label>
-        {translationType === "two_way" && (
-          <p className="mt-2 text-[12px] leading-5 text-inkSoft">양방향 자막은 문장별 대상 언어가 섞일 수 있어 자동 음성 재생을 사용하지 않습니다. 한 방향 번역에서 음성을 재생하세요.</p>
-        )}
 
         <div className="mt-5 flex flex-col gap-3 sm:flex-row">
           <button
@@ -413,7 +388,7 @@ function TranslatorTool() {
             <button
               type="button"
               aria-label="번역 음성 듣기"
-              disabled={!translatedSpeech || translationType !== "one_way" || listening || busy}
+              disabled={!translatedSpeech || listening || busy}
               onClick={speakTranslation}
               className="min-h-11 rounded-full border border-line px-5 text-[14px] font-semibold text-accent disabled:opacity-40"
             >
@@ -466,11 +441,11 @@ function TranslatorTool() {
   );
 }
 
-function TranslatorModeSwitch({ mode, onChange }: { mode: "quick" | "speakers"; onChange(mode: "quick" | "speakers"): void }) {
+function TranslatorModeSwitch({ mode, onChange }: { mode: "one-way" | "global-meeting"; onChange(mode: "one-way" | "global-meeting"): void }) {
   return (
     <div className="inline-flex rounded-xl border border-line bg-panel p-1" role="group" aria-label="Translator 모드">
-      <button type="button" aria-pressed={mode === "quick"} onClick={() => onChange("quick")} className={`min-h-11 rounded-lg px-4 text-[13px] font-bold ${mode === "quick" ? "bg-ink text-bg" : "text-inkSoft"}`}>빠른 번역</button>
-      <button type="button" aria-pressed={mode === "speakers"} onClick={() => onChange("speakers")} className={`min-h-11 rounded-lg px-4 text-[13px] font-bold ${mode === "speakers" ? "bg-ink text-bg" : "text-inkSoft"}`}>화자 구분 통역</button>
+      <button type="button" aria-pressed={mode === "one-way"} onClick={() => onChange("one-way")} className={`min-h-11 rounded-lg px-4 text-[13px] font-bold ${mode === "one-way" ? "bg-ink text-bg" : "text-inkSoft"}`}>단방향 트랜스레이터</button>
+      <button type="button" aria-pressed={mode === "global-meeting"} onClick={() => onChange("global-meeting")} className={`min-h-11 rounded-lg px-4 text-[13px] font-bold ${mode === "global-meeting" ? "bg-ink text-bg" : "text-inkSoft"}`}>실시간 글로벌 미팅</button>
     </div>
   );
 }

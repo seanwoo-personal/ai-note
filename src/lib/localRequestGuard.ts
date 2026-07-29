@@ -38,6 +38,7 @@ export const DATA_SURFACE_INVENTORY = [
   "/api/summary-work",
   "/api/summarize",
   "/api/transcribe",
+  "/api/translate",
   "/api/whisper/health",
   "/api/workspaces",
   "/api/workspaces/[id]",

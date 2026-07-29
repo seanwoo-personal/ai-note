@@ -77,8 +77,8 @@ describe("Soniox real-time transcript", () => {
     });
 
     expect(transcript.endpoints).toEqual([
-      expect.objectContaining({ id: 1, speaker: "1", translationFinal: "Hello" }),
-      expect.objectContaining({ id: 2, speaker: "2", translationFinal: "Nice to meet you" }),
+      expect.objectContaining({ id: 1, speaker: "1", originalLanguage: "ko", translationFinal: "Hello" }),
+      expect.objectContaining({ id: 2, speaker: "2", originalLanguage: "ko", translationFinal: "Nice to meet you" }),
     ]);
   });
 

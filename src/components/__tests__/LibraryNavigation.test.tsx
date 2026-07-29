@@ -254,8 +254,12 @@ describe("activated library navigation", () => {
       `/soniox?workspace=${DEFAULT_WORKSPACE}&folder=${FOLDER}&tool=transcription`,
     );
     expect(within(nav).getByRole("link", { name: "Translator" })).toHaveAttribute("aria-current", "page");
+    expect(within(nav).getByRole("link", { name: "테스트 프로덕트" })).toHaveAttribute(
+      "href",
+      `/soniox?workspace=${DEFAULT_WORKSPACE}&folder=${FOLDER}&tool=test-product`,
+    );
     expect(within(nav).getByRole("link", { name: "Voice Typing" })).toBeInTheDocument();
-    expect(within(nav).getByText("제품 버전 1.14.0")).toBeInTheDocument();
+    expect(within(nav).getByText("제품 버전 1.15.0")).toBeInTheDocument();
     expect(within(nav).getByRole("link", { name: "릴리즈 노트" })).toHaveAttribute("href", "/settings/releases");
     expect(within(nav).getByRole("link", { name: /프로젝트/ })).toHaveAttribute(
       "href",

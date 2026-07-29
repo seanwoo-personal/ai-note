@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SonioxWorkspaceClient } from "@/components/SonioxWorkspaceClient";
@@ -74,6 +74,7 @@ vi.mock("@/components/useSonioxTts", () => ({
 
 describe("SonioxWorkspaceClient", () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -137,9 +138,15 @@ describe("SonioxWorkspaceClient", () => {
     transcription.unmount();
 
     navigation.search = "workspace=workspace-a&folder=folder-a&tool=voice-typing";
-    render(<SonioxWorkspaceClient />);
+    const voiceTyping = render(<SonioxWorkspaceClient />);
     expect(screen.getByRole("heading", { level: 1, name: "Voice Typing" })).toBeInTheDocument();
     expect(screen.queryByText(/고객사 \/ 글로벌 영업/)).not.toBeInTheDocument();
+    voiceTyping.unmount();
+
+    navigation.search = "workspace=workspace-a&tool=test-product";
+    render(<SonioxWorkspaceClient />);
+    expect(screen.getByRole("heading", { level: 1, name: "테스트 프로덕트" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "자유 참여 글로벌 미팅" })).toBeInTheDocument();
   });
 
   it("offers microphone and browser-tab live translation with truthful meeting limitations", () => {
@@ -169,6 +176,125 @@ describe("SonioxWorkspaceClient", () => {
       inputSource: "browser-tab",
       translation: { mode: "one_way", targetLanguage: "ja" },
     });
+  });
+
+  it("automatically separates test-product speakers and shows foreign speech beside Korean", async () => {
+    const translate = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { text: string };
+      return new Response(JSON.stringify({ translation: body.text === "はじめまして" ? "안녕하세요" : body.text }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", translate);
+    navigation.search = "workspace=workspace-a&tool=test-product";
+    const view = render(<SonioxWorkspaceClient />);
+
+    expect(screen.queryByRole("spinbutton", { name: "회의 참석자 수" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/그룹 A|그룹 B/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "미팅 시작" }));
+    expect(capture.start).toHaveBeenCalledWith({ inputSource: "microphone", translation: { mode: "none" } });
+
+    capture.phase = "listening";
+    capture.transcript = {
+      original: { final: "안녕하세요はじめまして", provisional: "" },
+      translation: { final: "", provisional: "" },
+      speakers: {
+        "1": { original: { final: "안녕하세요", provisional: "" }, translation: { final: "", provisional: "" }, originalLanguage: "ko" },
+        "2": { original: { final: "はじめまして", provisional: "" }, translation: { final: "", provisional: "" }, originalLanguage: "ja" },
+      },
+      activeSpeaker: "2",
+      endpointCount: 2,
+      lastEndpointSpeaker: "2",
+      endpoints: [
+        { id: 1, speaker: "1", originalLanguage: "ko", originalFinal: "안녕하세요", translationFinal: "" },
+        { id: 2, speaker: "2", originalLanguage: "ja", originalFinal: "はじめまして", translationFinal: "" },
+      ],
+    };
+    view.rerender(<SonioxWorkspaceClient />);
+
+    await waitFor(() => expect(screen.getByRole("region", { name: "한국어 회의 내용" })).toHaveTextContent("안녕하세요"));
+    expect(screen.getByRole("region", { name: "상대방 언어 회의 내용" })).toHaveTextContent("화자 2");
+    expect(screen.getByRole("region", { name: "상대방 언어 회의 내용" })).toHaveTextContent("はじめまして");
+    expect(translate).toHaveBeenCalledTimes(1);
+    expect(translate).toHaveBeenCalledWith("/api/translate", expect.objectContaining({ body: JSON.stringify({ text: "はじめまして", targetLanguage: "ko" }) }));
+  });
+
+  it("uses Space as push-to-talk and sends the captured utterance in the selected language", async () => {
+    const translate = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { targetLanguage: string };
+      return new Response(JSON.stringify({ translation: body.targetLanguage === "ja" ? "こんにちは" : "안녕하세요" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", translate);
+    navigation.search = "workspace=workspace-a&tool=test-product";
+    const view = render(<SonioxWorkspaceClient />);
+    fireEvent.change(screen.getByRole("combobox", { name: "내 송출 대상 언어" }), { target: { value: "ja" } });
+    fireEvent.click(screen.getByRole("button", { name: "미팅 시작" }));
+    capture.phase = "listening";
+    view.rerender(<SonioxWorkspaceClient />);
+
+    fireEvent.keyDown(window, { code: "Space", key: " ", repeat: false });
+    expect(screen.getByRole("status", { name: "Push-to-Talk 상태" })).toHaveTextContent("내 발화 수집 중");
+    expect(speech.prepare).toHaveBeenCalledTimes(1);
+
+    capture.transcript = {
+      original: { final: "안녕하세요", provisional: "" },
+      translation: { final: "", provisional: "" },
+      speakers: {
+        "1": { original: { final: "안녕하세요", provisional: "" }, translation: { final: "", provisional: "" }, originalLanguage: "ko" },
+      },
+      activeSpeaker: "1",
+      endpointCount: 1,
+      lastEndpointSpeaker: "1",
+      endpoints: [{ id: 1, speaker: "1", originalLanguage: "ko", originalFinal: "안녕하세요", translationFinal: "" }],
+    };
+    view.rerender(<SonioxWorkspaceClient />);
+    fireEvent.keyDown(window, { code: "Space", key: " ", repeat: false });
+
+    await waitFor(() => expect(screen.getByRole("region", { name: "상대방 언어 회의 내용" })).toHaveTextContent("こんにちは"));
+    expect(screen.getByRole("region", { name: "상대방 언어 회의 내용" })).toHaveTextContent("나 · Push-to-Talk");
+    expect(translate).toHaveBeenCalledWith("/api/translate", expect.objectContaining({ body: JSON.stringify({ text: "안녕하세요", targetLanguage: "ja" }) }));
+    await waitFor(() => expect(speech.speak).toHaveBeenCalledWith({ text: "こんにちは", language: "ja", voice: "Maya", speed: 1 }));
+    expect(screen.getByRole("status", { name: "Push-to-Talk 상태" })).toHaveTextContent("송출 완료");
+  });
+
+  it("stops test-product capture and speech when leaving the section", () => {
+    navigation.search = "workspace=workspace-a&tool=test-product";
+    const view = render(<SonioxWorkspaceClient />);
+    view.unmount();
+
+    expect(capture.stop).toHaveBeenCalledTimes(1);
+    expect(speech.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps translated text visible while exposing test-product speech playback errors", () => {
+    navigation.search = "workspace=workspace-a&tool=test-product";
+    speech.phase = "error";
+    speech.error = "브라우저에서 번역 음성을 재생할 수 없습니다.";
+
+    render(<SonioxWorkspaceClient />);
+
+    expect(screen.getByRole("alert")).toHaveTextContent("브라우저에서 번역 음성을 재생할 수 없습니다");
+  });
+
+  it("recovers when push-to-talk never receives an endpoint after the closing Space", () => {
+    vi.useFakeTimers();
+    navigation.search = "workspace=workspace-a&tool=test-product";
+    capture.phase = "listening";
+    render(<SonioxWorkspaceClient />);
+
+    fireEvent.keyDown(window, { code: "Space", key: " " });
+    fireEvent.keyDown(window, { code: "Space", key: " " });
+    expect(screen.getByRole("status", { name: "Push-to-Talk 상태" })).toHaveTextContent("마지막 문장 확정 중");
+
+    act(() => vi.advanceTimersByTime(8_000));
+
+    expect(screen.getByRole("status", { name: "Push-to-Talk 상태" })).toHaveTextContent("스페이스바를 눌러");
+    expect(screen.getByRole("alert")).toHaveTextContent("완료된 발화를 찾지 못했습니다");
+    vi.useRealTimers();
   });
 
   it("presents One-way Translator and Real-time Global Meeting as the two top-level modes", () => {

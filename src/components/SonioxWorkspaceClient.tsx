@@ -7,6 +7,7 @@ import { useOptionalAppPreferences } from "@/components/AppPreferences";
 import { useLibrary } from "@/components/LibraryProvider";
 import { Recorder } from "@/components/Recorder";
 import { RealTimeGlobalMeetingPanel } from "@/components/RealTimeGlobalMeetingPanel";
+import { TestProductMeetingPanel } from "@/components/TestProductMeetingPanel";
 import {
   type SonioxCapturePhase,
   type SonioxInputSource,
@@ -186,6 +187,12 @@ function TranscriptionTool({ workspaceId, folderId }: { workspaceId: string; fol
   return (
     <Recorder requestedLocation={{ workspaceId, folderId }} defaultTranscriptionMode="soniox" />
   );
+}
+
+function TestProductTool() {
+  const capture = useSonioxLiveCapture();
+  const speech = useSonioxTts();
+  return <TestProductMeetingPanel capture={capture} speech={speech} />;
 }
 
 function TranslatorTool() {
@@ -706,6 +713,7 @@ export function SonioxWorkspaceClient() {
   const headings = {
     transcription: ["Smart Scribe", "회의를 녹음하고 실시간 원문을 확인한 뒤 로컬 최종 전사로 저장합니다."],
     translator: ["Translator", "Zoom·Google Meet 웹 탭 또는 마이크 음성을 실시간 번역합니다."],
+    "test-product": ["테스트 프로덕트", "자동 화자 구분과 스페이스바 Push-to-Talk 송출을 실험합니다."],
     "voice-typing": ["Voice Typing", "단축키로 받아쓰기와 번역 입력을 전환합니다."],
   } as const;
   const [title, description] = headings[selection.tool];
@@ -723,6 +731,7 @@ export function SonioxWorkspaceClient() {
       </header>
       {selection.tool === "transcription" && <TranscriptionTool workspaceId={selection.workspaceId} folderId={selection.folderId} />}
       {selection.tool === "translator" && <TranslatorTool />}
+      {selection.tool === "test-product" && <TestProductTool />}
       {selection.tool === "voice-typing" && <VoiceTypingTool key={selection.workspaceId} workspaceId={selection.workspaceId} />}
     </main>
   );

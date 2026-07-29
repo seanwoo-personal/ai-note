@@ -1,4 +1,4 @@
-export type SonioxTool = "transcription" | "translator" | "voice-typing";
+export type SonioxTool = "transcription" | "translator" | "voice-typing" | "test-product";
 
 export interface SonioxWorkspaceSelection {
   workspaceId: string;
@@ -12,7 +12,7 @@ interface SonioxLibraryLike {
   folders: Array<{ id: string; workspaceId: string }>;
 }
 
-const SONIOX_TOOLS = new Set<SonioxTool>(["transcription", "translator", "voice-typing"]);
+const SONIOX_TOOLS = new Set<SonioxTool>(["transcription", "translator", "voice-typing", "test-product"]);
 
 export function resolveSonioxWorkspaceSelection(
   search: URLSearchParams,

@@ -1,6 +1,6 @@
 import { expect, test } from "./support/synthetic-test";
 
-test("v1.14 release, independent scrolling, and global meeting setup are visible", async ({ page }) => {
+test("v1.15 release, independent scrolling, and meeting products are visible", async ({ page }) => {
   await page.addInitScript(() => {
     if (localStorage.getItem("e2e-release-initialized") !== "true") {
       localStorage.setItem("ai-note-locale", "ko");
@@ -17,12 +17,12 @@ test("v1.14 release, independent scrolling, and global meeting setup are visible
     ? page.getByLabel("라이브러리 메뉴", { exact: true })
     : page.getByRole("navigation", { name: "라이브러리" });
 
-  await expect(navigation.getByText("제품 버전 1.14.0", { exact: true })).toBeVisible();
+  await expect(navigation.getByText("제품 버전 1.15.0")).toBeVisible();
   await navigation.getByRole("link", { name: "릴리즈 노트" }).click();
   await expect(page).toHaveURL(/\/settings\/releases$/);
   await expect(page.getByRole("heading", { name: "릴리즈 노트" })).toBeVisible();
-  await expect(page.getByText("v1.14.0", { exact: true })).toBeVisible();
-  await expect(page.getByText("기준판 이후 14회 업데이트", { exact: true })).toBeVisible();
+  await expect(page.getByText("v1.15.0", { exact: true })).toBeVisible();
+  await expect(page.getByText("기준판 이후 15회 업데이트", { exact: true })).toBeVisible();
   await expect(page.getByText("v1.0.0 · AI NOTE 오픈소스 기준판", { exact: true })).toBeVisible();
 
   await page.goto("/settings");
@@ -64,4 +64,14 @@ test("v1.14 release, independent scrolling, and global meeting setup are visible
   await expect(page.getByRole("region", { name: "그룹 A 화면" })).toBeVisible();
   await expect(page.getByRole("region", { name: "그룹 B 화면" })).toBeVisible();
   await expect(page.getByText(/목소리를 영구 학습하거나 생체정보로 저장하지 않습니다/)).toBeVisible();
+
+  await page.goto("/soniox?tool=test-product");
+  await expect(page.getByRole("heading", { level: 1, name: "테스트 프로덕트" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "자유 참여 글로벌 미팅" })).toBeVisible();
+  await expect(page.getByLabel("회의 참석자 수")).toHaveCount(0);
+  await expect(page.getByText(/그룹 A|그룹 B/)).toHaveCount(0);
+  await expect(page.getByRole("combobox", { name: "내 송출 대상 언어" })).toHaveValue("en");
+  await expect(page.getByRole("region", { name: "한국어 회의 내용" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "상대방 언어 회의 내용" })).toBeVisible();
+  await expect(page.getByRole("status", { name: "Push-to-Talk 상태" })).toContainText("스페이스바를 눌러");
 });

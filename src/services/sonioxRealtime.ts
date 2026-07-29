@@ -35,6 +35,7 @@ export interface SonioxSpeakerTrack {
 export interface SonioxEndpointEvent {
   id: number;
   speaker: string | null;
+  originalLanguage?: string;
   originalFinal: string;
   translationFinal: string;
 }
@@ -94,6 +95,7 @@ export function applySonioxResult(
         {
           id: next.endpointCount,
           speaker,
+          originalLanguage: speakerTrack?.originalLanguage,
           originalFinal: speakerTrack?.original.final ?? next.original.final,
           translationFinal: speakerTrack?.translation.final ?? next.translation.final,
         },

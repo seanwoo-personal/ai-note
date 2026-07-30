@@ -2,6 +2,12 @@
 
 > 이 파일은 제품 릴리즈 노트의 단일 원본입니다. 사용자에게 의미 있는 기능 묶음만 버전을 올립니다.
 
+## 1.15.5
+**2026-07-30 · Global Meeting Left Shift Push-to-Talk**
+- 사이드바와 페이지의 테스트 프로덕트 표시명을 Global Meeting으로 변경
+- Push-to-Talk 단축키를 Space에서 Left Shift로 변경해 미팅 버튼의 Space 동작과 충돌하지 않도록 개선
+- 미팅 시작 버튼의 잔류 포커스를 해제하고 Left Shift 반복 입력, 오른쪽 Shift, 입력·링크·버튼 포커스를 안전하게 구분
+
 ## 1.15.4
 **2026-07-29 · 번역 fallback·TTS 오류 정리**
 - 한국어 endpoint의 Soniox 최종 상대 언어 번역이 비어 있으면 선택 언어로 fallback해 양쪽 완료 기록을 유지

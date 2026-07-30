@@ -164,7 +164,7 @@ describe("SonioxWorkspaceClient", () => {
 
     navigation.search = "workspace=workspace-a&tool=test-product";
     render(<SonioxWorkspaceClient />);
-    expect(screen.getByRole("heading", { level: 1, name: "테스트 프로덕트" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Global Meeting" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "자유 참여 글로벌 미팅" })).toBeInTheDocument();
   });
 
@@ -300,7 +300,7 @@ describe("SonioxWorkspaceClient", () => {
     expect(translate).not.toHaveBeenCalled();
   });
 
-  it("uses the live Soniox translation immediately at closing Space without waiting for the LLM adapter", async () => {
+  it("uses the live Soniox translation immediately at closing Left Shift without waiting for the LLM adapter", async () => {
     const translate = vi.fn(async (_url: string, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body)) as { targetLanguage: string };
       return new Response(JSON.stringify({ translation: body.targetLanguage === "ja" ? "こんにちは" : "안녕하세요" }), {
@@ -316,7 +316,7 @@ describe("SonioxWorkspaceClient", () => {
     capture.phase = "listening";
     view.rerender(<SonioxWorkspaceClient />);
 
-    fireEvent.keyDown(window, { code: "Space", key: " ", repeat: false });
+    fireEvent.keyDown(window, { code: "ShiftLeft", key: "Shift", repeat: false });
     expect(screen.getByRole("status", { name: "Push-to-Talk 상태" })).toHaveTextContent("실시간 번역 및 음성 연결 준비 중");
     expect(speech.prepare).toHaveBeenCalledWith({ language: "ja", voice: "Maya", speed: 1 });
     completePttOpeningBoundary(view);
@@ -333,7 +333,7 @@ describe("SonioxWorkspaceClient", () => {
       endpoints: [PTT_OPENING_ENDPOINT, { id: 2, speaker: "1", originalLanguage: "ko", originalFinal: "안녕하세요", translationFinal: "こんにちは" }],
     };
     view.rerender(<SonioxWorkspaceClient />);
-    fireEvent.keyDown(window, { code: "Space", key: " ", repeat: false });
+    fireEvent.keyDown(window, { code: "ShiftLeft", key: "Shift", repeat: false });
 
     await waitFor(() => expect(screen.getByRole("region", { name: "상대방 언어 회의 내용" })).toHaveTextContent("こんにちは"));
     expect(screen.getByRole("region", { name: "상대방 언어 회의 내용" })).toHaveTextContent("나 · Push-to-Talk");
@@ -353,7 +353,7 @@ describe("SonioxWorkspaceClient", () => {
     const view = render(<SonioxWorkspaceClient />);
     fireEvent.change(screen.getByRole("combobox", { name: "내 송출 대상 언어" }), { target: { value: "ja" } });
 
-    fireEvent.keyDown(window, { code: "Space", key: " " });
+    fireEvent.keyDown(window, { code: "ShiftLeft", key: "Shift" });
     completePttOpeningBoundary(view);
     capture.transcript = {
       original: { final: "", provisional: "안녕하세요" },
@@ -372,7 +372,7 @@ describe("SonioxWorkspaceClient", () => {
       endpoints: [PTT_OPENING_ENDPOINT],
     };
     view.rerender(<SonioxWorkspaceClient />);
-    fireEvent.keyDown(window, { code: "Space", key: " " });
+    fireEvent.keyDown(window, { code: "ShiftLeft", key: "Shift" });
 
     expect(capture.finalize).toHaveBeenCalledTimes(2);
     expect(screen.getByRole("status", { name: "Push-to-Talk 상태" })).toHaveTextContent("마지막 토큰 확정 중");
@@ -436,7 +436,7 @@ describe("SonioxWorkspaceClient", () => {
     expect(speech.speak).not.toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining("Other person") }));
   });
 
-  it("freezes push-to-talk text and target at the closing Space before a delayed endpoint", async () => {
+  it("freezes push-to-talk text and target at the closing Left Shift before a delayed endpoint", async () => {
     const translate = vi.fn(async (_url: string, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body)) as { text: string; targetLanguage: string };
       return new Response(JSON.stringify({ translation: `${body.targetLanguage}:${body.text}` }), {
@@ -450,7 +450,7 @@ describe("SonioxWorkspaceClient", () => {
     const view = render(<SonioxWorkspaceClient />);
     fireEvent.change(screen.getByRole("combobox", { name: "내 송출 대상 언어" }), { target: { value: "ja" } });
 
-    fireEvent.keyDown(window, { code: "Space", key: " " });
+    fireEvent.keyDown(window, { code: "ShiftLeft", key: "Shift" });
     completePttOpeningBoundary(view);
     capture.transcript = {
       original: { final: "안녕하세요", provisional: "" },
@@ -464,7 +464,7 @@ describe("SonioxWorkspaceClient", () => {
       endpoints: [PTT_OPENING_ENDPOINT],
     };
     view.rerender(<SonioxWorkspaceClient />);
-    fireEvent.keyDown(window, { code: "Space", key: " " });
+    fireEvent.keyDown(window, { code: "ShiftLeft", key: "Shift" });
     expect(capture.finalize).toHaveBeenCalledTimes(2);
     fireEvent.change(screen.getByRole("combobox", { name: "내 송출 대상 언어" }), { target: { value: "zh" } });
 
@@ -523,13 +523,13 @@ describe("SonioxWorkspaceClient", () => {
     expect(capture.reset).toHaveBeenCalledTimes(1);
   });
 
-  it("recovers when push-to-talk never receives an endpoint after the closing Space", () => {
+  it("recovers when push-to-talk never receives an endpoint after the closing Left Shift", () => {
     vi.useFakeTimers();
     navigation.search = "workspace=workspace-a&tool=test-product";
     capture.phase = "listening";
     const view = render(<SonioxWorkspaceClient />);
 
-    fireEvent.keyDown(window, { code: "Space", key: " " });
+    fireEvent.keyDown(window, { code: "ShiftLeft", key: "Shift" });
     completePttOpeningBoundary(view);
     capture.transcript = {
       original: { final: "말", provisional: "" },
@@ -543,7 +543,7 @@ describe("SonioxWorkspaceClient", () => {
       endpoints: [PTT_OPENING_ENDPOINT],
     };
     view.rerender(<SonioxWorkspaceClient />);
-    fireEvent.keyDown(window, { code: "Space", key: " " });
+    fireEvent.keyDown(window, { code: "ShiftLeft", key: "Shift" });
     expect(screen.getByRole("status", { name: "Push-to-Talk 상태" })).toHaveTextContent("마지막 토큰 확정 중");
 
     act(() => vi.advanceTimersByTime(8_000));
@@ -553,15 +553,48 @@ describe("SonioxWorkspaceClient", () => {
     vi.useRealTimers();
   });
 
-  it("does not hijack Space from a focused navigation link", () => {
+  it("starts Push-to-Talk only with Left Shift after mouse-starting the meeting", () => {
+    navigation.search = "workspace=workspace-a&tool=test-product";
+    const view = render(<SonioxWorkspaceClient />);
+
+    const startButton = screen.getByRole("button", { name: "미팅 시작" });
+    startButton.focus();
+    fireEvent.click(startButton);
+    capture.phase = "listening";
+    view.rerender(<SonioxWorkspaceClient />);
+
+    fireEvent.keyDown(document.activeElement ?? window, { code: "Space", key: " " });
+    fireEvent.keyDown(document.activeElement ?? window, { code: "ShiftRight", key: "Shift" });
+    fireEvent.keyDown(document.activeElement ?? window, { code: "ShiftLeft", key: "Shift" });
+    expect(capture.finalize).not.toHaveBeenCalled();
+
+    fireEvent.keyUp(document.activeElement ?? window, { code: "ShiftRight", key: "Shift" });
+    fireEvent.keyDown(document.activeElement ?? window, { code: "ShiftLeft", key: "Shift" });
+    expect(capture.finalize).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("status", { name: "Push-to-Talk 상태" })).toHaveTextContent("Left Shift를 다시 누르세요");
+
+    fireEvent.keyDown(document.activeElement ?? window, { code: "ShiftLeft", key: "Shift", repeat: true });
+    expect(capture.finalize).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not hijack Left Shift from focused buttons, links, or inputs", () => {
     navigation.search = "workspace=workspace-a&tool=test-product";
     capture.phase = "listening";
-    render(<><a href="/settings">설정 링크</a><SonioxWorkspaceClient /></>);
+    render(<><a href="/settings">설정 링크</a><input aria-label="안전 입력" /><div tabIndex={0} aria-label="포커스 영역" /><div contentEditable aria-label="편집 영역" /><SonioxWorkspaceClient /></>);
 
-    const link = screen.getByRole("link", { name: "설정 링크" });
-    link.focus();
-    fireEvent.keyDown(link, { code: "Space", key: " " });
+    const targets = [
+      screen.getByRole("button", { name: "미팅 중지" }),
+      screen.getByRole("link", { name: "설정 링크" }),
+      screen.getByRole("textbox", { name: "안전 입력" }),
+      screen.getByLabelText("포커스 영역"),
+      screen.getByLabelText("편집 영역"),
+    ];
+    for (const target of targets) {
+      target.focus();
+      fireEvent.keyDown(target, { code: "ShiftLeft", key: "Shift" });
+    }
 
+    expect(capture.finalize).not.toHaveBeenCalled();
     expect(screen.getByRole("status", { name: "Push-to-Talk 상태" })).toHaveTextContent("마이크와 실시간 번역");
   });
 
@@ -575,7 +608,7 @@ describe("SonioxWorkspaceClient", () => {
     capture.phase = "listening";
     const view = render(<SonioxWorkspaceClient />);
 
-    fireEvent.keyDown(window, { code: "Space", key: " " });
+    fireEvent.keyDown(window, { code: "ShiftLeft", key: "Shift" });
     completePttOpeningBoundary(view);
     capture.transcript = {
       original: { final: "안녕하세요", provisional: "" },
@@ -589,7 +622,7 @@ describe("SonioxWorkspaceClient", () => {
       endpoints: [PTT_OPENING_ENDPOINT, { id: 2, speaker: "1", originalLanguage: "ko", originalFinal: "안녕하세요", translationFinal: "" }],
     };
     view.rerender(<SonioxWorkspaceClient />);
-    fireEvent.keyDown(window, { code: "Space", key: " " });
+    fireEvent.keyDown(window, { code: "ShiftLeft", key: "Shift" });
 
     await act(async () => {
       await Promise.resolve();

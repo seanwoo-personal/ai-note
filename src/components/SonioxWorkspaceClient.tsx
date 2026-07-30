@@ -713,7 +713,7 @@ export function SonioxWorkspaceClient() {
   const headings = {
     transcription: ["Smart Scribe", "회의를 녹음하고 실시간 원문을 확인한 뒤 로컬 최종 전사로 저장합니다."],
     translator: ["Translator", "Zoom·Google Meet 웹 탭 또는 마이크 음성을 실시간 번역합니다."],
-    "test-product": ["테스트 프로덕트", "자동 화자 구분과 스페이스바 Push-to-Talk 송출을 실험합니다."],
+    "test-product": ["Global Meeting", "자동 화자 구분과 Left Shift Push-to-Talk 송출을 실험합니다."],
     "voice-typing": ["Voice Typing", "단축키로 받아쓰기와 번역 입력을 전환합니다."],
   } as const;
   const [title, description] = headings[selection.tool];

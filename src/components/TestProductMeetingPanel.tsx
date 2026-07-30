@@ -61,7 +61,7 @@ function hasUtteranceAwaitingEndpoint(transcript: Capture["transcript"]): boolea
 }
 
 function isTextInputTarget(target: EventTarget | null): boolean {
-  return target instanceof HTMLElement && Boolean(target.closest("input, textarea, select, button, a, [role='button'], [role='link'], [contenteditable='true']"));
+  return target instanceof HTMLElement && Boolean(target.closest("input, textarea, select, button, a, summary, audio, video, [role='button'], [role='link'], [tabindex]:not([tabindex='-1']), [contenteditable]:not([contenteditable='false'])"));
 }
 
 export function TestProductMeetingPanel({ capture, speech }: { capture: Capture; speech: Speech }) {
@@ -89,6 +89,7 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
   const pushToTalkTranslationLengthsRef = useRef<Record<string, number>>({});
   const frozenPushToTalkRef = useRef<FrozenPushToTalk | null>(null);
   const userSpeakerRef = useRef<string | null>(null);
+  const rightShiftHeldRef = useRef(false);
   const outboundIdRef = useRef(1_000_000);
   captureStopRef.current = capture.stop;
   speechStopRef.current = speech.stop;
@@ -299,7 +300,7 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
     frozenPushToTalkRef.current = null;
     const { text, translation, targetLanguage: frozenTargetLanguage } = frozen;
     if (!text) {
-      setError("스페이스바 사이에서 완료된 발화를 찾지 못했습니다. 다시 시도해 주세요.");
+      setError("Left Shift 사이에서 완료된 발화를 찾지 못했습니다. 다시 시도해 주세요.");
       setPushToTalkPhase("idle");
       return;
     }
@@ -382,20 +383,36 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
       if (generationRef.current !== generation) return;
       frozenPushToTalkRef.current = null;
       setPushToTalkPhase("idle");
-      setError("스페이스바 사이에서 완료된 발화를 찾지 못했습니다. 다시 시도해 주세요.");
+      setError("Left Shift 사이에서 완료된 발화를 찾지 못했습니다. 다시 시도해 주세요.");
     }, 8_000);
     return () => window.clearTimeout(timer);
   }, [pushToTalkPhase]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.code !== "Space" || event.repeat || event.altKey || event.ctrlKey || event.metaKey || isTextInputTarget(event.target)) return;
+      if (event.code === "ShiftRight") {
+        rightShiftHeldRef.current = true;
+        return;
+      }
+      if (event.code !== "ShiftLeft" || rightShiftHeldRef.current || event.repeat || event.altKey || event.ctrlKey || event.metaKey || isTextInputTarget(event.target)) return;
       if (capture.phase !== "listening") return;
       event.preventDefault();
       togglePushToTalk();
     };
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.code === "ShiftRight") rightShiftHeldRef.current = false;
+    };
+    const onBlur = () => {
+      rightShiftHeldRef.current = false;
+    };
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("blur", onBlur);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", onBlur);
+    };
   });
 
   useEffect(() => () => {
@@ -465,12 +482,12 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
   const liveCounterpart = liveSourceLanguage.startsWith("ko") ? liveTranslation : liveOriginal;
 
   const pushToTalkLabel = {
-    idle: "마이크와 실시간 번역은 계속 실행됩니다. 스페이스바로 내 송출 구간을 시작하세요.",
-    recording: "내 송출 구간 · 실시간 번역 및 음성 연결 준비 중… 말을 마치면 스페이스바를 다시 누르세요.",
+    idle: "마이크와 실시간 번역은 계속 실행됩니다. Left Shift로 내 송출 구간을 시작하세요.",
+    recording: "내 송출 구간 · 실시간 번역 및 음성 연결 준비 중… 말을 마치면 Left Shift를 다시 누르세요.",
     finalizing: "마지막 토큰 확정 중…",
     translating: "상대방 언어로 번역 중…",
     speaking: "번역 음성 송출 중…",
-    sent: "송출 완료 · 스페이스바를 눌러 다시 말할 수 있습니다.",
+    sent: "송출 완료 · Left Shift를 눌러 다시 말할 수 있습니다.",
   }[pushToTalkPhase];
 
   return (
@@ -489,7 +506,11 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
           </label>
         </div>
         <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
-          <button type="button" onClick={active ? stopMeeting : startMeeting} className="min-h-11 rounded-full bg-ink px-5 text-[14px] font-semibold text-bg">
+          <button type="button" onClick={(event) => {
+            event.currentTarget.blur();
+            if (active) stopMeeting();
+            else startMeeting();
+          }} className="min-h-11 rounded-full bg-ink px-5 text-[14px] font-semibold text-bg">
             {active ? "미팅 중지" : "미팅 시작"}
           </button>
           <button type="button" disabled={capture.phase !== "listening" || ["finalizing", "translating", "speaking"].includes(pushToTalkPhase) || ["connecting", "playing"].includes(speech.phase)} onClick={togglePushToTalk} className={`min-h-11 rounded-full border px-5 text-[14px] font-semibold disabled:opacity-40 ${pushToTalkPhase === "recording" ? "border-error bg-error/10 text-error" : "border-line text-accent"}`}>
@@ -497,9 +518,9 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
           </button>
         </div>
         <div className="mt-4 rounded-xl border border-line bg-soft/40 p-4">
-          <p className="text-[12px] font-bold text-ink">Push-to-Talk · Space</p>
+          <p className="text-[12px] font-bold text-ink">Push-to-Talk · Left Shift</p>
           <p role="status" aria-label="Push-to-Talk 상태" className="mt-1 text-[13px] leading-6 text-inkSoft">{pushToTalkLabel}</p>
-          <p className="mt-1 text-[12px] leading-5 text-inkSoft">발화 중 Soniox 번역과 TTS 연결을 미리 준비하고, 두 번째 Space에서 경계를 확정해 즉시 음성 송출을 시작합니다. 첫 Push-to-Talk 구간에서 감지된 활성 화자를 이 세션의 내 화자로 자동 고정하므로 첫 구간에서는 다른 참석자가 동시에 말하지 않도록 해 주세요.</p>
+          <p className="mt-1 text-[12px] leading-5 text-inkSoft">발화 중 Soniox 번역과 TTS 연결을 미리 준비하고, 두 번째 Left Shift에서 경계를 확정해 즉시 음성 송출을 시작합니다. 첫 Push-to-Talk 구간에서 감지된 활성 화자를 이 세션의 내 화자로 자동 고정하므로 첫 구간에서는 다른 참석자가 동시에 말하지 않도록 해 주세요.</p>
         </div>
       </section>
 
@@ -542,7 +563,7 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
         </section>
       </div>
       {(error || capture.error || speech.error) && <p role="alert" className="text-[13px] font-medium text-error">{error || capture.error || speech.error}</p>}
-      <p className="text-[12px] leading-5 text-inkSoft">회의 오디오는 Soniox로 전송됩니다. Soniox 실시간 번역 결과가 없는 경우에만 전사 텍스트가 설정된 번역 모델로 전송됩니다. 번역 음성 생성을 위해 번역된 텍스트도 Soniox로 전송됩니다. 외부 제공자를 사용하면 해당 제공자의 정책과 사용량 기반 비용이 적용될 수 있습니다. 테스트 프로덕트 결과는 현재 화면에만 유지되고 자동 저장되지 않습니다. 번역 음성은 이 기기의 스피커에서 재생되며 다른 통화 앱으로 자동 전송되지는 않습니다.</p>
+      <p className="text-[12px] leading-5 text-inkSoft">회의 오디오는 Soniox로 전송됩니다. Soniox 실시간 번역 결과가 없는 경우에만 전사 텍스트가 설정된 번역 모델로 전송됩니다. 번역 음성 생성을 위해 번역된 텍스트도 Soniox로 전송됩니다. 외부 제공자를 사용하면 해당 제공자의 정책과 사용량 기반 비용이 적용될 수 있습니다. Global Meeting 결과는 현재 화면에만 유지되고 자동 저장되지 않습니다. 번역 음성은 이 기기의 스피커에서 재생되며 다른 통화 앱으로 자동 전송되지는 않습니다.</p>
     </div>
   );
 }

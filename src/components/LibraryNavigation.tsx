@@ -349,7 +349,7 @@ function SonioxToolLinks({
   const tools: Array<{ tool: SonioxTool; label: string }> = [
     { tool: "transcription", label: "Smart Scribe" },
     { tool: "translator", label: "Translator" },
-    { tool: "test-product", label: "테스트 프로덕트" },
+    { tool: "test-product", label: "Global Meeting" },
     { tool: "voice-typing", label: "Voice Typing" },
   ];
   return <>{tools.map((item) => (

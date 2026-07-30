@@ -37,3 +37,4 @@ $EDITOR docs/decisions/0024-내-결정.md   # 5칸 채우고 아래 목록에 �
 | [0021](0021-manual-transcript-and-summary-editing.md) | 불변 원본 위 editable transcript/summary와 독립 재생성·freshness·저장 probe | 채택됨 |
 | [0022](0022-inline-freeform-meeting-content-editing.md) | Tab-local action과 본문 교체형 single-textarea 편집 — 0021의 footer·structured summary form만 부분 대체 | 채택됨 |
 | [0023](0023-installation-and-first-run-ux.md) | 안전한 install target, owned background runtime과 provider-aware first-run UX | 채택됨 |
+| [0024](0024-external-provider-exception-and-vendor-neutral-ui.md) | 외부 provider 예외(실시간 STT/TTS·요약 API 키)와 vendor 중립 UI | 채택됨 |

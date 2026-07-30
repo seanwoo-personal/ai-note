@@ -1,10 +1,57 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { connectSonioxTts } from "@/services/sonioxTts";
+import {
+  connectSonioxTts,
+  getSonioxTtsSpeedPlan,
+  SONIOX_TTS_SPEED_OPTIONS,
+} from "@/services/sonioxTts";
 
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
+});
+
+describe("Soniox TTS speed support", () => {
+  it("keeps 2x as a product speed while respecting Soniox's documented 1.3x provider ceiling", () => {
+    expect(SONIOX_TTS_SPEED_OPTIONS).toContain(1.5);
+    expect(SONIOX_TTS_SPEED_OPTIONS).toContain(2);
+    expect(getSonioxTtsSpeedPlan(1.2)).toEqual({ providerSpeed: 1.2, playbackRate: 1 });
+    expect(getSonioxTtsSpeedPlan(1.5)).toEqual({ providerSpeed: 1.3, playbackRate: 1.5 / 1.3 });
+    expect(getSonioxTtsSpeedPlan(2)).toEqual({ providerSpeed: 1.3, playbackRate: 2 / 1.3 });
+  });
+
+  it("normalizes invalid product speeds without ever asking Soniox for an unsupported rate", () => {
+    expect(getSonioxTtsSpeedPlan(5)).toEqual({ providerSpeed: 1.3, playbackRate: 2 / 1.3 });
+    expect(getSonioxTtsSpeedPlan(0.1)).toEqual({ providerSpeed: 0.8, playbackRate: 1 });
+    expect(getSonioxTtsSpeedPlan(Number.NaN)).toEqual({ providerSpeed: 1, playbackRate: 1 });
+  });
+
+  it("sends only the documented Soniox speed on the connect handshake", async () => {
+    class FakeWebSocket {
+      static instance: FakeWebSocket | null = null;
+      static readonly OPEN = 1;
+      readyState = FakeWebSocket.OPEN;
+      sent: unknown[] = [];
+      onopen: (() => void) | null = null;
+      onmessage: ((event: { data: string }) => void) | null = null;
+      onerror: (() => void) | null = null;
+      onclose: (() => void) | null = null;
+      constructor() { FakeWebSocket.instance = this; queueMicrotask(() => this.onopen?.()); }
+      send(data: unknown) { this.sent.push(data); }
+      close() { this.readyState = 3; }
+    }
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ ["api" + "Key"]: "temporary-value" }),
+    } as Response)));
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+
+    await connectSonioxTts({ language: "en", voice: "Maya", speed: 1.2, onAudio: () => {} });
+    expect(JSON.parse(String(FakeWebSocket.instance!.sent[0])).speed).toBe(1.2);
+
+    await connectSonioxTts({ language: "en", voice: "Maya", speed: 2, onAudio: () => {} });
+    expect(JSON.parse(String(FakeWebSocket.instance!.sent[0])).speed).toBe(1.3);
+  });
 });
 
 describe("Soniox real-time TTS", () => {

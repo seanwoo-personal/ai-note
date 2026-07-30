@@ -2,6 +2,28 @@ const SONIOX_TTS_WEBSOCKET_URL = "wss://tts-rt.soniox.com/tts-websocket";
 const CONNECT_TIMEOUT_MS = 10_000;
 const TERMINATION_TIMEOUT_MS = 30_000;
 
+// Soniox documents a provider-side speed range of 0.7–1.3. Product speeds
+// above 1.3 remain available by synthesizing at 1.3 and accelerating the PCM
+// playback locally; the API itself must never receive 1.5 or 2.
+export const MIN_SONIOX_TTS_SPEED = 0.7;
+export const MAX_SONIOX_TTS_SPEED = 1.3;
+export const SONIOX_TTS_SPEED_OPTIONS = [0.8, 1, 1.2, 1.5, 2] as const;
+const MIN_PRODUCT_TTS_SPEED = SONIOX_TTS_SPEED_OPTIONS[0];
+const MAX_PRODUCT_TTS_SPEED = SONIOX_TTS_SPEED_OPTIONS[SONIOX_TTS_SPEED_OPTIONS.length - 1];
+
+export interface SonioxTtsSpeedPlan {
+  providerSpeed: number;
+  playbackRate: number;
+}
+
+export function getSonioxTtsSpeedPlan(requestedSpeed: number): SonioxTtsSpeedPlan {
+  const productSpeed = Number.isFinite(requestedSpeed)
+    ? Math.min(MAX_PRODUCT_TTS_SPEED, Math.max(MIN_PRODUCT_TTS_SPEED, requestedSpeed))
+    : 1;
+  const providerSpeed = Math.min(MAX_SONIOX_TTS_SPEED, Math.max(MIN_SONIOX_TTS_SPEED, productSpeed));
+  return { providerSpeed, playbackRate: productSpeed / providerSpeed };
+}
+
 interface SonioxTtsResponse {
   stream_id?: unknown;
   audio?: unknown;
@@ -128,7 +150,7 @@ export async function connectSonioxTts(
         voice: options.voice,
         audio_format: "pcm_s16le",
         sample_rate: 24_000,
-        speed: options.speed ?? 1,
+        speed: getSonioxTtsSpeedPlan(options.speed ?? 1).providerSpeed,
         stream_id: streamId,
       }));
       resolve();

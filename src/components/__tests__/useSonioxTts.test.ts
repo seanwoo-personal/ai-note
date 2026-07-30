@@ -18,10 +18,16 @@ const soniox = vi.hoisted(() => ({
 
 vi.mock("@/services/sonioxTts", () => ({
   connectSonioxTts: soniox.connect,
+  getSonioxTtsSpeedPlan: (requestedSpeed: number) => {
+    const productSpeed = Number.isFinite(requestedSpeed) ? Math.min(2, Math.max(0.8, requestedSpeed)) : 1;
+    const providerSpeed = Math.min(1.3, Math.max(0.7, productSpeed));
+    return { providerSpeed, playbackRate: productSpeed / providerSpeed };
+  },
 }));
 
 class FakeSource {
   buffer: { duration: number } | null = null;
+  playbackRate = { value: 1 };
   onended: (() => void) | null = null;
   connect = vi.fn();
   start = vi.fn();
@@ -93,6 +99,18 @@ describe("useSonioxTts", () => {
     expect(result.current.phase).toBe("playing");
     await act(async () => { await vi.runAllTimersAsync(); });
     expect(result.current.phase).toBe("finished");
+  });
+
+  it("turns a 2x product speed into Soniox 1.3x synthesis plus client-side playback acceleration", async () => {
+    const { result } = renderHook(() => useSonioxTts());
+
+    await act(async () => {
+      await result.current.speak({ text: "Hello", language: "en", voice: "Maya", speed: 2 });
+    });
+    expect(soniox.connect).toHaveBeenCalledWith(expect.objectContaining({ speed: 1.3 }));
+
+    act(() => soniox.callbacks?.onAudio(new Uint8Array([0, 0, 255, 127])));
+    expect(FakeAudioContext.instance!.sources[0].playbackRate.value).toBeCloseTo(2 / 1.3);
   });
 
   it("preconnects the matching Soniox stream so speak skips the network handshake", async () => {

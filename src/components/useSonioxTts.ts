@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   connectSonioxTts,
+  getSonioxTtsSpeedPlan,
   type SonioxTtsSession,
 } from "@/services/sonioxTts";
 
@@ -89,7 +90,7 @@ export function useSonioxTts() {
     return context;
   }, []);
 
-  const scheduleAudio = useCallback((generation: number, chunk: Uint8Array) => {
+  const scheduleAudio = useCallback((generation: number, chunk: Uint8Array, playbackRate: number) => {
     if (!mountedRef.current || generation !== generationRef.current) return;
     const context = contextRef.current;
     if (!context) return;
@@ -117,12 +118,13 @@ export function useSonioxTts() {
     }
     const source = context.createBufferSource();
     source.buffer = buffer;
+    source.playbackRate.value = playbackRate;
     source.connect(context.destination);
     sourcesRef.current.add(source);
     source.onended = () => sourcesRef.current.delete(source);
     const startAt = Math.max(context.currentTime + 0.01, nextStartTimeRef.current);
     source.start(startAt);
-    nextStartTimeRef.current = startAt + buffer.duration;
+    nextStartTimeRef.current = startAt + (buffer.duration / playbackRate);
     setPhase("playing");
   }, []);
 
@@ -131,12 +133,14 @@ export function useSonioxTts() {
     generation: number,
     controller: AbortController,
     context: AudioContext,
-  ) => connectSonioxTts({
+  ) => {
+    const speedPlan = getSonioxTtsSpeedPlan(options.speed ?? 1);
+    return connectSonioxTts({
     language: options.language,
     voice: options.voice,
-    speed: options.speed ?? 1,
+    speed: speedPlan.providerSpeed,
     signal: controller.signal,
-    onAudio: (chunk) => scheduleAudio(generation, chunk),
+    onAudio: (chunk) => scheduleAudio(generation, chunk, speedPlan.playbackRate),
     onTerminated: () => {
       if (!mountedRef.current || generation !== generationRef.current) return;
       sessionRef.current = null;
@@ -154,7 +158,8 @@ export function useSonioxTts() {
       setError(message);
       setPhase("error");
     },
-  }), [clearFinishTimer, scheduleAudio, stopResources]);
+    });
+  }, [clearFinishTimer, scheduleAudio, stopResources]);
 
   const prepare = useCallback(async (options?: SonioxPrepareOptions) => {
     let generation = generationRef.current;

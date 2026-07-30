@@ -4,6 +4,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 
 import { type useSonioxLiveCapture } from "@/components/useSonioxLiveCapture";
 import { type useSonioxTts } from "@/components/useSonioxTts";
+import { SONIOX_TTS_SPEED_OPTIONS } from "@/services/sonioxTts";
 
 const LANGUAGES = [
   { value: "en", label: "영어" },
@@ -12,6 +13,18 @@ const LANGUAGES = [
 ] as const;
 
 const TTS_VOICES = ["Maya", "Daniel", "Mina", "Kenji"] as const;
+
+const SPEED_LABELS: Record<string, string> = {
+  "0.8": "느리게 (0.8×)",
+  "1": "보통 (1.0×)",
+  "1.2": "빠르게 (1.2×)",
+  "1.5": "매우 빠르게 (1.5×)",
+  "2": "최고 속도 (2.0×)",
+};
+
+function speedLabel(speed: number): string {
+  return SPEED_LABELS[String(speed)] ?? `${speed}×`;
+}
 
 type Capture = ReturnType<typeof useSonioxLiveCapture>;
 type Speech = ReturnType<typeof useSonioxTts>;
@@ -537,10 +550,9 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
             <label className="flex min-w-0 flex-col gap-2 text-[13px] font-semibold text-ink">
               <span>음성 속도</span>
               <select aria-label="음성 속도" value={ttsSpeed} disabled={active} onChange={(event) => setTtsSpeed(Number(event.target.value))} className="min-h-11 rounded-xl border border-line bg-bg px-3 text-[14px] text-ink disabled:opacity-50">
-                <option value={0.8}>느리게 (0.8×)</option>
-                <option value={1}>보통 (1.0×)</option>
-                <option value={1.2}>빠르게 (1.2×)</option>
+                {SONIOX_TTS_SPEED_OPTIONS.map((speed) => <option key={speed} value={speed}>{speedLabel(speed)}</option>)}
               </select>
+              <span className="text-[11px] font-normal leading-5 text-inkSoft">1.5×·2.0×는 Soniox 최대 1.3×로 생성한 뒤 이 기기에서 추가 가속합니다.</span>
             </label>
           </div>
         </div>

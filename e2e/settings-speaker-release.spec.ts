@@ -1,6 +1,6 @@
 import { expect, test } from "./support/synthetic-test";
 
-test("v1.16.0 release, independent scrolling, and meeting products are visible", async ({ page }) => {
+test("v1.17.0 release, independent scrolling, and meeting products are visible", async ({ page }) => {
   await page.addInitScript(() => {
     if (localStorage.getItem("e2e-release-initialized") !== "true") {
       localStorage.setItem("ai-note-locale", "ko");
@@ -17,12 +17,12 @@ test("v1.16.0 release, independent scrolling, and meeting products are visible",
     ? page.getByLabel("라이브러리 메뉴", { exact: true })
     : page.getByRole("navigation", { name: "라이브러리" });
 
-  await expect(navigation.getByText("제품 버전 1.16.0")).toBeVisible();
+  await expect(navigation.getByText("제품 버전 1.17.0")).toBeVisible();
   await navigation.getByRole("link", { name: "릴리즈 노트" }).click();
   await expect(page).toHaveURL(/\/settings\/releases$/);
   await expect(page.getByRole("heading", { name: "릴리즈 노트" })).toBeVisible();
-  await expect(page.getByText("v1.16.0", { exact: true })).toBeVisible();
-  await expect(page.getByText("기준판 이후 22회 업데이트", { exact: true })).toBeVisible();
+  await expect(page.getByText("v1.17.0", { exact: true })).toBeVisible();
+  await expect(page.getByText("기준판 이후 23회 업데이트", { exact: true })).toBeVisible();
   await expect(page.getByText("v1.0.0 · AI NOTE 오픈소스 기준판", { exact: true })).toBeVisible();
 
   await page.goto("/settings");
@@ -47,10 +47,10 @@ test("v1.16.0 release, independent scrolling, and meeting products are visible",
     expect(layout.bodyOverflow).not.toBe("hidden");
   }
 
-  await page.goto("/soniox?tool=translator");
+  await page.goto("/live?tool=translator");
   await expect(page).toHaveURL(/tool=test-product/);
   await expect(page.getByLabel("회의 참석자 수")).toHaveCount(0);
-  await expect(page.getByRole("heading", { level: 1, name: "트랜슬레이터" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "글로벌 미팅 번역" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "자유 참여 글로벌 미팅" })).toBeVisible();
   await expect(page.getByLabel("회의 참석자 수")).toHaveCount(0);
   await expect(page.getByText(/그룹 A|그룹 B/)).toHaveCount(0);
@@ -58,6 +58,6 @@ test("v1.16.0 release, independent scrolling, and meeting products are visible",
   await expect(page.getByRole("combobox", { name: "번역할 언어" })).toHaveValue("en");
   await expect(page.getByRole("combobox", { name: "번역 음성" })).toHaveValue("Maya");
   await expect(page.getByRole("combobox", { name: "음성 속도" })).toHaveValue("1");
-  await expect(page.getByRole("table", { name: "트랜슬레이터 대화록" })).toBeVisible();
+  await expect(page.getByRole("table", { name: "글로벌 미팅 번역 대화록" })).toBeVisible();
   await expect(page.getByRole("status", { name: "Push-to-Talk 상태" })).toContainText("마이크와 실시간 번역");
 });

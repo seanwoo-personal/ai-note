@@ -3,16 +3,16 @@
 @tailwind utilities;
 
 @font-face {
-  font-family: "SUIT";
-  src: url("/fonts/SUIT/SUIT-Medium.otf") format("opentype");
+  font-family: "Noto Sans KR";
+  src: url("/fonts/NotoSansKR/NotoSansKR-Medium.otf") format("opentype");
   font-style: normal;
   font-weight: 500;
   font-display: swap;
 }
 
 @font-face {
-  font-family: "SUIT";
-  src: url("/fonts/SUIT/SUIT-Bold.otf") format("opentype");
+  font-family: "Noto Sans KR";
+  src: url("/fonts/NotoSansKR/NotoSansKR-Bold.otf") format("opentype");
   font-style: normal;
   font-weight: 700;
   font-display: swap;
@@ -35,7 +35,7 @@
   --hej-color-status-warning: #98640b;
   --hej-color-status-warning-surface: #fff4d9;
   --hej-color-status-error: #b42318;
-  --font-suit: "SUIT", "Noto Sans KR", "Noto Sans JP", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Noto Sans KR", "Noto Sans", "Noto Sans JP", ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
   --hej-text-11: 11px;
   --hej-text-12: 12px;
@@ -122,7 +122,7 @@
 body {
   background-color: var(--hej-color-background-canvas);
   color: var(--hej-color-text-primary);
-  font-family: var(--font-suit);
+  font-family: var(--font-sans);
   font-weight: 500;
 }
 

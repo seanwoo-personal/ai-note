@@ -235,7 +235,7 @@ describe("activated library navigation", () => {
   });
 
   it("renders one HeyHome service navigation with workspace tools instead of product tabs", () => {
-    navigation.pathname = "/soniox";
+    navigation.pathname = "/live";
     navigation.search = `workspace=${DEFAULT_WORKSPACE}&folder=${FOLDER}&tool=translator`;
     renderShell();
 
@@ -249,23 +249,24 @@ describe("activated library navigation", () => {
     expect(within(nav).getByText("내 워크스페이스")).toBeInTheDocument();
     expect(within(nav).getByRole("button", { name: "새 워크스페이스" })).toBeInTheDocument();
     expect(within(nav).getByRole("button", { name: "기본 이름 수정" })).toBeInTheDocument();
-    expect(within(nav).getByRole("link", { name: "미팅 노트 스마트 스크라이브" })).toHaveAttribute(
+    expect(within(nav).getByRole("link", { name: "미팅노트" })).toHaveAttribute(
       "href",
-      `/soniox?workspace=${DEFAULT_WORKSPACE}&folder=${FOLDER}&tool=transcription`,
+      `/live?workspace=${DEFAULT_WORKSPACE}&folder=${FOLDER}&tool=transcription`,
     );
-    expect(within(nav).getByRole("link", { name: "트랜슬레이터" })).toHaveAttribute("aria-current", "page");
-    expect(within(nav).getByRole("link", { name: "트랜슬레이터" })).toHaveAttribute(
+    expect(within(nav).getByRole("link", { name: "글로벌 미팅 번역" })).toHaveAttribute("aria-current", "page");
+    expect(within(nav).getByRole("link", { name: "글로벌 미팅 번역" })).toHaveAttribute(
       "href",
-      `/soniox?workspace=${DEFAULT_WORKSPACE}&folder=${FOLDER}&tool=test-product`,
+      `/live?workspace=${DEFAULT_WORKSPACE}&folder=${FOLDER}&tool=test-product`,
     );
-    expect(within(nav).getByRole("link", { name: "보이스 타이핑" })).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: "음성 입력" })).toBeInTheDocument();
     expect(within(nav).queryByRole("link", { name: "Translator" })).not.toBeInTheDocument();
     expect(within(nav).queryByRole("link", { name: "Global Meeting" })).not.toBeInTheDocument();
-    expect(within(nav).getByText("제품 버전 1.16.0")).toBeInTheDocument();
+    // Version-agnostic: assert the row exists without pinning the release number.
+    expect(within(nav).getByText(/^제품 버전 \d+\.\d+(\.\d+)?$/)).toBeInTheDocument();
     expect(within(nav).getByRole("link", { name: "릴리즈 노트" })).toHaveAttribute("href", "/settings/releases");
     expect(within(nav).getByRole("link", { name: /프로젝트/ })).toHaveAttribute(
       "href",
-      `/soniox?workspace=${DEFAULT_WORKSPACE}&folder=${FOLDER}&tool=test-product`,
+      `/live?workspace=${DEFAULT_WORKSPACE}&folder=${FOLDER}&tool=test-product`,
     );
     expect(within(nav).getByRole("button", { name: "회의 검색" })).toBeInTheDocument();
     expect(within(nav).getByRole("link", { name: /모든 내용/ })).toBeInTheDocument();
@@ -291,7 +292,7 @@ describe("activated library navigation", () => {
         accepted: true,
       })),
     });
-    navigation.pathname = "/soniox";
+    navigation.pathname = "/live";
     navigation.search = `workspace=${DEFAULT_WORKSPACE}&folder=${FOLDER}&tool=translator`;
     renderShell();
 
@@ -301,7 +302,7 @@ describe("activated library navigation", () => {
     fireEvent.keyDown(input, { key: "Enter" });
 
     await waitFor(() => expect(navigation.push).toHaveBeenCalledWith(
-      `/soniox?workspace=${DEFAULT_WORKSPACE}&folder=${createdFolder.id}&tool=test-product`,
+      `/live?workspace=${DEFAULT_WORKSPACE}&folder=${createdFolder.id}&tool=test-product`,
     ));
   });
 
@@ -394,7 +395,7 @@ describe("activated library navigation", () => {
 
   it("updates polite system rows only when the visible health label actually changes", () => {
     const view = renderShell();
-    const initialLabel = screen.getAllByText("Whisper base · 준비됨")[0];
+    const initialLabel = screen.getAllByText("준비 완료")[0];
     const liveRow = initialLabel.closest("[aria-live]");
     expect(liveRow).toHaveAttribute("aria-live", "polite");
     const observer = new MutationObserver(() => {});
@@ -419,20 +420,28 @@ describe("activated library navigation", () => {
         </div>
       </RecorderSessionProvider>,
     );
-    expect(screen.getAllByText("Whisper · 연결 안 됨").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("연결 안 됨").length).toBeGreaterThan(0);
     expect(observer.takeRecords().length).toBeGreaterThan(0);
     observer.disconnect();
   });
 
-  it("separates local and live processing status without overstating Soniox connectivity", () => {
+  it("shows two simple system rows (로컬/외부 모델) without vendor or model names", () => {
     renderShell();
     const nav = screen.getByRole("navigation", { name: "라이브러리" });
 
-    expect(within(nav).getByText("로컬 전사")).toBeInTheDocument();
-    expect(within(nav).getByText("요약")).toBeInTheDocument();
-    expect(within(nav).getByText("외부")).toBeInTheDocument();
-    expect(within(nav).getByText("Soniox · 키 설정됨 · 인터넷 필요")).toBeInTheDocument();
-    expect(within(nav).queryByText(/Soniox.*연결됨/)).not.toBeInTheDocument();
+    expect(within(nav).getByText("로컬")).toBeInTheDocument();
+    expect(within(nav).getByText("준비 완료")).toBeInTheDocument();
+    expect(within(nav).getByText("외부 모델")).toBeInTheDocument();
+    expect(within(nav).getByText("준비됨")).toBeInTheDocument();
+    expect(within(nav).queryByText(/soniox|whisper|codex|base|sonnet/i)).not.toBeInTheDocument();
+  });
+
+  it("marks the external-model row not ready when the realtime key is missing", () => {
+    healthState.soniox = { kind: "unconfigured" as never };
+    renderShell();
+    const nav = screen.getByRole("navigation", { name: "라이브러리" });
+    expect(within(nav).getByText("준비 안됨")).toBeInTheDocument();
+    healthState.soniox = { kind: "configured" as never };
   });
 
   it("keeps the native workspace combobox while reserving an aria-hidden chevron inset", () => {
@@ -538,9 +547,9 @@ describe("activated library navigation", () => {
     expect(screen.getByRole("heading", { level: 1, name: "최근 작업한 문서" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /제품 회의/ })).toHaveAttribute("href", "/meetings/meeting-1");
     expect(screen.getByRole("button", { name: "Whisper 전사용 녹음 시작" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "미팅 노트 스마트 스크라이브 열기" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "트랜슬레이터 열기" })).toHaveAttribute("href", expect.stringContaining("tool=test-product"));
-    expect(screen.getByRole("link", { name: "보이스 타이핑 열기" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "미팅노트 열기" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "글로벌 미팅 번역 열기" })).toHaveAttribute("href", expect.stringContaining("tool=test-product"));
+    expect(screen.getByRole("link", { name: "음성 입력 열기" })).toBeInTheDocument();
     expect(navigation.replace).not.toHaveBeenCalled();
   });
 
@@ -674,7 +683,7 @@ describe("activated library navigation", () => {
     expect(continueRecording).toHaveClass("min-h-11");
     expect(cardHeading.closest("section")!.compareDocumentPosition(start.closest("section")!)
       & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.getByText(/로컬 Whisper 전사 또는 Soniox 실시간 자막과 번역을 선택할 수 있습니다/))
+    expect(screen.getByText(/로컬 전사 또는 실시간 자막과 번역을 선택할 수 있습니다/))
       .toBeInTheDocument();
 
     fireEvent.click(continueRecording);
@@ -1207,8 +1216,8 @@ describe("activated library navigation", () => {
 
   it("returns a newly created Soniox folder to the active tool", () => {
     expect(folderCreateDestination("workspace-a", "folder-a", "test-product"))
-      .toBe("/soniox?workspace=workspace-a&folder=folder-a&tool=test-product");
+      .toBe("/live?workspace=workspace-a&folder=folder-a&tool=test-product");
     expect(folderCreateDestination("workspace-a", "folder-a", "voice-typing"))
-      .toBe("/soniox?workspace=workspace-a&folder=folder-a&tool=voice-typing");
+      .toBe("/live?workspace=workspace-a&folder=folder-a&tool=voice-typing");
   });
 });

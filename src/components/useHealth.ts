@@ -39,6 +39,12 @@ let llmInflight = false;
 let sonioxInflight = false;
 
 function emit(patch: Partial<Health>) {
+  // Polls fetch a fresh object every tick even when nothing changed. Skipping
+  // identical snapshots keeps subscribers (and their effects/intervals) from
+  // re-rendering app-wide every few seconds.
+  const changed = (Object.keys(patch) as (keyof Health)[])
+    .some((key) => JSON.stringify(patch[key]) !== JSON.stringify(state[key]));
+  if (!changed) return;
   state = { ...state, ...patch };
   subscribers.forEach((fn) => fn());
 }
@@ -73,7 +79,7 @@ async function loadSoniox() {
   if (sonioxInflight) return;
   sonioxInflight = true;
   try {
-    const res = await fetch("/api/soniox/temporary-key", { cache: "no-store" });
+    const res = await fetch("/api/realtime/temporary-key", { cache: "no-store" });
     if (!res.ok) throw new Error("soniox status unavailable");
     const payload = await res.json() as { configured?: unknown };
     emit({ soniox: typeof payload.configured === "boolean"

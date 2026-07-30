@@ -158,6 +158,7 @@ export function TestProductMeetingPanel({ capture, speech, location }: {
   const pushToTalkTranslationLengthsRef = useRef<Record<string, number>>({});
   const frozenPushToTalkRef = useRef<FrozenPushToTalk | null>(null);
   const userSpeakerRef = useRef<string | null>(null);
+  const strandedSweepRef = useRef(false);
   const rightShiftHeldRef = useRef(false);
   const outboundIdRef = useRef(1_000_000);
   captureStopRef.current = capture.stop;
@@ -386,6 +387,7 @@ export function TestProductMeetingPanel({ capture, speech, location }: {
     const { text, translation, targetLanguage: frozenTargetLanguage } = frozen;
     if (!text) {
       setError("Left Shift 사이에서 완료된 발화를 찾지 못했습니다. 다시 시도해 주세요.");
+      strandedSweepRef.current = true;
       setPushToTalkPhase("idle");
       return;
     }
@@ -407,6 +409,9 @@ export function TestProductMeetingPanel({ capture, speech, location }: {
         direction: "outbound" as const,
       },
     ]);
+    // Rows from other speakers inside the PTT window kept their counterpart
+    // suppressed; re-enqueue their translations once this PTT settles.
+    strandedSweepRef.current = true;
     if (translation) {
       setSpeechQueue((current) => [...current, { id, text: translation, language: frozenTargetLanguage, voice: frozen.voice, speed: frozen.speed }]);
       setPushToTalkPhase("speaking");
@@ -482,11 +487,37 @@ export function TestProductMeetingPanel({ capture, speech, location }: {
     const timer = window.setTimeout(() => {
       if (generationRef.current !== generation) return;
       frozenPushToTalkRef.current = null;
+      strandedSweepRef.current = true;
       setPushToTalkPhase("idle");
       setError("Left Shift 사이에서 완료된 발화를 찾지 못했습니다. 다시 시도해 주세요.");
     }, 8_000);
     return () => window.clearTimeout(timer);
   }, [pushToTalkPhase]);
+
+  useEffect(() => {
+    // Incoming rows that arrived while push-to-talk was recording/finalizing had
+    // their counterpart job suppressed. If the PTT attempt aborted (timeout, no
+    // finished utterance, meeting end) — or completed for a different speaker —
+    // those rows would stay "번역 중…" forever. Re-enqueue exactly the rows that
+    // still miss a counterpart and have no queued or in-flight job.
+    if (!strandedSweepRef.current || pushToTalkPhase !== "idle") return;
+    strandedSweepRef.current = false;
+    const stranded = entries.filter((entry) =>
+      entry.direction === "incoming" && !entry.original && entry.korean);
+    if (stranded.length === 0) return;
+    setTranslationQueue((queue) => {
+      const queuedIds = new Set(queue.map((job) => job.id));
+      const additions = stranded
+        .filter((entry) => !queuedIds.has(entry.id))
+        .map((entry) => ({
+          id: entry.id,
+          text: entry.korean,
+          targetLanguage: targetLanguageRef.current,
+          kind: "incoming-counterpart" as const,
+        }));
+      return additions.length > 0 ? [...queue, ...additions] : queue;
+    });
+  }, [entries, pushToTalkPhase]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -686,6 +717,7 @@ export function TestProductMeetingPanel({ capture, speech, location }: {
     endedAtRef.current = new Date().toISOString();
     speech.stop();
     setSpeechQueue([]);
+    strandedSweepRef.current = true;
     setPushToTalkPhase("idle");
     frozenPushToTalkRef.current = null;
     openingBoundaryRef.current = null;
@@ -739,7 +771,7 @@ export function TestProductMeetingPanel({ capture, speech, location }: {
       id: "global-meeting-unsaved-session",
       kind: "meeting_content_edit",
       phase: saveState === "saving" ? "saving" : "dirty",
-      label: "트랜슬레이터 미팅",
+      label: "글로벌 미팅 번역",
       discard: () => {
         speechRef.current.stop();
         captureRef.current.stop();
@@ -764,7 +796,7 @@ export function TestProductMeetingPanel({ capture, speech, location }: {
         <div className="flex flex-col gap-4">
           <div>
             <h2 className="text-[20px] font-bold text-ink">자유 참여 글로벌 미팅</h2>
-            <p className="mt-1 text-[13px] leading-6 text-inkSoft">참석자 등록 없이 Soniox가 세션 화자를 자동 구분하고, 선택한 입력 언어와 번역할 언어를 계속 실시간 양방향 번역합니다.</p>
+            <p className="mt-1 text-[13px] leading-6 text-inkSoft">참석자 등록 없이 세션 화자를 자동 구분하고, 선택한 입력 언어와 번역할 언어를 계속 실시간 양방향 번역합니다.</p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <label className="flex min-w-0 flex-col gap-2 text-[13px] font-semibold text-ink">
@@ -802,7 +834,7 @@ export function TestProductMeetingPanel({ capture, speech, location }: {
               <select aria-label="음성 속도" value={ttsSpeed} disabled={active} onChange={(event) => setTtsSpeed(Number(event.target.value))} className="min-h-11 rounded-xl border border-line bg-bg px-3 text-[14px] text-ink disabled:opacity-50">
                 {SONIOX_TTS_SPEED_OPTIONS.map((speed) => <option key={speed} value={speed}>{speedLabel(speed)}</option>)}
               </select>
-              <span className="text-[11px] font-normal leading-5 text-inkSoft">1.5×·2.0×는 Soniox 최대 1.3×로 생성한 뒤 이 기기에서 추가 가속합니다.</span>
+              <span className="text-[11px] font-normal leading-5 text-inkSoft">1.5×·2.0×는 외부 음성 최대 1.3×로 생성한 뒤 이 기기에서 추가 가속합니다.</span>
             </label>
           </div>
         </div>
@@ -856,12 +888,12 @@ export function TestProductMeetingPanel({ capture, speech, location }: {
         <div className="mt-4 rounded-xl border border-line bg-soft/40 p-4">
           <p className="text-[12px] font-bold text-ink">Push-to-Talk · Left Shift</p>
           <p role="status" aria-label="Push-to-Talk 상태" className="mt-1 text-[13px] leading-6 text-inkSoft">{pushToTalkLabel}</p>
-          <p className="mt-1 text-[12px] leading-5 text-inkSoft">발화 중 Soniox 번역과 TTS 연결을 미리 준비하고, 두 번째 Left Shift에서 경계를 확정해 즉시 음성 송출을 시작합니다. 첫 Push-to-Talk 구간에서 감지된 활성 화자를 이 세션의 내 화자로 자동 고정하므로 첫 구간에서는 다른 참석자가 동시에 말하지 않도록 해 주세요.</p>
+          <p className="mt-1 text-[12px] leading-5 text-inkSoft">발화 중 실시간 번역과 TTS 연결을 미리 준비하고, 두 번째 Left Shift에서 경계를 확정해 즉시 음성 송출을 시작합니다. 첫 Push-to-Talk 구간에서 감지된 활성 화자를 이 세션의 내 화자로 자동 고정하므로 첫 구간에서는 다른 참석자가 동시에 말하지 않도록 해 주세요.</p>
         </div>
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-line bg-panel">
-        <table aria-label="트랜슬레이터 대화록" aria-live="polite" aria-relevant="additions text" className="w-full table-fixed border-collapse">
+        <table aria-label="글로벌 미팅 번역 대화록" aria-live="polite" aria-relevant="additions text" className="w-full table-fixed border-collapse">
           <thead>
             <tr className="border-b border-line bg-soft/50">
               <th scope="col" className="w-1/2 border-r border-line px-4 py-3 text-left text-[13px] font-bold text-ink sm:px-5">{inputLanguageLabel}</th>
@@ -932,7 +964,7 @@ export function TestProductMeetingPanel({ capture, speech, location }: {
         </table>
       </section>
       {(error || capture.error || speech.error) && <p role="alert" className="text-[13px] font-medium text-error">{error || capture.error || speech.error}</p>}
-      <p className="text-[12px] leading-5 text-inkSoft">회의 오디오는 Soniox로 전송됩니다. Soniox 실시간 번역 결과가 없거나 언어 혼용이 감지된 경우 전사 텍스트가 설정된 번역 모델로 전송됩니다. 번역 음성 생성을 위해 번역된 텍스트도 Soniox로 전송됩니다. 외부 제공자를 사용하면 해당 제공자의 정책과 사용량 기반 비용이 적용될 수 있습니다. “미팅 종료”를 누르면 저장 팝업에서 회의록 이름을 확인한 뒤 선택한 폴더에 저장할 수 있으며 오디오 파일은 보존하지 않습니다. 번역 음성은 이 기기의 스피커에서 재생되며 다른 통화 앱으로 자동 전송되지는 않습니다.</p>
+      <p className="text-[12px] leading-5 text-inkSoft">회의 오디오는 외부 서버로 전송됩니다. 실시간 번역 결과가 없거나 언어 혼용이 감지된 경우 전사 텍스트가 설정된 번역 모델로 전송됩니다. 번역 음성 생성을 위해 번역된 텍스트도 외부 서버로 전송됩니다. 외부 제공자를 사용하면 해당 제공자의 정책과 사용량 기반 비용이 적용될 수 있습니다. “미팅 종료”를 누르면 저장 팝업에서 회의록 이름을 확인한 뒤 선택한 폴더에 저장할 수 있으며 오디오 파일은 보존하지 않습니다. 번역 음성은 이 기기의 스피커에서 재생되며 다른 통화 앱으로 자동 전송되지는 않습니다.</p>
       <AppDialog
         open={saveDialogOpen}
         title="회의록 저장"

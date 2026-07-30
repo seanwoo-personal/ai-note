@@ -94,7 +94,7 @@ describe("Soniox real-time TTS", () => {
     const socket = FakeWebSocket.instance!;
 
     expect(socket.url).toBe("wss://tts-rt.soniox.com/tts-websocket");
-    expect(fetchMock).toHaveBeenCalledWith("/api/soniox/temporary-key", expect.objectContaining({
+    expect(fetchMock).toHaveBeenCalledWith("/api/realtime/temporary-key", expect.objectContaining({
       method: "POST",
       body: JSON.stringify({ service: "tts" }),
     }));

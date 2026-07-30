@@ -1,32 +1,34 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  formatExternalStatus,
   formatLlmStatus,
-  formatSonioxStatus,
   formatWhisperStatus,
   getLlmReadiness,
   providerLabel,
 } from "@/components/healthStatus";
 
 describe("healthStatus", () => {
-  it("formats whisper readiness with model names", () => {
+  it("formats local transcription readiness without exposing model names", () => {
     expect(formatWhisperStatus({ connected: true, ready: true, model: "base" })).toMatchObject({
-      label: "Whisper base · 준비됨",
+      label: "로컬 전사 · 준비 완료",
+      shortLabel: "준비 완료",
       tone: "success",
     });
+    expect(formatWhisperStatus({ connected: true, ready: true, model: "large-v3" }).label)
+      .not.toMatch(/whisper|large/i);
     expect(formatWhisperStatus({ connected: true, ready: false, model: "large-v3" })).toMatchObject({
-      label: "Whisper large-v3 · 준비 중",
+      label: "로컬 전사 · 준비 중",
       tone: "warn",
     });
     expect(formatWhisperStatus({ connected: false, ready: false, model: null })).toMatchObject({
-      label: "Whisper · 연결 안 됨",
+      label: "로컬 전사 · 연결 안 됨",
       tone: "error",
     });
   });
 
   it("formats llm provider/model labels and readiness", () => {
     expect(providerLabel("claude-cli")).toBe("Claude CLI");
-    expect(providerLabel("codex-cli")).toBe("Codex CLI");
     expect(providerLabel("ollama")).toBe("Ollama");
 
     expect(
@@ -35,10 +37,6 @@ describe("healthStatus", () => {
       label: "Claude CLI sonnet · 감지됨",
       title: expect.stringContaining("첫 요약"),
       tone: "success",
-    });
-    expect(formatLlmStatus({ configured: true, provider: "codex-cli", ok: true, detail: "available" })).toMatchObject({
-      label: "Codex CLI · 감지됨",
-      title: expect.stringContaining("첫 요약"),
     });
     expect(formatLlmStatus({
       configured: true,
@@ -66,24 +64,34 @@ describe("healthStatus", () => {
     expect(getLlmReadiness({ configured: true, provider: "claude-cli", ok: true, detail: "ready" })).toBe("ready");
   });
 
-  it("describes Soniox configuration without claiming an unverified connection", () => {
-    expect(formatSonioxStatus({ kind: "checking" })).toMatchObject({
-      label: "Soniox · 설정 확인 중",
-      tone: "neutral",
+  it("shows a single external-model row that is green only when everything is configured", () => {
+    const llmReady = { configured: true as const, provider: "claude-cli", ok: true, detail: "ready" };
+
+    expect(formatExternalStatus(llmReady, { kind: "configured" })).toMatchObject({
+      label: "외부 모델 · 준비됨",
+      shortLabel: "준비됨",
+      tone: "success",
     });
-    expect(formatSonioxStatus({ kind: "unconfigured" })).toMatchObject({
-      label: "Soniox · 미설정",
+    expect(formatExternalStatus(llmReady, { kind: "unconfigured" })).toMatchObject({
+      label: "외부 모델 · 준비 안됨",
+      shortLabel: "준비 안됨",
       tone: "warn",
     });
-    expect(formatSonioxStatus({ kind: "unknown" })).toMatchObject({
-      label: "Soniox · 설정 확인 불가",
+    expect(formatExternalStatus({ configured: false }, { kind: "configured" })).toMatchObject({
+      label: "외부 모델 · 준비 안됨",
+      title: expect.stringContaining("요약 모델"),
       tone: "warn",
     });
-    expect(formatSonioxStatus({ kind: "configured" })).toMatchObject({
-      label: "Soniox · 키 설정됨 · 인터넷 필요",
-      title: expect.stringContaining("시작할 때"),
+    expect(formatExternalStatus(null, { kind: "checking" })).toMatchObject({
+      label: "외부 모델 · 확인 중",
       tone: "neutral",
     });
-    expect(formatSonioxStatus({ kind: "configured" }).label).not.toContain("연결됨");
+    expect(formatExternalStatus(llmReady, { kind: "unknown" })).toMatchObject({
+      label: "외부 모델 · 확인 불가",
+      tone: "warn",
+    });
+    // No vendor names leak into the customer-facing status row.
+    expect(formatExternalStatus(llmReady, { kind: "configured" }).label).not.toMatch(/soniox|codex/i);
+    expect(formatExternalStatus(llmReady, { kind: "configured" }).title).not.toMatch(/soniox|codex/i);
   });
 });

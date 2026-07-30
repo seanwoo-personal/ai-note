@@ -87,7 +87,7 @@ function SummaryReadinessCard({ readiness }: { readiness: LlmReadiness }) {
         {unavailable
           ? "저장한 요약 모델을 지금 사용할 수 없습니다. 설정에서 설치와 실행 상태를 확인하세요."
           : "AI 요약을 사용하려면 로컬 CLI 또는 Ollama 모델을 먼저 설정하세요."}
-        {" "}요약 모델과 관계없이 로컬 Whisper 전사 또는 Soniox 실시간 자막과 번역을 선택할 수 있습니다.
+        {" "}요약 모델과 관계없이 로컬 전사 또는 실시간 자막과 번역을 선택할 수 있습니다.
       </p>
       <div className="mt-4 flex min-w-0 flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         <GuardedLink
@@ -112,19 +112,19 @@ export function HomeQuickStart({ workspaceId }: { workspaceId: string }) {
   const workspace = encodeURIComponent(workspaceId);
   const tools = [
     {
-      title: "미팅 노트 스마트 스크라이브",
-      description: "Soniox 실시간 자막으로 회의를 기록합니다.",
-      href: `/soniox?workspace=${workspace}&tool=transcription`,
+      title: "미팅노트",
+      description: "실시간 자막으로 회의를 기록합니다.",
+      href: `/live?workspace=${workspace}&tool=transcription`,
     },
     {
-      title: "트랜슬레이터",
+      title: "글로벌 미팅 번역",
       description: "자유롭게 참여해 실시간 양방향 번역과 회의록 저장을 사용합니다.",
-      href: `/soniox?workspace=${workspace}&tool=test-product`,
+      href: `/live?workspace=${workspace}&tool=test-product`,
     },
     {
-      title: "보이스 타이핑",
+      title: "음성 입력",
       description: "단축키로 받아쓰기와 번역 입력을 시작합니다.",
-      href: `/soniox?workspace=${workspace}&tool=voice-typing`,
+      href: `/live?workspace=${workspace}&tool=voice-typing`,
     },
   ] as const;
 
@@ -132,7 +132,7 @@ export function HomeQuickStart({ workspaceId }: { workspaceId: string }) {
     <section className="space-y-5" aria-labelledby="home-quick-start-title">
       <div>
         <h2 id="home-quick-start-title" className="text-[18px] font-bold text-ink">바로 시작</h2>
-        <p className="mt-1 text-[13px] leading-6 text-inkSoft">기존 회의 녹음과 Soniox 도구를 여기서 바로 사용할 수 있습니다.</p>
+        <p className="mt-1 text-[13px] leading-6 text-inkSoft">기존 회의 녹음과 실시간 도구를 여기서 바로 사용할 수 있습니다.</p>
       </div>
       <Recorder requestedLocation={{ workspaceId, folderId: null }} />
       <div className="grid gap-3 md:grid-cols-3">
@@ -253,10 +253,13 @@ export function HomeClient() {
     }
   }, [libraryState, resolution?.replace, scope]);
 
+  // Depend on the derived boolean, not the `rows` array: `rows` gets a fresh
+  // identity every render, so unrelated re-renders (e.g. health polling) would
+  // tear the interval down before the 30s idle delay ever elapses.
+  const hasActiveRows = rows.some((row) => !["summarized"].includes(row.status));
   useEffect(() => {
     if (!scope || !currentPage) return;
-    const active = rows.some((row) => !["summarized"].includes(row.status));
-    const delay = active ? 3_000 : 30_000;
+    const delay = hasActiveRows ? 3_000 : 30_000;
     const timer = window.setInterval(() => {
       void libraryState.loadPage({
         position: currentPage.position,
@@ -264,7 +267,7 @@ export function HomeClient() {
       }).catch(() => {});
     }, delay);
     return () => window.clearInterval(timer);
-  }, [currentPage, libraryState, rows, scope]);
+  }, [currentPage, hasActiveRows, libraryState, scope]);
 
   if (libraryState.mode === "loading") {
     return (
@@ -422,7 +425,7 @@ export function HomeClient() {
         {recentRows.length === 0 ? (
           <section className="rounded-[16px] border border-line bg-panel px-4 py-10 text-center sm:px-6">
             <h2 className="text-[16px] font-bold text-ink">최근 작업한 문서가 없습니다</h2>
-            <p className="mt-2 text-[13px] text-inkSoft">스마트 스크라이브나 모든 내용에서 첫 기록을 시작해 보세요.</p>
+            <p className="mt-2 text-[13px] text-inkSoft">미팅노트나 모든 내용에서 첫 기록을 시작해 보세요.</p>
           </section>
         ) : (
           <section aria-label="최근 작업한 문서 목록">
@@ -451,7 +454,7 @@ export function HomeClient() {
           <ScopeTitleCopy scope={scope} library={library} />
         </h1>
         <p className="mt-2 break-words text-[15px] leading-relaxed text-inkSoft">
-          원본 오디오는 로컬에 저장합니다. 전사는 로컬 Whisper와 Soniox 실시간 자막·번역 중에서 선택하고, 녹음이 끝나면 설정한 Claude/Codex CLI 또는 Ollama로 회의록을 요약할 수 있습니다.
+          원본 오디오는 로컬에 저장합니다. 전사는 로컬 전사와 실시간 자막·번역 중에서 선택하고, 녹음이 끝나면 설정한 요약 모델로 회의록을 요약할 수 있습니다.
         </p>
       </header>
       <span className="sr-only" aria-live="polite">{canonicalMessage}</span>

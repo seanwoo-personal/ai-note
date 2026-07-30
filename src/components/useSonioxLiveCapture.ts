@@ -218,7 +218,7 @@ export function useSonioxLiveCapture() {
         ? "마이크 또는 화면 공유 권한이 필요합니다."
         : caught instanceof Error
           ? caught.message
-          : "Soniox 실시간 세션을 시작할 수 없습니다.";
+          : "실시간 세션을 시작할 수 없습니다.";
       failCurrent(generation, message);
     }
   }, [closeCurrent, failCurrent, stopTracks, transitionPhase]);

@@ -45,13 +45,13 @@ describe("UI translations", () => {
     expect(translateUi("en", "Whisper · 연결 안 됨")).toBe("Whisper · Disconnected");
     expect(translateUi("zh", "Whisper · 연결 안 됨")).toBe("Whisper · 未连接");
     expect(translateUi("ja", "Whisper · 연결 안 됨")).toBe("Whisper · 未接続");
-    expect(translateUi("en", "Soniox · 설정 확인 불가")).toBe("Soniox · Unable to check configuration");
-    expect(translateUi("zh", "Soniox · 설정 확인 불가")).toBe("Soniox · 无法检查配置");
-    expect(translateUi("ja", "Soniox · 설정 확인 불가")).toBe("Soniox · 設定を確認できません");
+    expect(translateUi("en", "외부 모델 · 설정 확인 불가")).toBe("외부 모델 · Unable to check configuration");
+    expect(translateUi("zh", "외부 모델 · 설정 확인 불가")).toBe("외부 모델 · 无法检查配置");
+    expect(translateUi("ja", "외부 모델 · 설정 확인 불가")).toBe("외부 모델 · 設定を確認できません");
     for (const source of [
       "전사 서버에 연결할 수 없습니다.",
       "요약 모델을 설정해야 회의록 요약을 생성할 수 있습니다.",
-      "로컬 설정 확인 요청에 실패해 Soniox 설정 여부나 인터넷 상태를 판단할 수 없습니다.",
+      "로컬 설정 확인 요청에 실패해 실시간 전사 설정 여부나 인터넷 상태를 판단할 수 없습니다.",
     ]) {
       for (const locale of ["en", "zh", "ja"] as const) {
         expect(translateUi(locale, source)).not.toMatch(/[가-힣]/);

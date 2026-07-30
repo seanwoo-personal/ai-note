@@ -60,7 +60,7 @@ export interface NavigationBlockerDescriptor {
   id: string;
   kind: "meeting_content_edit";
   phase: NavigationBlockerPhase;
-  label: "전체 스크립트 수정" | "회의록 요약 수정" | "트랜슬레이터 미팅";
+  label: "전체 스크립트 수정" | "회의록 요약 수정" | "글로벌 미팅 번역";
   discard: () => void;
   allowNavigation: (currentUrl: string, destinationUrl: string) => boolean;
 }
@@ -252,7 +252,17 @@ export function RecorderSessionProvider({ children }: { children: ReactNode }) {
     const tick = async () => {
       try {
         const response = await fetch(`/api/meetings/${id}`, { cache: "no-store" });
-        if (!response.ok) return;
+        if (!response.ok) {
+          // A deleted or tombstoned meeting can never progress; stop the 2s
+          // poll instead of hammering the API for the rest of the layout's
+          // lifetime. Transient failures (5xx/network) keep retrying.
+          if (
+            mountedRef.current
+            && generation === sessionGenerationRef.current
+            && [404, 410].includes(response.status)
+          ) stopPolling();
+          return;
+        }
         const status = (await response.json()) as ServerStatus;
         if (!mountedRef.current || generation !== sessionGenerationRef.current) return;
         setServerStatus(status);
@@ -460,7 +470,7 @@ export function RecorderSessionProvider({ children }: { children: ReactNode }) {
       if (generation !== sessionGenerationRef.current || !mountedRef.current) return;
       setError(permissionError instanceof Error ? permissionError.message : "마이크 접근이 거부되었습니다.");
       if (options.soniox) {
-        setLiveError("마이크 권한이 없어 Soniox 실시간 전사를 시작하지 못했습니다.");
+        setLiveError("마이크 권한이 없어 실시간 전사를 시작하지 못했습니다.");
         setLiveStatus("error");
       }
       setPhase("failed");
@@ -519,7 +529,7 @@ export function RecorderSessionProvider({ children }: { children: ReactNode }) {
       if (!sonioxSessionRef.current && sonioxConnectAbortRef.current) {
         sonioxConnectAbortRef.current.abort();
         sonioxConnectAbortRef.current = null;
-        setLiveError("Soniox 연결이 완료되기 전에 녹음이 종료되었습니다.");
+        setLiveError("실시간 전사 연결이 완료되기 전에 녹음이 종료되었습니다.");
         setLiveStatus("error");
       }
       sonioxSessionRef.current?.finish();
@@ -575,7 +585,7 @@ export function RecorderSessionProvider({ children }: { children: ReactNode }) {
       if (generation !== sessionGenerationRef.current || !mountedRef.current) return;
       setError(captureError instanceof Error ? captureError.message : "녹음을 시작하지 못했습니다.");
       if (options.soniox) {
-        setLiveError("로컬 녹음을 시작하지 못해 Soniox 전사도 시작되지 않았습니다.");
+        setLiveError("로컬 녹음을 시작하지 못해 실시간 전사도 시작되지 않았습니다.");
         setLiveStatus("error");
       }
       setPhase("failed");
@@ -639,7 +649,7 @@ export function RecorderSessionProvider({ children }: { children: ReactNode }) {
           || generation !== sessionGenerationRef.current
           || discardInProgressRef.current
         ) return;
-        setLiveError("Soniox 실시간 전사를 시작하지 못했습니다. 녹음은 로컬에 계속 저장됩니다.");
+        setLiveError("실시간 전사를 시작하지 못했습니다. 녹음은 로컬에 계속 저장됩니다.");
         setLiveStatus("error");
       }).finally(() => {
         if (sonioxConnectAbortRef.current === controller) sonioxConnectAbortRef.current = null;
@@ -825,16 +835,16 @@ export function RecorderSessionProvider({ children }: { children: ReactNode }) {
   }, [blockerRevision, hasUnsavedAudio]);
 
   useEffect(() => {
-    const queueBlockedNavigation = (current: string, destination: string) => {
+    const queueBlockedNavigation = (current: string, destination: string, commit?: () => void) => {
       navigationCommitInProgressRef.current = false;
       setPendingNavigation({
         current,
         destination,
         trigger: document.activeElement instanceof HTMLElement ? document.activeElement : null,
-        commit: () => {
+        commit: commit ?? (() => {
           suppressNextPopRef.current = true;
           window.history.back();
-        },
+        }),
       });
     };
     const browserNavigation = (
@@ -843,7 +853,7 @@ export function RecorderSessionProvider({ children }: { children: ReactNode }) {
     const onNavigate = (rawEvent: Event) => {
       const event = rawEvent as Event & {
         navigationType?: unknown;
-        destination?: { url?: unknown };
+        destination?: { url?: unknown; index?: unknown };
       };
       if (
         event.navigationType !== "traverse"
@@ -857,7 +867,22 @@ export function RecorderSessionProvider({ children }: { children: ReactNode }) {
       const contentBlocked = blockedContentNavigation(current, destination).length > 0;
       if (!audioBlocked && !contentBlocked) return;
       event.preventDefault();
-      queueBlockedNavigation(current, destination);
+      // The cancelled traverse may be a forward (or multi-step) jump; committing
+      // with a hardcoded back() would land on the wrong entry. Derive the real
+      // delta from the entry indexes when the Navigation API exposes them.
+      const currentEntry = (browserNavigation as (EventTarget & {
+        currentEntry?: { index?: unknown };
+      }) | undefined)?.currentEntry;
+      const rawDelta = typeof event.destination.index === "number"
+        && typeof currentEntry?.index === "number"
+        ? event.destination.index - currentEntry.index
+        : -1;
+      const delta = rawDelta === 0 ? -1 : rawDelta;
+      queueBlockedNavigation(current, destination, () => {
+        suppressNextPopRef.current = true;
+        if (delta === -1) window.history.back();
+        else window.history.go(delta);
+      });
     };
     const onPopState = (event: PopStateEvent) => {
       const destination = window.location.href;

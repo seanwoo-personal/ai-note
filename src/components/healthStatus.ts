@@ -51,7 +51,7 @@ export function providerLabel(provider: string): string {
     case "claude-cli":
       return "Claude CLI";
     case "codex-cli":
-      return "Codex CLI";
+      return "외부 모델";
     case "ollama":
       return "Ollama";
     default:
@@ -59,24 +59,23 @@ export function providerLabel(provider: string): string {
   }
 }
 
+// The customer-facing rows never expose engine or model names ("Whisper
+// large-v3" 등) — 로컬 전사는 이름 없이 준비 상태만 보여 준다.
 export function formatWhisperStatus(health: WhisperHealthState | null): StatusDisplay {
   if (health === null) {
     return withTone({
-      label: "Whisper · 확인 중",
+      label: "로컬 전사 · 확인 중",
       shortLabel: "확인 중",
-      title: "전사 서버 상태 확인 중",
+      title: "로컬 전사 서버 상태 확인 중",
       tone: "neutral",
     });
   }
 
-  const model = health.model?.trim() || null;
-  const name = compact(["Whisper", model]);
-
   if (!health.connected) {
     return withTone({
-      label: "Whisper · 연결 안 됨",
+      label: "로컬 전사 · 연결 안 됨",
       shortLabel: "연결 안 됨",
-      title: health.message || "전사 서버에 연결할 수 없습니다.",
+      title: health.message || "로컬 전사 서버에 연결할 수 없습니다.",
       tone: "error",
     });
   }
@@ -84,17 +83,17 @@ export function formatWhisperStatus(health: WhisperHealthState | null): StatusDi
   const ready = health.ready === true || (health.ready === undefined && health.ok !== false);
   if (!ready) {
     return withTone({
-      label: `${name} · 준비 중`,
+      label: "로컬 전사 · 준비 중",
       shortLabel: "준비 중",
-      title: health.message || `${name} 준비 중`,
+      title: health.message || "로컬 전사 준비 중",
       tone: "warn",
     });
   }
 
   return withTone({
-    label: `${name} · 준비됨`,
-    shortLabel: "준비됨",
-    title: `${name} 사용 가능`,
+    label: "로컬 전사 · 준비 완료",
+    shortLabel: "준비 완료",
+    title: "로컬 전사 사용 가능",
     tone: "success",
   });
 }
@@ -157,35 +156,40 @@ export function formatLlmStatus(health: LlmHealthState | null): StatusDisplay {
   });
 }
 
-export function formatSonioxStatus(health: SonioxHealthState | null | undefined): StatusDisplay {
-  if (health == null || health.kind === "checking") {
+// 사이드바의 단일 "외부 모델" 행: 실시간 전사·번역 키와 요약 모델이 모두
+// 준비됐을 때만 초록 "준비됨"을 보여 준다. 공급자 이름은 노출하지 않는다.
+export function formatExternalStatus(
+  llm: LlmHealthState | null,
+  realtime: SonioxHealthState | null | undefined,
+): StatusDisplay {
+  if (llm === null || realtime == null || realtime.kind === "checking") {
     return withTone({
-      label: "Soniox · 설정 확인 중",
+      label: "외부 모델 · 확인 중",
       shortLabel: "확인 중",
-      title: "Soniox API 키 설정 여부를 확인하고 있습니다.",
+      title: "외부 모델 설정 여부를 확인하고 있습니다.",
       tone: "neutral",
     });
   }
-  if (health.kind === "unknown") {
+  if (realtime.kind === "unknown") {
     return withTone({
-      label: "Soniox · 설정 확인 불가",
+      label: "외부 모델 · 확인 불가",
       shortLabel: "확인 불가",
-      title: "로컬 설정 확인 요청에 실패해 Soniox 설정 여부나 인터넷 상태를 판단할 수 없습니다.",
+      title: "로컬 설정 확인 요청에 실패해 외부 모델 설정 여부를 판단할 수 없습니다.",
       tone: "warn",
     });
   }
-  if (health.kind === "unconfigured") {
+  if (realtime.kind === "unconfigured" || !llm.configured || !llm.ok) {
     return withTone({
-      label: "Soniox · 미설정",
-      shortLabel: "미설정",
-      title: "실시간 전사·번역을 사용하려면 Soniox API 설정이 필요합니다.",
+      label: "외부 모델 · 준비 안됨",
+      shortLabel: "준비 안됨",
+      title: "설정에서 실시간 전사·번역 키와 요약 모델 설정을 완료해 주세요.",
       tone: "warn",
     });
   }
   return withTone({
-    label: "Soniox · 키 설정됨 · 인터넷 필요",
-    shortLabel: "인터넷 필요",
-    title: "API 키 설정만 확인했습니다. 인터넷 연결, 키 유효성, Soniox 연결은 실시간 기능을 시작할 때 확인합니다.",
-    tone: "neutral",
+    label: "외부 모델 · 준비됨",
+    shortLabel: "준비됨",
+    title: "실시간 전사·번역과 요약에 필요한 외부 모델 설정이 준비되었습니다.",
+    tone: "success",
   });
 }

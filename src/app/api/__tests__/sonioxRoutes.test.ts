@@ -1,13 +1,13 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { GET, POST } from "@/app/api/soniox/temporary-key/route";
+import { GET, POST } from "@/app/api/realtime/temporary-key/route";
 
 const ORIGIN = "http://127.0.0.1:3000";
 const TEST_LONG_LIVED_KEY = ["test", "long", "lived"].join("-");
 
 function request(method: "GET" | "POST", origin = ORIGIN): Request {
-  return new Request(`${origin}/api/soniox/temporary-key`, {
+  return new Request(`${origin}/api/realtime/temporary-key`, {
     method,
     headers: {
       host: new URL(origin).host,
@@ -22,7 +22,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("/api/soniox/temporary-key", () => {
+describe("/api/realtime/temporary-key", () => {
   it("runs the local guard before reading configuration", async () => {
     const deniedRequest = request("POST", "http://evil.test");
     const env = vi.spyOn(process, "env", "get").mockImplementation(() => {

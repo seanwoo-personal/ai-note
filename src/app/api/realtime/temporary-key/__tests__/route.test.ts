@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { POST } from "@/app/api/soniox/temporary-key/route";
+import { POST } from "@/app/api/realtime/temporary-key/route";
 
 afterEach(() => {
   delete process.env.SONIOX_API_KEY;
@@ -19,12 +19,12 @@ describe("Soniox temporary-key route", () => {
       } as Response;
     }));
 
-    const stt = await POST(new Request("http://localhost:3100/api/soniox/temporary-key", {
+    const stt = await POST(new Request("http://localhost:3100/api/realtime/temporary-key", {
       method: "POST",
       headers: { "content-type": "application/json", origin: "http://localhost:3100" },
       body: JSON.stringify({ service: "stt" }),
     }));
-    const tts = await POST(new Request("http://localhost:3100/api/soniox/temporary-key", {
+    const tts = await POST(new Request("http://localhost:3100/api/realtime/temporary-key", {
       method: "POST",
       headers: { "content-type": "application/json", origin: "http://localhost:3100" },
       body: JSON.stringify({ service: "tts" }),
@@ -44,7 +44,7 @@ describe("Soniox temporary-key route", () => {
     process.env.SONIOX_API_KEY = ["long", "lived", "value"].join("-");
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-    const response = await POST(new Request("http://localhost:3100/api/soniox/temporary-key", {
+    const response = await POST(new Request("http://localhost:3100/api/realtime/temporary-key", {
       method: "POST",
       headers: { "content-type": "application/json", origin: "http://localhost:3100" },
       body: JSON.stringify({ service: "other" }),

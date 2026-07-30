@@ -207,7 +207,7 @@ describe("data-surface inventory", () => {
       "/api/settings/llm",
       "/api/settings/llm/health",
       "/api/settings/profile",
-      "/api/soniox/temporary-key",
+      "/api/realtime/temporary-key",
       "/api/whisper/health",
       "/meetings/[id]",
     ]));

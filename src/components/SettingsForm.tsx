@@ -16,7 +16,7 @@ import { LLM_PROVIDERS, type LlmProvider } from "@/services/llm/types";
 
 const PROVIDERS: { value: LlmProvider; label: string; hint: string }[] = [
   { value: "claude-cli", label: "Claude CLI", hint: "구독 CLI 사용 · 권장" },
-  { value: "codex-cli", label: "Codex CLI", hint: "구독 CLI 사용 · 직접 입력 지원" },
+  { value: "codex-cli", label: "외부 모델", hint: "제공된 API 키 사용 · CLI 폴백 지원" },
   { value: "ollama", label: "Ollama", hint: "로컬에 설치된 모델 사용" },
 ];
 
@@ -578,7 +578,7 @@ export function SettingsForm({ embedded = false }: { embedded?: boolean } = {}) 
                 )}
                 {provider === "codex-cli" && (
                   <>
-                    <option value="">CLI 기본값 (권장)</option>
+                    <option value="">기본 모델 (권장)</option>
                     <option value={CUSTOM_MODEL}>직접 입력</option>
                   </>
                 )}

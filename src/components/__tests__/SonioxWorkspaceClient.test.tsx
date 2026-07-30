@@ -121,7 +121,7 @@ describe("SonioxWorkspaceClient", () => {
     render(<SonioxWorkspaceClient />);
 
     await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith(
-      "/soniox?workspace=workspace-a&tool=transcription",
+      "/live?workspace=workspace-a&tool=transcription",
     ));
   });
 
@@ -137,27 +137,27 @@ describe("SonioxWorkspaceClient", () => {
 
   it("uses product names as page headings and shows storage context only where files are saved", () => {
     const translator = render(<SonioxWorkspaceClient />);
-    expect(screen.getByRole("heading", { level: 1, name: "트랜슬레이터" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "글로벌 미팅 번역" })).toBeInTheDocument();
     expect(screen.queryByText(/Soniox Workspace/i)).not.toBeInTheDocument();
     expect(screen.getByText("고객사").closest("p")).toHaveTextContent("저장 위치 · 고객사 / 글로벌 영업");
     translator.unmount();
 
     navigation.search = "workspace=workspace-a&folder=folder-a&tool=transcription";
     const transcription = render(<SonioxWorkspaceClient />);
-    expect(screen.getByRole("heading", { level: 1, name: "미팅 노트 스마트 스크라이브" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "미팅노트" })).toBeInTheDocument();
     expect(screen.getByText("고객사").closest("p")).toHaveTextContent("저장 위치 · 고객사 / 글로벌 영업");
-    expect(screen.queryByRole("heading", { name: "Soniox 실시간 전사" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "실시간 전사" })).not.toBeInTheDocument();
     transcription.unmount();
 
     navigation.search = "workspace=workspace-a&folder=folder-a&tool=voice-typing";
     const voiceTyping = render(<SonioxWorkspaceClient />);
-    expect(screen.getByRole("heading", { level: 1, name: "보이스 타이핑" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "음성 입력" })).toBeInTheDocument();
     expect(screen.queryByText(/고객사 \/ 글로벌 영업/)).not.toBeInTheDocument();
     voiceTyping.unmount();
 
     navigation.search = "workspace=workspace-a&tool=test-product";
     render(<SonioxWorkspaceClient />);
-    expect(screen.getByRole("heading", { level: 1, name: "트랜슬레이터" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "글로벌 미팅 번역" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "자유 참여 글로벌 미팅" })).toBeInTheDocument();
   });
 
@@ -197,7 +197,7 @@ describe("SonioxWorkspaceClient", () => {
     };
     view.rerender(<SonioxWorkspaceClient />);
 
-    const transcript = await screen.findByRole("table", { name: "트랜슬레이터 대화록" });
+    const transcript = await screen.findByRole("table", { name: "글로벌 미팅 번역 대화록" });
     expect(transcript).toHaveAttribute("aria-live", "polite");
     const speaker1 = within(transcript).getByRole("row", { name: "Speaker 1 대화 행" });
     const speaker2 = within(transcript).getByRole("row", { name: "Speaker 2 대화 행" });
@@ -235,7 +235,7 @@ describe("SonioxWorkspaceClient", () => {
     await waitFor(() => expect(translate).toHaveBeenCalledWith("/api/translate", expect.objectContaining({
       body: JSON.stringify({ text: "안녕하세요", targetLanguage: "en" }),
     })));
-    await waitFor(() => expect(screen.getByRole("table", { name: "트랜슬레이터 대화록" })).toHaveTextContent("Hello"));
+    await waitFor(() => expect(screen.getByRole("table", { name: "글로벌 미팅 번역 대화록" })).toHaveTextContent("Hello"));
   });
 
   it("renders Soniox provisional translation while a test-product utterance is still in progress", () => {
@@ -262,8 +262,8 @@ describe("SonioxWorkspaceClient", () => {
 
     render(<SonioxWorkspaceClient />);
 
-    expect(screen.getByRole("table", { name: "트랜슬레이터 대화록" })).toHaveTextContent("안녕하세요");
-    expect(screen.getByRole("table", { name: "트랜슬레이터 대화록" })).toHaveTextContent("Hello");
+    expect(screen.getByRole("table", { name: "글로벌 미팅 번역 대화록" })).toHaveTextContent("안녕하세요");
+    expect(screen.getByRole("table", { name: "글로벌 미팅 번역 대화록" })).toHaveTextContent("Hello");
     expect(translate).not.toHaveBeenCalled();
   });
 
@@ -685,7 +685,7 @@ describe("SonioxWorkspaceClient", () => {
     expect(translationCalls()).toHaveLength(2);
   });
 
-  it("lets the user replace and persist the 보이스 타이핑 dictation shortcut", () => {
+  it("lets the user replace and persist the 음성 입력 dictation shortcut", () => {
     navigation.search = "workspace=workspace-a&folder=folder-a&tool=voice-typing";
     const view = render(<SonioxWorkspaceClient />);
 
@@ -788,7 +788,7 @@ describe("SonioxWorkspaceClient", () => {
       capture.start.mockClear();
     };
 
-    expect(screen.getByRole("heading", { name: "보이스 타이핑" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "음성 입력" })).toBeInTheDocument();
     expect(screen.getByText(/기존 Fn\/F8/)).toBeInTheDocument();
     expect(screen.getByText("⌥ + ⇧ + D")).toBeInTheDocument();
     expect(screen.getByText("⌥ + ⇧ + V")).toBeInTheDocument();
@@ -822,7 +822,7 @@ describe("SonioxWorkspaceClient", () => {
     });
   });
 
-  it("shows which 보이스 타이핑 mode is active throughout its lifecycle", () => {
+  it("shows which 음성 입력 mode is active throughout its lifecycle", () => {
     navigation.search = "workspace=workspace-a&folder=folder-a&tool=voice-typing";
     const view = render(<SonioxWorkspaceClient />);
 
@@ -841,7 +841,7 @@ describe("SonioxWorkspaceClient", () => {
     expect(screen.getByRole("status")).toHaveTextContent("번역 추가됨");
   });
 
-  it("restores and continuously saves the 보이스 타이핑 draft for its workspace", async () => {
+  it("restores and continuously saves the 음성 입력 draft for its workspace", async () => {
     navigation.search = "workspace=workspace-a&folder=folder-a&tool=voice-typing";
     window.localStorage.setItem("ai-note-voice-typing-draft:workspace-a", "saved draft");
     const view = render(<SonioxWorkspaceClient />);
@@ -856,7 +856,7 @@ describe("SonioxWorkspaceClient", () => {
     await waitFor(() => expect(screen.getByRole("textbox", { name: "입력 결과" })).toHaveValue("edited draft"));
   });
 
-  it("keeps the first 보이스 타이핑 mode when different starts race before rerender", () => {
+  it("keeps the first 음성 입력 mode when different starts race before rerender", () => {
     navigation.search = "workspace=workspace-a&folder=folder-a&tool=voice-typing";
     const view = render(<SonioxWorkspaceClient />);
 

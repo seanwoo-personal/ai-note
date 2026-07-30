@@ -40,7 +40,7 @@ export function buildSonioxToolHref(selection: SonioxWorkspaceSelection): string
   const search = new URLSearchParams({ workspace: selection.workspaceId });
   if (selection.folderId) search.set("folder", selection.folderId);
   search.set("tool", selection.tool);
-  return `/soniox?${search.toString()}`;
+  return `/live?${search.toString()}`;
 }
 
 export interface VoiceTypingFormatOptions {

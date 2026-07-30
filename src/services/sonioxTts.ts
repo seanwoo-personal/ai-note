@@ -73,7 +73,7 @@ export async function connectSonioxTts(
   const fetchTimeout = setTimeout(abortFetch, CONNECT_TIMEOUT_MS);
   let keyPayload: { apiKey?: unknown };
   try {
-    const response = await fetch("/api/soniox/temporary-key", {
+    const response = await fetch("/api/realtime/temporary-key", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ service: "tts" }),

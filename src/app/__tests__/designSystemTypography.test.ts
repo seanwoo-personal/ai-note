@@ -22,25 +22,24 @@ function contrastRatio(foreground: string, background: string) {
 }
 
 describe("Hejhome typography assets", () => {
-  it("self-hosts SUIT 500 and 700 with the required OFL notice", () => {
+  it("self-hosts Noto Sans KR 500 and 700 with the required OFL notice", () => {
     const css = read("src/app/globals.css").toString("utf8");
-    const medium = read("public/fonts/SUIT/SUIT-Medium.otf");
-    const bold = read("public/fonts/SUIT/SUIT-Bold.otf");
-    const license = read("public/fonts/SUIT/OFL.txt").toString("utf8");
+    const medium = read("public/fonts/NotoSansKR/NotoSansKR-Medium.otf");
+    const bold = read("public/fonts/NotoSansKR/NotoSansKR-Bold.otf");
+    const license = read("public/fonts/NotoSansKR/LICENSE.txt").toString("utf8");
 
     const faces = css.match(/@font-face\s*{[^}]*}/gs) ?? [];
-    const mediumFace = faces.find((face) => face.includes("SUIT-Medium.otf"));
-    const boldFace = faces.find((face) => face.includes("SUIT-Bold.otf"));
+    const mediumFace = faces.find((face) => face.includes("NotoSansKR-Medium.otf"));
+    const boldFace = faces.find((face) => face.includes("NotoSansKR-Bold.otf"));
 
     expect(medium.subarray(0, 4).toString("ascii")).toBe("OTTO");
     expect(bold.subarray(0, 4).toString("ascii")).toBe("OTTO");
-    expect(mediumFace).toContain('font-family: "SUIT"');
+    expect(mediumFace).toContain('font-family: "Noto Sans KR"');
     expect(mediumFace).toContain("font-weight: 500");
-    expect(boldFace).toContain('font-family: "SUIT"');
+    expect(boldFace).toContain('font-family: "Noto Sans KR"');
     expect(boldFace).toContain("font-weight: 700");
-    expect(css).toContain("font-family: var(--font-suit)");
+    expect(css).toContain("font-family: var(--font-sans)");
     expect(license).toContain("SIL OPEN FONT LICENSE Version 1.1");
-    expect(license).toContain("Copyright © 2022 Sun");
   });
 
   it("defines a complete dark-mode semantic token override", () => {

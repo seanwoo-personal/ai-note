@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock the subprocess helper so run() never shells out; codex's structured
 // contract is the `--json` JSONL event stream, from which we salvage the final
@@ -73,19 +73,70 @@ describe("CodexCliAdapter.health — binary detection only", () => {
       ["--version"],
       expect.objectContaining({ timeoutMs: 15_000 }),
     );
-    expect(health).toEqual({
-      ok: true,
-      detail: "Codex CLI가 감지되었습니다. 인증과 실제 요약 가능 여부는 첫 요약에서 확인합니다.",
-    });
+    expect(health.ok).toBe(true);
+    expect(health.detail).toContain("첫 요약에서 확인");
+    expect(health.detail).not.toMatch(/codex/i);
   });
 
   it("returns an actionable static message for a missing binary", async () => {
     runProcessMock.mockRejectedValueOnce(
       Object.assign(new Error("private spawn output"), { code: "ENOENT" }),
     );
-    await expect(new CodexCliAdapter({ provider: "codex-cli" }).health()).resolves.toEqual({
-      ok: false,
-      detail: "Codex CLI를 찾을 수 없습니다. 설치 후 PATH를 확인하세요.",
-    });
+    const health = await new CodexCliAdapter({ provider: "codex-cli" }).health();
+    expect(health.ok).toBe(false);
+    expect(health.detail).toContain("API 키");
+    expect(health.detail).not.toMatch(/codex/i);
+  });
+});
+
+describe("CodexCliAdapter — API-key mode (customer machines without the CLI)", () => {
+  const KEY = "sk-test-not-a-real-key";
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    runProcessMock.mockClear();
+    vi.stubEnv("CODEX_API_KEY", KEY);
+    fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      choices: [{ message: { content: '{"oneLine":"요약"}' } }],
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it("runs the prompt through the HTTPS API with a bearer key and never shells out", async () => {
+    const out = await new CodexCliAdapter({ provider: "codex-cli" }).run("요약해 줘");
+
+    expect(out).toBe('{"oneLine":"요약"}');
+    expect(runProcessMock).not.toHaveBeenCalled();
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://api.openai.com/v1/chat/completions");
+    expect((init.headers as Record<string, string>).authorization).toBe(`Bearer ${KEY}`);
+    expect(init.redirect).toBe("error");
+    const body = JSON.parse(init.body as string);
+    expect(body.messages).toEqual([{ role: "user", content: "요약해 줘" }]);
+    expect(body.model).toBeTruthy();
+  });
+
+  it("honors a custom model and surfaces opaque errors without the response body", async () => {
+    await new CodexCliAdapter({ provider: "codex-cli", model: "custom-api-model" }).run("p");
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string).model)
+      .toBe("custom-api-model");
+
+    fetchMock.mockResolvedValueOnce(new Response("{\"secret\":\"internal provider detail\"}", { status: 401 }));
+    await expect(new CodexCliAdapter({ provider: "codex-cli" }).run("p"))
+      .rejects.toThrow("summary_api_status_401");
+  });
+
+  it("reports healthy on key presence alone without network or subprocess calls", async () => {
+    const health = await new CodexCliAdapter({ provider: "codex-cli" }).health();
+    expect(health.ok).toBe(true);
+    expect(health.detail).toContain("API 키");
+    expect(health.detail).not.toContain(KEY);
+    expect(runProcessMock).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

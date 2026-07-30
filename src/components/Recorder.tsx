@@ -18,11 +18,11 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const LIVE_STATUS_LABELS = {
-  connecting: "Soniox 연결 중…",
-  connected: "Soniox 실시간 전사 중",
-  finishing: "Soniox 전사 마무리 중…",
-  finished: "Soniox 실시간 전사 완료",
-  error: "Soniox 실시간 전사 오류",
+  connecting: "실시간 전사 연결 중…",
+  connected: "실시간 전사 중",
+  finishing: "실시간 전사 마무리 중…",
+  finished: "실시간 전사 완료",
+  error: "실시간 전사 오류",
 } as const;
 
 function liveTranslation(value: string): SonioxTranslationOptions {
@@ -65,7 +65,7 @@ export function Recorder({
 
   useEffect(() => {
     let active = true;
-    void fetch("/api/soniox/temporary-key", { cache: "no-store" })
+    void fetch("/api/realtime/temporary-key", { cache: "no-store" })
       .then(async (response) => response.ok ? response.json() as Promise<{ configured?: unknown }> : null)
       .then((payload) => {
         if (active) setSonioxConfigStatus(payload?.configured === true ? "configured" : "unconfigured");
@@ -97,10 +97,10 @@ export function Recorder({
   const sonioxUnavailable = transcriptionMode === "soniox" && !sonioxConfigured;
   const idleStartLabel = transcriptionMode === "soniox"
     ? sonioxConfigStatus === "checking"
-      ? "Soniox 설정 확인 중…"
+      ? "실시간 전사 설정 확인 중…"
       : sonioxConfigured
-        ? "Soniox 실시간 전사로 녹음 시작"
-        : "Soniox 설정 필요"
+        ? "실시간 전사로 녹음 시작"
+        : "실시간 전사 설정 필요"
     : "Whisper 전사용 녹음 시작";
 
   return (
@@ -186,13 +186,13 @@ export function Recorder({
                   className="mt-1 h-4 w-4 shrink-0 accent-accent"
                 />
                 <span className="min-w-0">
-                  <span className="block text-[14px] font-semibold text-ink">실시간 전사 (Soniox)</span>
+                  <span className="block text-[14px] font-semibold text-ink">실시간 전사</span>
                   <span className="mt-1 block text-[12px] leading-relaxed text-inkSoft">
                     녹음 중 원문을 바로 보고, 필요한 경우 번역도 함께 표시합니다.
                   </span>
                   {sonioxConfigStatus === "checking" && (
                     <span className="mt-1 block text-[12px] font-medium text-inkSoft">
-                      Soniox 설정을 확인하고 있습니다.
+                      실시간 전사 설정을 확인하고 있습니다.
                     </span>
                   )}
                   {sonioxConfigStatus === "unconfigured" && (
@@ -224,7 +224,7 @@ export function Recorder({
                 </select>
               </label>
               <p className="mt-3 text-[12px] leading-relaxed text-inkSoft">
-                녹음하는 동안 마이크 오디오를 Soniox 서버로 전송합니다. Soniox 사용량에 따라 비용이 발생할 수 있습니다.
+                녹음하는 동안 마이크 오디오를 외부 전사 서버로 전송합니다. 사용량에 따라 비용이 발생할 수 있습니다.
               </p>
               <p className="mt-1 text-[12px] leading-relaxed text-inkSoft">
                 원본 녹음은 로컬에 저장합니다. 종료 후에는 로컬 Whisper가 최종 스크립트를 만들어 회의 파일에 저장합니다.
@@ -249,7 +249,7 @@ export function Recorder({
                 aria-hidden="true"
               />
               {transcriptionMode === "soniox"
-                ? "녹음 중 · Soniox 실시간 전사"
+                ? "녹음 중 · 실시간 전사"
                 : "녹음 중 · 종료 후 Whisper 전사"}
             </span>
             <span className="font-mono text-[15px] tabular-nums text-ink">
@@ -277,7 +277,7 @@ export function Recorder({
               {LIVE_STATUS_LABELS[liveStatus]}
             </p>
             <div>
-              <div className="text-[12px] font-semibold text-inkSoft">Soniox 실시간 원문</div>
+              <div className="text-[12px] font-semibold text-inkSoft">실시간 원문</div>
               <p data-i18n-user-content className="mt-2 min-h-12 whitespace-pre-wrap text-[15px] leading-relaxed text-ink">
                 {liveTranscript.original.final}
                 <span className="text-inkSoft">{liveTranscript.original.provisional}</span>
@@ -285,7 +285,7 @@ export function Recorder({
             </div>
             {(liveTranscript.translation.final || liveTranscript.translation.provisional) && (
               <div>
-                <div className="text-[12px] font-semibold text-inkSoft">Soniox 실시간 번역</div>
+                <div className="text-[12px] font-semibold text-inkSoft">실시간 번역</div>
                 <p data-i18n-user-content className="mt-2 min-h-12 whitespace-pre-wrap text-[15px] leading-relaxed text-accent">
                   {liveTranscript.translation.final}
                   <span className="text-inkSoft">{liveTranscript.translation.provisional}</span>
@@ -302,8 +302,8 @@ export function Recorder({
               ? `저장 완료${statusLabel ? ` · ${statusLabel}` : ""}`
               : transcriptionMode === "soniox"
                 ? translationValue === "none"
-                  ? "Soniox에서 실시간 원문을 보려면 녹음을 시작하세요. 마이크 권한이 필요합니다."
-                  : "Soniox에서 실시간 원문과 번역을 보려면 녹음을 시작하세요. 마이크 권한이 필요합니다."
+                  ? "실시간 원문을 보려면 녹음을 시작하세요. 마이크 권한이 필요합니다."
+                  : "실시간 원문과 번역을 보려면 녹음을 시작하세요. 마이크 권한이 필요합니다."
                 : <>
                     <span>녹음이 끝나면 이 Mac에서 Whisper 전사를 시작합니다. 마이크 권한이 필요합니다. </span>
                     <span>선택한 Whisper 모델을 처음 사용하면 먼저 내려받아 시간이 더 걸릴 수 있습니다. </span>

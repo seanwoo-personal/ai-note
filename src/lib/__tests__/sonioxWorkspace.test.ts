@@ -73,6 +73,6 @@ describe("Soniox workspace routing", () => {
       workspaceId: "workspace-a",
       folderId: "folder-a",
       tool: "voice-typing",
-    })).toBe("/soniox?workspace=workspace-a&folder=folder-a&tool=voice-typing");
+    })).toBe("/live?workspace=workspace-a&folder=folder-a&tool=voice-typing");
   });
 });

@@ -538,6 +538,9 @@ export function MeetingDetailView({
           setSummaryDraft(summaryBodyFromSummary(next.summary));
           setExternalSyncStatus({ kind: "success", message: "다른 곳에서 저장된 최신 내용을 반영했습니다." });
         } else {
+          // Allow a later effect run to re-probe this revision instead of
+          // permanently skipping an externally saved update.
+          probedIncomingRef.current = null;
           setExternalSyncStatus({
             kind: "warning",
             message: "새 내용의 현재 revision을 확인하지 못해 확인된 내용을 유지했습니다.",
@@ -545,6 +548,7 @@ export function MeetingDetailView({
         }
       } catch {
         if (!cancelled) {
+          probedIncomingRef.current = null;
           setExternalSyncStatus({
             kind: "warning",
             message: "최신 저장 내용을 확인할 수 없어 확인된 내용을 유지했습니다.",
@@ -554,6 +558,9 @@ export function MeetingDetailView({
     })();
     return () => {
       cancelled = true;
+      // A cancelled probe never adopted or rejected the revision; let the next
+      // run (e.g. after a draft-protection toggle) probe it again.
+      if (probedIncomingRef.current === revisionKey) probedIncomingRef.current = null;
     };
   }, [draftProtected, id, incomingSignature]);
 

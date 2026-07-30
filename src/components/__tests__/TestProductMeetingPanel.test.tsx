@@ -81,7 +81,7 @@ describe("TestProductMeetingPanel — Global Meeting", () => {
     expect(registerNavigationBlocker).toHaveBeenCalledWith(expect.objectContaining({
       id: "global-meeting-unsaved-session",
       phase: "dirty",
-      label: "트랜슬레이터 미팅",
+      label: "글로벌 미팅 번역",
     }));
 
     const blocker = registerNavigationBlocker.mock.calls[0]?.[0] as { discard: () => void };
@@ -184,6 +184,31 @@ describe("TestProductMeetingPanel — Global Meeting", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/translate", expect.any(Object)));
     const body = JSON.parse((fetchMock.mock.calls.find((call) => call[0] === "/api/translate")![1] as RequestInit).body as string);
     expect(body.text).toContain("okay");
+    expect(body.targetLanguage).toBe("en");
+  });
+
+  it("re-enqueues suppressed counterpart translations when the meeting ends during push-to-talk", async () => {
+    const { rerender } = render(
+      <TestProductMeetingPanel capture={makeCapture({ phase: "listening" })} speech={makeSpeech()} location={LOCATION} />,
+    );
+    // Left Shift starts push-to-talk; incoming counterpart jobs are now suppressed.
+    fireEvent.keyDown(window, { code: "ShiftLeft" });
+
+    const transcript = transcriptFrom([{
+      tokens: [
+        { text: "안녕하세요", is_final: true, speaker: "2", language: "ko", translation_status: "original" },
+        { text: "<end>", is_final: true, speaker: "2", translation_status: "original" },
+      ],
+    }]);
+    rerender(<TestProductMeetingPanel capture={makeCapture({ phase: "listening", transcript })} speech={makeSpeech()} location={LOCATION} />);
+    await screen.findByText("안녕하세요");
+    expect(fetchMock.mock.calls.some((call) => call[0] === "/api/translate")).toBe(false);
+
+    // Ending the meeting aborts the PTT attempt; the suppressed row must not stay "번역 중…" forever.
+    fireEvent.click(screen.getByRole("button", { name: "미팅 종료" }));
+    await waitFor(() => expect(fetchMock.mock.calls.some((call) => call[0] === "/api/translate")).toBe(true));
+    const body = JSON.parse((fetchMock.mock.calls.find((call) => call[0] === "/api/translate")![1] as RequestInit).body as string);
+    expect(body.text).toBe("안녕하세요");
     expect(body.targetLanguage).toBe("en");
   });
 

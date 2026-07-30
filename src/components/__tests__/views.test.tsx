@@ -2266,10 +2266,10 @@ describe("SettingsForm — persisted draft/load/test state", () => {
     expect(screen.getByRole("link", { name: "첫 회의 녹음" })).toHaveAttribute("href", "/#recorder");
     expect(fetchMock.mock.calls.some(([input]) => String(input) === "/api/settings/llm/health")).toBe(true);
 
-    fireEvent.click(screen.getByLabelText(/Codex CLI/));
+    fireEvent.click(screen.getByLabelText(/외부 모델/));
     const codexModels = screen.getByRole("combobox", { name: "모델" });
     expect(within(codexModels).getAllByRole("option").map((option) => option.textContent)).toEqual([
-      "CLI 기본값 (권장)",
+      "기본 모델 (권장)",
       "직접 입력",
     ]);
     expect(within(codexModels).queryByText(/gpt-|codex-/i)).not.toBeInTheDocument();
@@ -2296,7 +2296,7 @@ describe("SettingsForm — persisted draft/load/test state", () => {
       target: { value: " claude-private " },
     });
 
-    fireEvent.click(screen.getByLabelText(/Codex CLI/));
+    fireEvent.click(screen.getByLabelText(/외부 모델/));
     fireEvent.change(screen.getByRole("combobox", { name: "모델" }), {
       target: { value: "__custom__" },
     });
@@ -2306,7 +2306,7 @@ describe("SettingsForm — persisted draft/load/test state", () => {
 
     fireEvent.click(screen.getByLabelText(/Claude CLI/));
     expect(screen.getByRole("textbox", { name: "직접 입력 모델" })).toHaveValue(" claude-private ");
-    fireEvent.click(screen.getByLabelText(/Codex CLI/));
+    fireEvent.click(screen.getByLabelText(/외부 모델/));
     expect(screen.getByRole("textbox", { name: "직접 입력 모델" })).toHaveValue(" codex-private ");
     fireEvent.click(screen.getByRole("button", { name: "저장" }));
 
@@ -2367,7 +2367,7 @@ describe("SettingsForm — persisted draft/load/test state", () => {
     fireEvent.click(await screen.findByRole("button", { name: "다시 시도" }));
     expect(await screen.findByRole("combobox", { name: "모델" })).toHaveValue("__custom__");
     expect(screen.getByRole("textbox", { name: "직접 입력 모델" })).toHaveValue("gpt-5");
-    expect(screen.getByLabelText(/Codex CLI/)).toBeChecked();
+    expect(screen.getByLabelText(/외부 모델/)).toBeChecked();
     expect(screen.getByRole("button", { name: "저장" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "연결 테스트" })).toBeEnabled();
   });
@@ -2500,7 +2500,7 @@ describe("SettingsForm — persisted draft/load/test state", () => {
       render(<SettingsForm />);
       fireEvent.click(await screen.findByRole("button", { name: "연결 테스트" }));
       expect(await screen.findByText(/연결 테스트 요청에 실패했습니다/)).toBeInTheDocument();
-      expect(screen.getByText("검사한 저장 설정: Codex CLI · gpt-5")).toBeInTheDocument();
+      expect(screen.getByText("검사한 저장 설정: 외부 모델 · gpt-5")).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "연결 테스트" })).toBeEnabled();
     },
   );

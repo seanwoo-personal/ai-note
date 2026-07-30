@@ -22,7 +22,7 @@ const config: Config = {
         error: "var(--hej-color-status-error)",
       },
       fontFamily: {
-        sans: ["var(--font-suit)"],
+        sans: ["var(--font-sans)"],
         mono: ["var(--font-mono)"],
       },
       fontWeight: {

@@ -76,7 +76,7 @@ test("all non-Korean locales translate Home and Translator without overflow or t
     }).first()).toBeVisible();
     await expectLocalizedSurface(page);
 
-    await page.goto("/soniox?tool=translator");
+    await page.goto("/live?tool=translator");
     await expect(page.locator("main h1")).toBeVisible();
     await expect(page.locator("main select")).toHaveCount(4);
     await expectLocalizedSurface(page);

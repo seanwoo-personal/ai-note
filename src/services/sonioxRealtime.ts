@@ -242,7 +242,7 @@ export async function connectSonioxRealtime(
   let keyResponse: Response;
   let keyPayload: { apiKey?: unknown };
   try {
-    keyResponse = await fetch("/api/soniox/temporary-key", {
+    keyResponse = await fetch("/api/realtime/temporary-key", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: "{}",
@@ -315,7 +315,9 @@ export async function connectSonioxRealtime(
     try {
       const result = JSON.parse(String(event.data)) as SonioxResult;
       if (typeof result.error_code === "number") {
-        failRuntimeSession(result.error_message || "실시간 전사 연결에 오류가 발생했습니다.");
+        // Never surface the provider's raw error text (it can carry the vendor
+        // name or account details) — map to a generic local message + code.
+        failRuntimeSession(`실시간 전사 연결에 오류가 발생했습니다. (코드 ${result.error_code})`);
         return;
       }
       transcript = applySonioxResult(transcript, result);
@@ -345,7 +347,7 @@ export async function connectSonioxRealtime(
       socket.send("");
       clearFinishTimeout();
       finishTimeout = setTimeout(() => {
-        failRuntimeSession("Soniox 실시간 전사 완료 응답이 지연되어 연결을 종료했습니다.");
+        failRuntimeSession("실시간 전사 완료 응답이 지연되어 연결을 종료했습니다.");
       }, CONNECT_TIMEOUT_MS);
     },
     close() {

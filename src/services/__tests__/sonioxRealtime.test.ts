@@ -217,7 +217,7 @@ describe("Soniox real-time transcript", () => {
     });
     const socket = FakeWebSocket.instance!;
     expect(socket.url).toBe("wss://stt-rt.soniox.com/transcribe-websocket");
-    expect(fetchMock).toHaveBeenCalledWith("/api/soniox/temporary-key", expect.objectContaining({
+    expect(fetchMock).toHaveBeenCalledWith("/api/realtime/temporary-key", expect.objectContaining({
       method: "POST",
     }));
     expect(JSON.parse(String(socket.sent[0]))).toMatchObject({
@@ -243,9 +243,9 @@ describe("Soniox real-time transcript", () => {
     expect(socket.sent[3]).toBe("");
     await vi.advanceTimersByTimeAsync(10_000);
     expect(socket.readyState).toBe(3);
-    expect(errors).toEqual(["Soniox 실시간 전사 완료 응답이 지연되어 연결을 종료했습니다."]);
+    expect(errors).toEqual(["실시간 전사 완료 응답이 지연되어 연결을 종료했습니다."]);
     socket.onerror?.();
-    expect(errors).toEqual(["Soniox 실시간 전사 완료 응답이 지연되어 연결을 종료했습니다."]);
+    expect(errors).toEqual(["실시간 전사 완료 응답이 지연되어 연결을 종료했습니다."]);
     vi.useRealTimers();
   });
 

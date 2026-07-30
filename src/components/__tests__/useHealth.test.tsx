@@ -17,7 +17,7 @@ describe("useHealth — in-flight dedup", () => {
   it("polls Soniox configuration with GET semantics instead of minting temporary keys", async () => {
     const fetchMock = vi.fn((url: string, init?: RequestInit) => {
       void init;
-      if (url === "/api/soniox/temporary-key") {
+      if (url === "/api/realtime/temporary-key") {
         return Promise.resolve(new Response(JSON.stringify({ configured: true }), {
           status: 200,
           headers: { "content-type": "application/json" },
@@ -33,7 +33,7 @@ describe("useHealth — in-flight dedup", () => {
       await vi.advanceTimersByTimeAsync(0);
     });
 
-    const sonioxCalls = fetchMock.mock.calls.filter(([url]) => url === "/api/soniox/temporary-key");
+    const sonioxCalls = fetchMock.mock.calls.filter(([url]) => url === "/api/realtime/temporary-key");
     expect(sonioxCalls).toHaveLength(1);
     expect(sonioxCalls[0]?.[1]).toEqual({ cache: "no-store" });
     expect(result.current.soniox).toEqual({ kind: "configured" });
@@ -64,6 +64,37 @@ describe("useHealth — in-flight dedup", () => {
       await vi.advanceTimersByTimeAsync(35_000);
     });
     expect(llmCalls).toBe(1);
+  });
+
+  it("does not notify subscribers when a poll returns an identical snapshot", async () => {
+    vi.stubGlobal("fetch", vi.fn((url: string) => {
+      if (url === "/api/whisper/health") {
+        return Promise.resolve(new Response(JSON.stringify({ connected: true }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }));
+      }
+      return new Promise<never>(() => {});
+    }));
+
+    const { useHealth } = await import("@/components/useHealth");
+    let renders = 0;
+    const { result } = renderHook(() => {
+      renders += 1;
+      return useHealth();
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.whisper).toEqual({ connected: true });
+    const settled = renders;
+
+    // Three more identical whisper polls: subscribers must not re-render, so
+    // sibling intervals (e.g. the 30s home-list refresh) are never starved.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15_000);
+    });
+    expect(renders).toBe(settled);
   });
 
   it("a rejected fetch does not wedge the poller (finally resets the flag)", async () => {

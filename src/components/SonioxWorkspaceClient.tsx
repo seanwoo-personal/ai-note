@@ -353,7 +353,7 @@ function VoiceTypingTool({ workspaceId }: { workspaceId: string }) {
           <input type="checkbox" checked={smartCleanup} onChange={(event) => setSmartCleanup(event.target.checked)} disabled={listening || busy} className="mt-0.5 h-4 w-4 accent-accent" />
           <span>
             <span className="block font-semibold">깔끔하게 입력</span>
-            <span className="mt-1 block leading-5 text-inkSoft">음·어·um 같은 불필요한 말과 바로 반복된 단어, 문장부호 앞 공백을 정리합니다. 끄면 Soniox 결과를 그대로 추가합니다.</span>
+            <span className="mt-1 block leading-5 text-inkSoft">음·어·um 같은 불필요한 말과 바로 반복된 단어, 문장부호 앞 공백을 정리합니다. 끄면 실시간 결과를 그대로 추가합니다.</span>
           </span>
         </label>
         {capture.error && <p className="mt-4 text-[13px] text-error" role="alert">{capture.error}</p>}
@@ -376,7 +376,7 @@ function VoiceTypingTool({ workspaceId }: { workspaceId: string }) {
         <h3 className="font-bold">웹 단축키 범위</h3>
         <p className="mt-2 text-inkSoft">웹에서는 현재 탭에 포커스가 있을 때만 단축키를 감지할 수 있습니다. 기본값은 Option+Shift+D와 Option+Shift+V입니다. 기본 설정에서는 기존 Fn/F8과 Shift+Fn/F8도 함께 동작하지만, 브라우저가 Fn 키를 전달하지 않을 수 있습니다. 해당 기능의 단축키를 변경하면 기존 대체키는 해제됩니다. 다른 앱의 커서 위치에 직접 삽입하는 전역 입력은 향후 데스크톱 앱에서 접근성 권한을 받은 뒤 지원합니다.</p>
       </section>
-      <p className="text-[12px] leading-5 text-inkSoft">받아쓰기 중 마이크 오디오가 Soniox로 전송되며 사용량 기반 비용이 발생할 수 있습니다.</p>
+      <p className="text-[12px] leading-5 text-inkSoft">받아쓰기 중 마이크 오디오가 외부 서버로 전송되며 사용량 기반 비용이 발생할 수 있습니다.</p>
     </div>
   );
 }
@@ -398,19 +398,19 @@ export function SonioxWorkspaceClient() {
   }, [canonicalHref, router, searchValue]);
 
   if (libraryState.mode === "loading") {
-    return <main id="main" className="px-6 py-12 text-[14px] text-inkSoft" aria-busy="true">Soniox 작업 영역을 불러오는 중…</main>;
+    return <main id="main" className="px-6 py-12 text-[14px] text-inkSoft" aria-busy="true">실시간 작업 영역을 불러오는 중…</main>;
   }
   if (!libraryState.library || !resolvedSelection) {
-    return <main id="main" className="px-6 py-12"><h1 className="text-2xl font-bold text-ink">Soniox</h1><p className="mt-3 text-[14px] text-error">워크스페이스 정보를 불러온 뒤 사용할 수 있습니다.</p></main>;
+    return <main id="main" className="px-6 py-12"><h1 className="text-2xl font-bold text-ink">실시간 도구</h1><p className="mt-3 text-[14px] text-error">워크스페이스 정보를 불러온 뒤 사용할 수 있습니다.</p></main>;
   }
 
   const selection = resolvedSelection;
   const workspace = libraryState.library.workspaces.find((item) => item.id === selection.workspaceId);
   const folder = selection.folderId ? libraryState.library.folders.find((item) => item.id === selection.folderId) : null;
   const headings = {
-    transcription: ["미팅 노트 스마트 스크라이브", "회의를 녹음하고 실시간 원문을 확인한 뒤 로컬 최종 전사로 저장합니다."],
-    "test-product": ["트랜슬레이터", "자동 화자 구분과 Push-to-Talk 양방향 번역을 제공합니다."],
-    "voice-typing": ["보이스 타이핑", "단축키로 받아쓰기와 번역 입력을 전환합니다."],
+    transcription: ["미팅노트", "회의를 녹음하고 실시간 원문을 확인한 뒤 로컬 최종 전사로 저장합니다."],
+    "test-product": ["글로벌 미팅 번역", "자동 화자 구분과 Push-to-Talk 양방향 번역을 제공합니다."],
+    "voice-typing": ["음성 입력", "단축키로 받아쓰기와 번역 입력을 전환합니다."],
   } as const;
   const [title, description] = headings[selection.tool];
 

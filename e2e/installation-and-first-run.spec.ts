@@ -154,7 +154,7 @@ test("installation first run, provider models, summary default, and transcriptio
   const readinessCard = page.getByRole("heading", { name: "회의록 요약을 준비하세요" })
     .locator("..");
   await expect(readinessCard).toContainText(
-    "요약 모델과 관계없이 로컬 Whisper 전사 또는 Soniox 실시간 자막과 번역을 선택할 수 있습니다.",
+    "요약 모델과 관계없이 로컬 전사 또는 실시간 자막과 번역을 선택할 수 있습니다.",
   );
   const configureSummary = readinessCard.getByRole("link", { name: "AI 요약 설정" });
   const recordWithoutSummary = readinessCard.getByRole("button", {
@@ -215,20 +215,20 @@ test("installation first run, provider models, summary default, and transcriptio
   ]);
 
   await modelSelect.selectOption("sonnet");
-  await page.getByRole("radio", { name: /Codex CLI/u }).check();
+  await page.getByRole("radio", { name: /외부 모델/u }).check();
   expect(await modelSelect.locator("option").allTextContents()).toEqual([
-    "CLI 기본값 (권장)",
+    "기본 모델 (권장)",
     "직접 입력",
   ]);
   await modelSelect.selectOption("__custom__");
   await page.getByLabel("직접 입력 모델").fill("  codex-synthetic-exact  ");
   await page.getByRole("radio", { name: /Claude CLI/u }).check();
   await expect(modelSelect).toHaveValue("sonnet");
-  await page.getByRole("radio", { name: /Codex CLI/u }).check();
+  await page.getByRole("radio", { name: /외부 모델/u }).check();
   await expect(page.getByLabel("직접 입력 모델")).toHaveValue("  codex-synthetic-exact  ");
 
   await page.getByRole("button", { name: "저장", exact: true }).click();
-  await expect(modelSettings.getByText(/Codex CLI codex-synthetic-exact · 감지됨/u)).toBeVisible();
+  await expect(modelSettings.getByText(/외부 모델 codex-synthetic-exact · 감지됨/u)).toBeVisible();
   expect(savePayloads.at(-1)).toEqual({
     provider: "codex-cli",
     model: "codex-synthetic-exact",

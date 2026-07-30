@@ -45,12 +45,12 @@ describe("Recorder Soniox default mode", () => {
     vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>((resolve) => { resolveFetch = resolve; })));
     render(<Recorder defaultTranscriptionMode="soniox" />);
 
-    expect(screen.getByRole("button", { name: "Soniox 설정 확인 중…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "실시간 전사 설정 확인 중…" })).toBeDisabled();
 
     await act(async () => {
       resolveFetch(new Response(JSON.stringify({ configured: false }), { status: 200 }));
     });
-    expect(await screen.findByRole("button", { name: "Soniox 설정 필요" })).toBeDisabled();
+    expect(await screen.findByRole("button", { name: "실시간 전사 설정 필요" })).toBeDisabled();
     expect(recorder.start).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("radio", { name: /로컬 전사/ }));
@@ -61,7 +61,7 @@ describe("Recorder Soniox default mode", () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ configured: true }), { status: 200 })));
     render(<Recorder defaultTranscriptionMode="soniox" />);
 
-    const startButton = await screen.findByRole("button", { name: "Soniox 실시간 전사로 녹음 시작" });
+    const startButton = await screen.findByRole("button", { name: "실시간 전사로 녹음 시작" });
     await waitFor(() => expect(startButton).toBeEnabled());
     fireEvent.click(startButton);
 

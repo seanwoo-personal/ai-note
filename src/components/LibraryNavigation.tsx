@@ -30,8 +30,7 @@ import { LibraryDialogShell } from "@/components/LibraryPrimitives";
 import { LibraryLocationPicker } from "@/components/LibraryLocationPicker";
 import { useLibrary } from "@/components/LibraryProvider";
 import {
-  formatLlmStatus,
-  formatSonioxStatus,
+  formatExternalStatus,
   formatWhisperStatus,
   type LlmHealthState,
   type SonioxHealthState,
@@ -91,7 +90,7 @@ export function LibraryNavigation() {
   const generationEpochRef = useRef(library.generationEpoch);
 
   const detailPath = pathname.startsWith("/meetings/");
-  const sonioxPath = pathname.startsWith("/soniox");
+  const sonioxPath = pathname.startsWith("/live");
   const sonioxSelection = sonioxPath && library.library
     ? resolveSonioxWorkspaceSelection(new URLSearchParams(search.toString()), library.library)
     : null;
@@ -347,9 +346,9 @@ function SonioxToolLinks({
   onNavigationCommitted: () => void;
 }) {
   const tools: Array<{ tool: SonioxTool; label: string }> = [
-    { tool: "transcription", label: "미팅 노트 스마트 스크라이브" },
-    { tool: "test-product", label: "트랜슬레이터" },
-    { tool: "voice-typing", label: "보이스 타이핑" },
+    { tool: "transcription", label: "미팅노트" },
+    { tool: "test-product", label: "글로벌 미팅 번역" },
+    { tool: "voice-typing", label: "음성 입력" },
   ];
   return <>{tools.map((item) => (
     <NavigationRow
@@ -706,14 +705,12 @@ function SystemRows({ whisper, llm, soniox }: {
 }) {
   const { t } = useAppPreferences();
   const whisperStatus = formatWhisperStatus(whisper);
-  const llmStatus = formatLlmStatus(llm);
-  const sonioxStatus = formatSonioxStatus(soniox);
+  const externalStatus = formatExternalStatus(llm, soniox);
   return (
     <div className="border-t border-line p-3">
       <p className="px-2 text-[11px] font-semibold text-inkSoft">{t("시스템")}</p>
-      <SystemRow label={t("로컬 전사")} status={{ ...whisperStatus, label: t(whisperStatus.label), title: t(whisperStatus.title) }} />
-      <SystemRow label={t("요약")} status={{ ...llmStatus, label: t(llmStatus.label), title: t(llmStatus.title) }} />
-      <SystemRow label={t("외부")} status={{ ...sonioxStatus, label: t(sonioxStatus.label), title: t(sonioxStatus.title) }} />
+      <SystemRow label={t("로컬")} status={{ ...whisperStatus, shortLabel: t(whisperStatus.shortLabel), title: t(whisperStatus.title) }} />
+      <SystemRow label={t("외부 모델")} status={{ ...externalStatus, shortLabel: t(externalStatus.shortLabel), title: t(externalStatus.title) }} />
       <p className="mt-1 flex min-h-11 items-center rounded-md px-2 text-[11px] font-semibold text-inkSoft">
         {t("제품 버전")} {packageMetadata.version}
       </p>
@@ -724,9 +721,9 @@ function SystemRows({ whisper, llm, soniox }: {
 function SystemRow({ label, status }: { label: string; status: ReturnType<typeof formatWhisperStatus> }) {
   return (
     <div className="mt-1 flex min-h-11 items-center gap-2 rounded-md px-2" title={status.title} aria-live="polite">
-      <span className="w-14 shrink-0 text-[11px] font-semibold text-inkSoft">{label}</span>
+      <span className="w-16 shrink-0 text-[11px] font-semibold text-inkSoft">{label}</span>
       <span className={`h-2 w-2 shrink-0 rounded-full ${status.dotClass}`} aria-hidden="true" />
-      <span className="min-w-0 truncate text-[11px] font-medium text-inkSoft">{status.label}</span>
+      <span className={`min-w-0 truncate text-[11px] font-semibold ${status.tone === "success" ? "text-success" : "text-inkSoft"}`}>{status.shortLabel}</span>
     </div>
   );
 }

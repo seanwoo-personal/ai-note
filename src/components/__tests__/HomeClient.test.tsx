@@ -23,17 +23,17 @@ describe("HomeQuickStart", () => {
     expect(recorder.render).toHaveBeenCalledWith(expect.objectContaining({
       requestedLocation: { workspaceId: "workspace-a", folderId: null },
     }));
-    expect(screen.getByRole("link", { name: "미팅 노트 스마트 스크라이브 열기" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "미팅노트 열기" })).toHaveAttribute(
       "href",
-      "/soniox?workspace=workspace-a&tool=transcription",
+      "/live?workspace=workspace-a&tool=transcription",
     );
-    expect(screen.getByRole("link", { name: "트랜슬레이터 열기" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "글로벌 미팅 번역 열기" })).toHaveAttribute(
       "href",
-      "/soniox?workspace=workspace-a&tool=test-product",
+      "/live?workspace=workspace-a&tool=test-product",
     );
-    expect(screen.getByRole("link", { name: "보이스 타이핑 열기" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "음성 입력 열기" })).toHaveAttribute(
       "href",
-      "/soniox?workspace=workspace-a&tool=voice-typing",
+      "/live?workspace=workspace-a&tool=voice-typing",
     );
   });
 

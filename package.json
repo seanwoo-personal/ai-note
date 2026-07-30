@@ -1,6 +1,6 @@
 {
   "name": "ai-note",
-  "version": "1.16.0",
+  "version": "1.17.0",
   "description": "Local-first meeting recorder: record → local Whisper transcription → LLM summary via your own Claude/Codex CLI or Ollama. No cloud, no accounts, no API keys stored.",
   "license": "MIT",
   "author": "Dylan",
@@ -34,6 +34,12 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "zod": "^4.4.3"
+  },
+  "overrides": {
+    "sharp": "^0.35.3",
+    "next": {
+      "postcss": "^8.5.25"
+    }
   },
   "devDependencies": {
     "@playwright/test": "1.61.1",

@@ -12,6 +12,9 @@ playwright-report/
 # internal build scaffolding — never published
 BUILD_PLAN.md
 
+# local agent working notes (plans, i18n drafts) — never published
+/.hermes/
+
 # local environment and provider credentials — never commit
 .env*
 !.env.example

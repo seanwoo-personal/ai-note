@@ -7,8 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Product version ledger
 
-제품 소유자가 지정한 기준에 따라 최초 AI NOTE 오픈소스를 제품 버전 `1.0`으로 정규화합니다. 이후 문서·병합·테스트 전용 커밋이 아니라 사용자에게 전달되는 기능 묶음마다 버전을 올립니다. 현재 제품 버전은 `1.15.5`입니다.
+제품 소유자가 지정한 기준에 따라 최초 AI NOTE 오픈소스를 제품 버전 `1.0`으로 정규화합니다. 이후 문서·병합·테스트 전용 커밋이 아니라 사용자에게 전달되는 기능 묶음마다 버전을 올립니다. 현재 제품 버전은 `1.15.6`입니다.
 
+- **1.15.6 (2026-07-30) — Global Meeting 대화록·음성 설정**: 음성·속도 선택, 하나의 연속 양언어 대화록, 동일 행 정렬, Speaker 표기와 Push-to-Talk 강조.
 - **1.15.5 (2026-07-30) — Global Meeting Left Shift Push-to-Talk**: 제품 표시명 변경과 Space 대신 왼쪽 Shift를 사용하는 PTT 단축키 전환, 버튼 포커스·반복 입력 안전성 보완.
 - **1.15.4 (2026-07-29) — 번역 fallback·TTS 오류 정리**: 한국어 완료 endpoint의 상대 언어 fallback과 동기 TTS speak 실패 session 정리.
 - **1.15.3 (2026-07-29) — TTS 취소 경계 안정화**: AudioContext 재개 중 stop/unmount된 prepare·speak가 늦게 TTS 연결을 되살리는 stale generation race 차단.

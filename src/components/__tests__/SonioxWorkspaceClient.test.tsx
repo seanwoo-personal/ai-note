@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SonioxWorkspaceClient } from "@/components/SonioxWorkspaceClient";
@@ -197,7 +197,7 @@ describe("SonioxWorkspaceClient", () => {
     });
   });
 
-  it("automatically separates test-product speakers and shows foreign speech beside Korean", async () => {
+  it("keeps Global Meeting utterances in one aligned transcript with Speaker labels", async () => {
     const translate = vi.fn(async (_url: string, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body)) as { text: string };
       return new Response(JSON.stringify({ translation: body.text === "はじめまして" ? "안녕하세요" : body.text }), {
@@ -233,12 +233,15 @@ describe("SonioxWorkspaceClient", () => {
     };
     view.rerender(<SonioxWorkspaceClient />);
 
-    await waitFor(() => expect(screen.getByRole("region", { name: "한국어 회의 내용" })).toHaveTextContent("안녕하세요"));
-    expect(screen.getByRole("region", { name: "상대방 언어 회의 내용" })).toHaveTextContent("화자 2");
-    expect(screen.getByRole("region", { name: "상대방 언어 회의 내용" })).toHaveTextContent("Hello");
-    expect(screen.getByRole("region", { name: "상대방 언어 회의 내용" })).toHaveTextContent("はじめまして");
-    expect(screen.getByRole("log", { name: "한국어 실시간 기록" })).toHaveAttribute("aria-live", "polite");
-    expect(screen.getByRole("log", { name: "상대방 언어 실시간 기록" })).toHaveAttribute("aria-live", "polite");
+    const transcript = await screen.findByRole("table", { name: "Global Meeting 대화록" });
+    expect(transcript).toHaveAttribute("aria-live", "polite");
+    const speaker1 = within(transcript).getByRole("row", { name: "Speaker 1 대화" });
+    const speaker2 = within(transcript).getByRole("row", { name: "Speaker 2 대화" });
+    expect(speaker1).toHaveTextContent("안녕하세요");
+    expect(speaker1).toHaveTextContent("Hello");
+    expect(speaker2).toHaveTextContent("안녕하세요");
+    expect(speaker2).toHaveTextContent("はじめまして");
+    expect(transcript).not.toHaveTextContent("화자 2");
     expect(translate).toHaveBeenCalledTimes(1);
     expect(translate).toHaveBeenCalledWith("/api/translate", expect.objectContaining({ body: JSON.stringify({ text: "はじめまして", targetLanguage: "ko" }) }));
   });
@@ -268,7 +271,7 @@ describe("SonioxWorkspaceClient", () => {
     await waitFor(() => expect(translate).toHaveBeenCalledWith("/api/translate", expect.objectContaining({
       body: JSON.stringify({ text: "안녕하세요", targetLanguage: "en" }),
     })));
-    await waitFor(() => expect(screen.getByRole("region", { name: "상대방 언어 회의 내용" })).toHaveTextContent("Hello"));
+    await waitFor(() => expect(screen.getByRole("table", { name: "Global Meeting 대화록" })).toHaveTextContent("Hello"));
   });
 
   it("renders Soniox provisional translation while a test-product utterance is still in progress", () => {
@@ -295,8 +298,8 @@ describe("SonioxWorkspaceClient", () => {
 
     render(<SonioxWorkspaceClient />);
 
-    expect(screen.getByRole("log", { name: "한국어 실시간 기록" })).toHaveTextContent("안녕하세요");
-    expect(screen.getByRole("log", { name: "상대방 언어 실시간 기록" })).toHaveTextContent("Hello");
+    expect(screen.getByRole("table", { name: "Global Meeting 대화록" })).toHaveTextContent("안녕하세요");
+    expect(screen.getByRole("table", { name: "Global Meeting 대화록" })).toHaveTextContent("Hello");
     expect(translate).not.toHaveBeenCalled();
   });
 
@@ -312,13 +315,15 @@ describe("SonioxWorkspaceClient", () => {
     navigation.search = "workspace=workspace-a&tool=test-product";
     const view = render(<SonioxWorkspaceClient />);
     fireEvent.change(screen.getByRole("combobox", { name: "내 송출 대상 언어" }), { target: { value: "ja" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "번역 음성" }), { target: { value: "Daniel" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "음성 속도" }), { target: { value: "1.2" } });
     fireEvent.click(screen.getByRole("button", { name: "미팅 시작" }));
     capture.phase = "listening";
     view.rerender(<SonioxWorkspaceClient />);
 
     fireEvent.keyDown(window, { code: "ShiftLeft", key: "Shift", repeat: false });
     expect(screen.getByRole("status", { name: "Push-to-Talk 상태" })).toHaveTextContent("실시간 번역 및 음성 연결 준비 중");
-    expect(speech.prepare).toHaveBeenCalledWith({ language: "ja", voice: "Maya", speed: 1 });
+    expect(speech.prepare).toHaveBeenCalledWith({ language: "ja", voice: "Daniel", speed: 1.2 });
     completePttOpeningBoundary(view);
 
     capture.transcript = {
@@ -335,10 +340,14 @@ describe("SonioxWorkspaceClient", () => {
     view.rerender(<SonioxWorkspaceClient />);
     fireEvent.keyDown(window, { code: "ShiftLeft", key: "Shift", repeat: false });
 
-    await waitFor(() => expect(screen.getByRole("region", { name: "상대방 언어 회의 내용" })).toHaveTextContent("こんにちは"));
-    expect(screen.getByRole("region", { name: "상대방 언어 회의 내용" })).toHaveTextContent("나 · Push-to-Talk");
+    const pttRow = await screen.findByRole("row", { name: "Speaker 1 Push-to-Talk 대화" });
+    expect(pttRow).toHaveTextContent("こんにちは");
+    expect(within(pttRow).getByText("안녕하세요")).toHaveClass("font-bold", "italic", "text-error");
+    expect(within(pttRow).getByText("こんにちは")).toHaveClass("font-bold", "italic", "text-error");
+    expect(pttRow).not.toHaveClass("bg-error/5");
+    expect(screen.getByText("Speaker 1 · Push-to-Talk")).not.toHaveClass("text-error");
     expect(translate).not.toHaveBeenCalled();
-    await waitFor(() => expect(speech.speak).toHaveBeenCalledWith({ text: "こんにちは", language: "ja", voice: "Maya", speed: 1 }));
+    await waitFor(() => expect(speech.speak).toHaveBeenCalledWith({ text: "こんにちは", language: "ja", voice: "Daniel", speed: 1.2 }));
     expect(screen.getByRole("status", { name: "Push-to-Talk 상태" })).toHaveTextContent("음성 송출 중");
     speech.phase = "finished";
     view.rerender(<SonioxWorkspaceClient />);

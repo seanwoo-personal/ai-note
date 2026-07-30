@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 
 import { type useSonioxLiveCapture } from "@/components/useSonioxLiveCapture";
 import { type useSonioxTts } from "@/components/useSonioxTts";
@@ -10,6 +10,8 @@ const LANGUAGES = [
   { value: "ja", label: "일본어" },
   { value: "zh", label: "중국어" },
 ] as const;
+
+const TTS_VOICES = ["Maya", "Daniel", "Mina", "Kenji"] as const;
 
 type Capture = ReturnType<typeof useSonioxLiveCapture>;
 type Speech = ReturnType<typeof useSonioxTts>;
@@ -28,6 +30,8 @@ type TranslationJob = {
   text: string;
   targetLanguage: string;
   kind: "incoming" | "incoming-counterpart" | "outbound";
+  voice?: (typeof TTS_VOICES)[number];
+  speed?: number;
 };
 
 type PushToTalkPhase = "idle" | "recording" | "finalizing" | "translating" | "speaking" | "sent";
@@ -38,10 +42,12 @@ type FrozenPushToTalk = {
   targetLanguage: string;
   closingEndpointCount: number;
   speaker: string | null;
+  voice: (typeof TTS_VOICES)[number];
+  speed: number;
 };
 
 function speakerLabel(speaker: string | null): string {
-  return speaker ? `화자 ${speaker}` : "화자 미확인";
+  return speaker ? `Speaker ${speaker}` : "Speaker";
 }
 
 function hasUtteranceAwaitingEndpoint(transcript: Capture["transcript"]): boolean {
@@ -66,10 +72,12 @@ function isTextInputTarget(target: EventTarget | null): boolean {
 
 export function TestProductMeetingPanel({ capture, speech }: { capture: Capture; speech: Speech }) {
   const [targetLanguage, setTargetLanguage] = useState("en");
+  const [ttsVoice, setTtsVoice] = useState<(typeof TTS_VOICES)[number]>("Maya");
+  const [ttsSpeed, setTtsSpeed] = useState(1);
   const [entries, setEntries] = useState<MeetingEntry[]>([]);
   const [translationQueue, setTranslationQueue] = useState<TranslationJob[]>([]);
   const [passiveTranslationQueue, setPassiveTranslationQueue] = useState<TranslationJob[]>([]);
-  const [speechQueue, setSpeechQueue] = useState<Array<{ id: number; text: string; language: string }>>([]);
+  const [speechQueue, setSpeechQueue] = useState<Array<{ id: number; text: string; language: string; voice: (typeof TTS_VOICES)[number]; speed: number }>>([]);
   const [pushToTalkPhase, setPushToTalkPhase] = useState<PushToTalkPhase>("idle");
   const [error, setError] = useState<string | null>(null);
   const lastEndpointRef = useRef(0);
@@ -151,7 +159,13 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
         ? job.kind === "incoming" ? { ...entry, korean: translated } : { ...entry, original: translated }
         : entry));
       if (job.kind === "outbound") {
-        setSpeechQueue((current) => [...current, { id: job.id, text: translated, language: job.targetLanguage }]);
+        setSpeechQueue((current) => [...current, {
+          id: job.id,
+          text: translated,
+          language: job.targetLanguage,
+          voice: (job.voice ?? "Maya") as (typeof TTS_VOICES)[number],
+          speed: job.speed ?? 1,
+        }]);
         setPushToTalkPhase("speaking");
       }
     }).catch((reason: unknown) => {
@@ -239,7 +253,7 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
     const item = speechQueue[0];
     const generation = generationRef.current;
     speechProcessingRef.current = true;
-    void speech.speak({ text: item.text, language: item.language, voice: "Maya", speed: 1 }).catch(() => {
+    void speech.speak({ text: item.text, language: item.language, voice: item.voice, speed: item.speed }).catch(() => {
       if (generationRef.current === generation) setError("번역문은 표시했지만 음성 송출을 재생하지 못했습니다.");
     }).finally(() => {
       if (generationRef.current === generation) {
@@ -293,6 +307,8 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
       targetLanguage,
       closingEndpointCount: capture.transcript.endpointCount,
       speaker: inferredSpeaker,
+      voice: ttsVoice,
+      speed: ttsSpeed,
     };
   };
 
@@ -308,17 +324,24 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
     outboundIdRef.current += 1;
     setEntries((current) => [...current, {
       id,
-      speaker: "나 · Push-to-Talk",
+      speaker: `${speakerLabel(frozen.speaker)} · Push-to-Talk`,
       original: translation,
       sourceLanguage: frozenTargetLanguage,
       korean: text,
       direction: "outbound",
     }]);
     if (translation) {
-      setSpeechQueue((current) => [...current, { id, text: translation, language: frozenTargetLanguage }]);
+      setSpeechQueue((current) => [...current, { id, text: translation, language: frozenTargetLanguage, voice: frozen.voice, speed: frozen.speed }]);
       setPushToTalkPhase("speaking");
     } else {
-      setTranslationQueue((current) => [...current, { id, text, targetLanguage: frozenTargetLanguage, kind: "outbound" }]);
+      setTranslationQueue((current) => [...current, {
+        id,
+        text,
+        targetLanguage: frozenTargetLanguage,
+        kind: "outbound",
+        voice: frozen.voice,
+        speed: frozen.speed,
+      }]);
       setPushToTalkPhase("translating");
     }
     setError(null);
@@ -340,7 +363,7 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
       capture.finalize();
       setPushToTalkPhase("recording");
       setError(null);
-      void speech.prepare({ language: targetLanguage, voice: "Maya", speed: 1 });
+      void speech.prepare({ language: targetLanguage, voice: ttsVoice, speed: ttsSpeed });
       return;
     }
     const frozen = freezePushToTalk();
@@ -493,17 +516,33 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
   return (
     <div className="space-y-5">
       <section className="rounded-2xl border border-line bg-panel p-5 sm:p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-col gap-4">
           <div>
             <h2 className="text-[20px] font-bold text-ink">자유 참여 글로벌 미팅</h2>
             <p className="mt-1 text-[13px] leading-6 text-inkSoft">참석자 등록 없이 Soniox가 세션 화자를 자동 구분하고, 한국어와 선택한 상대 언어를 계속 실시간 양방향 번역합니다.</p>
           </div>
-          <label className="flex min-w-48 flex-col gap-2 text-[13px] font-semibold text-ink">
-            <span>내 송출 대상 언어</span>
-            <select aria-label="내 송출 대상 언어" value={targetLanguage} disabled={active} onChange={(event) => setTargetLanguage(event.target.value)} className="min-h-11 rounded-xl border border-line bg-bg px-3 text-[14px] text-ink disabled:opacity-50">
-              {LANGUAGES.map((language) => <option key={language.value} value={language.value}>{language.label}</option>)}
-            </select>
-          </label>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <label className="flex min-w-0 flex-col gap-2 text-[13px] font-semibold text-ink">
+              <span>내 송출 대상 언어</span>
+              <select aria-label="내 송출 대상 언어" value={targetLanguage} disabled={active} onChange={(event) => setTargetLanguage(event.target.value)} className="min-h-11 rounded-xl border border-line bg-bg px-3 text-[14px] text-ink disabled:opacity-50">
+                {LANGUAGES.map((language) => <option key={language.value} value={language.value}>{language.label}</option>)}
+              </select>
+            </label>
+            <label className="flex min-w-0 flex-col gap-2 text-[13px] font-semibold text-ink">
+              <span>번역 음성</span>
+              <select aria-label="번역 음성" value={ttsVoice} disabled={active} onChange={(event) => setTtsVoice(event.target.value as (typeof TTS_VOICES)[number])} className="min-h-11 rounded-xl border border-line bg-bg px-3 text-[14px] text-ink disabled:opacity-50">
+                {TTS_VOICES.map((voice) => <option key={voice} value={voice}>{voice}</option>)}
+              </select>
+            </label>
+            <label className="flex min-w-0 flex-col gap-2 text-[13px] font-semibold text-ink">
+              <span>음성 속도</span>
+              <select aria-label="음성 속도" value={ttsSpeed} disabled={active} onChange={(event) => setTtsSpeed(Number(event.target.value))} className="min-h-11 rounded-xl border border-line bg-bg px-3 text-[14px] text-ink disabled:opacity-50">
+                <option value={0.8}>느리게 (0.8×)</option>
+                <option value={1}>보통 (1.0×)</option>
+                <option value={1.2}>빠르게 (1.2×)</option>
+              </select>
+            </label>
+          </div>
         </div>
         <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
           <button type="button" onClick={(event) => {
@@ -524,44 +563,61 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
         </div>
       </section>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <section aria-label="한국어 회의 내용" className="rounded-2xl border border-line bg-panel p-5">
-          <h3 className="text-[16px] font-bold text-ink">한국어</h3>
-          <div role="log" aria-label="한국어 실시간 기록" aria-live="polite" aria-relevant="additions text" className="mt-4 space-y-3">
-            {entries.length === 0 && <p className="text-[13px] text-inkSoft">외국어 발언의 한국어 번역이 여기에 표시됩니다.</p>}
-            {entries.map((entry) => (
-              <article key={entry.id} className="min-h-24 rounded-xl border border-line bg-soft/30 p-4">
-                <p className="text-[12px] font-bold text-inkSoft">{entry.speaker}</p>
-                <p data-i18n-user-content className="mt-2 whitespace-pre-wrap text-[15px] leading-7 text-ink">{entry.korean || "번역 중…"}</p>
-              </article>
-            ))}
-            {liveOriginal && (
-              <article className="min-h-24 rounded-xl border border-accent/40 bg-soft/50 p-4">
-                <p className="text-[12px] font-bold text-inkSoft">{speakerLabel(liveSpeaker)} · 실시간</p>
-                <p data-i18n-user-content className="mt-2 whitespace-pre-wrap text-[15px] leading-7 text-ink">{liveKorean || "실시간 번역 중…"}</p>
-              </article>
+      <section className="overflow-hidden rounded-2xl border border-line bg-panel">
+        <table aria-label="Global Meeting 대화록" aria-live="polite" aria-relevant="additions text" className="w-full table-fixed border-collapse">
+          <thead>
+            <tr className="border-b border-line bg-soft/50">
+              <th scope="col" className="w-1/2 border-r border-line px-4 py-3 text-left text-[13px] font-bold text-ink sm:px-5">한국어</th>
+              <th scope="col" className="w-1/2 px-4 py-3 text-left text-[13px] font-bold text-ink sm:px-5">상대방 언어</th>
+            </tr>
+          </thead>
+          <tbody>
+            {entries.length === 0 && !liveOriginal && (
+              <tr aria-label="대화 없음">
+                <td className="border-r border-line px-4 py-6 text-[13px] text-inkSoft sm:px-5">한국어 번역이 여기에 이어집니다.</td>
+                <td className="px-4 py-6 text-[13px] text-inkSoft sm:px-5">상대방 언어가 여기에 이어집니다.</td>
+              </tr>
             )}
-          </div>
-        </section>
-        <section aria-label="상대방 언어 회의 내용" className="rounded-2xl border border-line bg-panel p-5">
-          <h3 className="text-[16px] font-bold text-ink">상대방 언어</h3>
-          <div role="log" aria-label="상대방 언어 실시간 기록" aria-live="polite" aria-relevant="additions text" className="mt-4 space-y-3">
-            {entries.length === 0 && <p className="text-[13px] text-inkSoft">화자가 구분된 원문이 여기에 표시됩니다.</p>}
-            {entries.map((entry) => (
-              <article key={entry.id} className="min-h-24 rounded-xl border border-line bg-soft/30 p-4">
-                <p className="text-[12px] font-bold text-inkSoft">{entry.speaker}</p>
-                <p data-i18n-user-content className="mt-2 whitespace-pre-wrap text-[15px] leading-7 text-accent">{entry.original}</p>
-              </article>
-            ))}
+            {entries.map((entry) => {
+              const ptt = entry.direction === "outbound";
+              const textClass = ptt ? "font-bold italic text-error" : "text-ink";
+              const rowLabel = ptt
+                ? `${entry.speaker.replace(" · ", " ")} 대화`
+                : `${entry.speaker} 대화`;
+              return (
+                <Fragment key={entry.id}>
+                  <tr>
+                    <td colSpan={2} className="border-b border-line/70 px-4 pt-3 text-left text-[12px] font-semibold text-inkSoft sm:px-5">{entry.speaker}</td>
+                  </tr>
+                  <tr aria-label={rowLabel} className="border-b border-line">
+                    <td className="min-w-0 border-r border-line px-4 pb-4 pt-2 align-top sm:px-5">
+                      <p data-i18n-user-content className={`whitespace-pre-wrap break-words text-[15px] leading-7 ${textClass}`}>{entry.korean || "번역 중…"}</p>
+                    </td>
+                    <td className="min-w-0 px-4 pb-4 pt-2 align-top sm:px-5">
+                      <p data-i18n-user-content className={`whitespace-pre-wrap break-words text-[15px] leading-7 ${textClass}`}>{entry.original || "번역 중…"}</p>
+                    </td>
+                  </tr>
+                </Fragment>
+              );
+            })}
             {liveOriginal && (
-              <article className="min-h-24 rounded-xl border border-accent/40 bg-soft/50 p-4">
-                <p className="text-[12px] font-bold text-inkSoft">{speakerLabel(liveSpeaker)} · 실시간</p>
-                <p data-i18n-user-content className="mt-2 whitespace-pre-wrap text-[15px] leading-7 text-accent">{liveCounterpart || "실시간 번역 중…"}</p>
-              </article>
+              <Fragment>
+                <tr className="bg-soft/30">
+                  <td colSpan={2} className="border-b border-line/70 px-4 pt-3 text-left text-[12px] font-semibold text-inkSoft sm:px-5">{speakerLabel(liveSpeaker)} · 실시간</td>
+                </tr>
+                <tr aria-label={`${speakerLabel(liveSpeaker)} 실시간 대화`} className="bg-soft/30">
+                  <td className="min-w-0 border-r border-line px-4 pb-4 pt-2 align-top sm:px-5">
+                    <p data-i18n-user-content className="whitespace-pre-wrap break-words text-[15px] leading-7 text-ink">{liveKorean || "실시간 번역 중…"}</p>
+                  </td>
+                  <td className="min-w-0 px-4 pb-4 pt-2 align-top sm:px-5">
+                    <p data-i18n-user-content className="whitespace-pre-wrap break-words text-[15px] leading-7 text-ink">{liveCounterpart || "실시간 번역 중…"}</p>
+                  </td>
+                </tr>
+              </Fragment>
             )}
-          </div>
-        </section>
-      </div>
+          </tbody>
+        </table>
+      </section>
       {(error || capture.error || speech.error) && <p role="alert" className="text-[13px] font-medium text-error">{error || capture.error || speech.error}</p>}
       <p className="text-[12px] leading-5 text-inkSoft">회의 오디오는 Soniox로 전송됩니다. Soniox 실시간 번역 결과가 없는 경우에만 전사 텍스트가 설정된 번역 모델로 전송됩니다. 번역 음성 생성을 위해 번역된 텍스트도 Soniox로 전송됩니다. 외부 제공자를 사용하면 해당 제공자의 정책과 사용량 기반 비용이 적용될 수 있습니다. Global Meeting 결과는 현재 화면에만 유지되고 자동 저장되지 않습니다. 번역 음성은 이 기기의 스피커에서 재생되며 다른 통화 앱으로 자동 전송되지는 않습니다.</p>
     </div>

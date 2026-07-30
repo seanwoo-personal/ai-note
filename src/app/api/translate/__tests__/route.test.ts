@@ -31,6 +31,16 @@ describe("POST /api/translate", () => {
     expect(llm.run).toHaveBeenCalledWith(expect.stringContaining("Japanese"));
   });
 
+  it("instructs the model to preserve words that are already in the target language", async () => {
+    await POST(new Request("http://localhost:3100/api/translate", {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: "http://localhost:3100" },
+      body: JSON.stringify({ text: "회의를 시작합니다 okay", targetLanguage: "en" }),
+    }));
+
+    expect(llm.run).toHaveBeenCalledWith(expect.stringMatching(/already written in the target language/i));
+  });
+
   it("rejects unsupported targets and oversized utterances without invoking a model", async () => {
     const unsupported = await POST(new Request("http://localhost:3100/api/translate", {
       method: "POST",

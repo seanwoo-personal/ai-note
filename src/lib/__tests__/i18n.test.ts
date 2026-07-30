@@ -27,6 +27,9 @@ describe("UI translations", () => {
     expect(translateUi("en", "Whisper large-v3 · 준비됨")).toBe("Whisper large-v3 · Ready");
     expect(translateUi("ja", "Codex CLI gpt-5 · 감지됨")).toBe("Codex CLI gpt-5 · 検出済み");
     expect(translateUi("zh", "Claude CLI sonnet 사용 가능")).toBe("Claude CLI sonnet 可用");
+    expect(translateUi("en", "{speaker} 대화 행", { speaker: "Speaker 2" })).toBe("Speaker 2 transcript row");
+    expect(translateUi("zh", "{speaker} 실시간 대화 행", { speaker: "Speaker 2" })).toBe("Speaker 2 实时对话行");
+    expect(translateUi("ja", "{speaker} 대화 행", { speaker: "Speaker 2" })).toBe("Speaker 2 会話行");
   });
 
   it("translates runtime health status copy in every non-Korean locale", () => {

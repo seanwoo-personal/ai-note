@@ -47,11 +47,18 @@ describe("Soniox workspace routing", () => {
     ],
   };
 
-  it("keeps a valid workspace, folder, and tool selection", () => {
+  it("normalizes the retired translator deep link to the Global Meeting implementation", () => {
     expect(resolveSonioxWorkspaceSelection(
       new URLSearchParams("workspace=workspace-b&folder=folder-b&tool=translator"),
       library,
-    )).toEqual({ workspaceId: "workspace-b", folderId: "folder-b", tool: "translator" });
+    )).toEqual({ workspaceId: "workspace-b", folderId: "folder-b", tool: "test-product" });
+  });
+
+  it("keeps the Global Meeting implementation route as the translator surface", () => {
+    expect(resolveSonioxWorkspaceSelection(
+      new URLSearchParams("workspace=workspace-b&folder=folder-b&tool=test-product"),
+      library,
+    )).toEqual({ workspaceId: "workspace-b", folderId: "folder-b", tool: "test-product" });
   });
 
   it("falls back to the default workspace, no folder, and transcription", () => {

@@ -249,21 +249,23 @@ describe("activated library navigation", () => {
     expect(within(nav).getByText("내 워크스페이스")).toBeInTheDocument();
     expect(within(nav).getByRole("button", { name: "새 워크스페이스" })).toBeInTheDocument();
     expect(within(nav).getByRole("button", { name: "기본 이름 수정" })).toBeInTheDocument();
-    expect(within(nav).getByRole("link", { name: "Smart Scribe" })).toHaveAttribute(
+    expect(within(nav).getByRole("link", { name: "미팅 노트 스마트 스크라이브" })).toHaveAttribute(
       "href",
       `/soniox?workspace=${DEFAULT_WORKSPACE}&folder=${FOLDER}&tool=transcription`,
     );
-    expect(within(nav).getByRole("link", { name: "Translator" })).toHaveAttribute("aria-current", "page");
-    expect(within(nav).getByRole("link", { name: "Global Meeting" })).toHaveAttribute(
+    expect(within(nav).getByRole("link", { name: "트랜슬레이터" })).toHaveAttribute("aria-current", "page");
+    expect(within(nav).getByRole("link", { name: "트랜슬레이터" })).toHaveAttribute(
       "href",
       `/soniox?workspace=${DEFAULT_WORKSPACE}&folder=${FOLDER}&tool=test-product`,
     );
-    expect(within(nav).getByRole("link", { name: "Voice Typing" })).toBeInTheDocument();
-    expect(within(nav).getByText("제품 버전 1.15.6")).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: "보이스 타이핑" })).toBeInTheDocument();
+    expect(within(nav).queryByRole("link", { name: "Translator" })).not.toBeInTheDocument();
+    expect(within(nav).queryByRole("link", { name: "Global Meeting" })).not.toBeInTheDocument();
+    expect(within(nav).getByText("제품 버전 1.16.0")).toBeInTheDocument();
     expect(within(nav).getByRole("link", { name: "릴리즈 노트" })).toHaveAttribute("href", "/settings/releases");
     expect(within(nav).getByRole("link", { name: /프로젝트/ })).toHaveAttribute(
       "href",
-      `/soniox?workspace=${DEFAULT_WORKSPACE}&folder=${FOLDER}&tool=translator`,
+      `/soniox?workspace=${DEFAULT_WORKSPACE}&folder=${FOLDER}&tool=test-product`,
     );
     expect(within(nav).getByRole("button", { name: "회의 검색" })).toBeInTheDocument();
     expect(within(nav).getByRole("link", { name: /모든 내용/ })).toBeInTheDocument();
@@ -299,7 +301,7 @@ describe("activated library navigation", () => {
     fireEvent.keyDown(input, { key: "Enter" });
 
     await waitFor(() => expect(navigation.push).toHaveBeenCalledWith(
-      `/soniox?workspace=${DEFAULT_WORKSPACE}&folder=${createdFolder.id}&tool=translator`,
+      `/soniox?workspace=${DEFAULT_WORKSPACE}&folder=${createdFolder.id}&tool=test-product`,
     ));
   });
 
@@ -536,9 +538,9 @@ describe("activated library navigation", () => {
     expect(screen.getByRole("heading", { level: 1, name: "최근 작업한 문서" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /제품 회의/ })).toHaveAttribute("href", "/meetings/meeting-1");
     expect(screen.getByRole("button", { name: "Whisper 전사용 녹음 시작" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Smart Scribe 열기" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Translator 열기" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Voice Typing 열기" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "미팅 노트 스마트 스크라이브 열기" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "트랜슬레이터 열기" })).toHaveAttribute("href", expect.stringContaining("tool=test-product"));
+    expect(screen.getByRole("link", { name: "보이스 타이핑 열기" })).toBeInTheDocument();
     expect(navigation.replace).not.toHaveBeenCalled();
   });
 
@@ -1204,8 +1206,8 @@ describe("activated library navigation", () => {
   });
 
   it("returns a newly created Soniox folder to the active tool", () => {
-    expect(folderCreateDestination("workspace-a", "folder-a", "translator"))
-      .toBe("/soniox?workspace=workspace-a&folder=folder-a&tool=translator");
+    expect(folderCreateDestination("workspace-a", "folder-a", "test-product"))
+      .toBe("/soniox?workspace=workspace-a&folder=folder-a&tool=test-product");
     expect(folderCreateDestination("workspace-a", "folder-a", "voice-typing"))
       .toBe("/soniox?workspace=workspace-a&folder=folder-a&tool=voice-typing");
   });

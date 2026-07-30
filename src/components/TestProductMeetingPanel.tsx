@@ -2,14 +2,24 @@
 
 import { Fragment, useEffect, useRef, useState } from "react";
 
+import { AppDialog } from "@/components/AppDialog";
+import { useOptionalAppPreferences } from "@/components/AppPreferences";
+import { useOptionalRecorderSession } from "@/components/RecorderSessionProvider";
 import { type useSonioxLiveCapture } from "@/components/useSonioxLiveCapture";
 import { type useSonioxTts } from "@/components/useSonioxTts";
+import {
+  buildGlobalMeetingDefaultTitle,
+  buildGlobalMeetingMinutes,
+  buildGlobalMeetingTranscript,
+  type GlobalMeetingLogEntry,
+} from "@/lib/globalMeetingTranscript";
 import { SONIOX_TTS_SPEED_OPTIONS } from "@/services/sonioxTts";
 
 const LANGUAGES = [
+  { value: "ko", label: "한국어" },
   { value: "en", label: "영어" },
-  { value: "ja", label: "일본어" },
   { value: "zh", label: "중국어" },
+  { value: "ja", label: "일본어" },
 ] as const;
 
 const TTS_VOICES = ["Maya", "Daniel", "Mina", "Kenji"] as const;
@@ -25,6 +35,13 @@ const SPEED_LABELS: Record<string, string> = {
 function speedLabel(speed: number): string {
   return SPEED_LABELS[String(speed)] ?? `${speed}×`;
 }
+
+export interface GlobalMeetingLocation {
+  workspaceId: string;
+  folderId: string | null;
+}
+
+type SaveState = "idle" | "saving" | "saved" | "error";
 
 type Capture = ReturnType<typeof useSonioxLiveCapture>;
 type Speech = ReturnType<typeof useSonioxTts>;
@@ -57,6 +74,10 @@ type FrozenPushToTalk = {
   speaker: string | null;
   voice: (typeof TTS_VOICES)[number];
   speed: number;
+  // When the outbound utterance code-switched, Soniox's two-way translation is
+  // unreliable (target-language spans get re-translated back into Korean), so we
+  // discard it and re-translate the full source text through the fallback route.
+  codeSwitched: boolean;
 };
 
 function speakerLabel(speaker: string | null): string {
@@ -83,11 +104,38 @@ function isTextInputTarget(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && Boolean(target.closest("input, textarea, select, button, a, summary, audio, video, [role='button'], [role='link'], [tabindex]:not([tabindex='-1']), [contenteditable]:not([contenteditable='false'])"));
 }
 
-export function TestProductMeetingPanel({ capture, speech }: { capture: Capture; speech: Speech }) {
+export function TestProductMeetingPanel({ capture, speech, location }: {
+  capture: Capture;
+  speech: Speech;
+  location?: GlobalMeetingLocation;
+}) {
+  const recorderSession = useOptionalRecorderSession();
+  const appPreferences = useOptionalAppPreferences();
+  const captureRef = useRef(capture);
+  captureRef.current = capture;
+  const speechRef = useRef(speech);
+  speechRef.current = speech;
+  const [inputLanguage, setInputLanguage] = useState("ko");
   const [targetLanguage, setTargetLanguage] = useState("en");
   const [ttsVoice, setTtsVoice] = useState<(typeof TTS_VOICES)[number]>("Maya");
   const [ttsSpeed, setTtsSpeed] = useState(1);
   const [entries, setEntries] = useState<MeetingEntry[]>([]);
+  const [saveState, setSaveState] = useState<SaveState>("idle");
+  const [savedMeetingId, setSavedMeetingId] = useState<string | null>(null);
+  const [endingRequested, setEndingRequested] = useState(false);
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [meetingTitle, setMeetingTitle] = useState("");
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const endedAtRef = useRef("");
+  const sessionIdRef = useRef<string | null>(null);
+  const sessionStartedAtRef = useRef<string>("");
+  const endInFlightRef = useRef(false);
+  const locationRef = useRef(location);
+  locationRef.current = location;
+  const inputLanguageRef = useRef(inputLanguage);
+  inputLanguageRef.current = inputLanguage;
+  const targetLanguageRef = useRef(targetLanguage);
+  targetLanguageRef.current = targetLanguage;
   const [translationQueue, setTranslationQueue] = useState<TranslationJob[]>([]);
   const [passiveTranslationQueue, setPassiveTranslationQueue] = useState<TranslationJob[]>([]);
   const [speechQueue, setSpeechQueue] = useState<Array<{ id: number; text: string; language: string; voice: (typeof TTS_VOICES)[number]; speed: number }>>([]);
@@ -114,7 +162,8 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
   const outboundIdRef = useRef(1_000_000);
   captureStopRef.current = capture.stop;
   speechStopRef.current = speech.stop;
-  const active = ["requesting", "connecting", "listening", "finishing"].includes(capture.phase);
+  const active = ["requesting", "connecting", "listening", "paused", "finishing"].includes(capture.phase);
+  const paused = capture.phase === "paused";
 
   useEffect(() => {
     if (capture.transcript.endpointCount <= lastEndpointRef.current) return;
@@ -132,14 +181,18 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
       translationLengthsRef.current[speakerKey] = endpoint.translationFinal.length;
       if (!original) continue;
       const sourceLanguage = endpoint.originalLanguage ?? "unknown";
-      const koreanSource = sourceLanguage.startsWith("ko");
-      const korean = koreanSource ? original : liveTranslation;
-      const counterpart = koreanSource ? liveTranslation : original;
+      const fromInputLanguage = sourceLanguage.startsWith(inputLanguageRef.current);
+      // A code-switched utterance corrupts Soniox's two-way translation (spans in
+      // the target language get re-translated back into the source), so drop the
+      // live translation and re-derive the counterpart from the full source text.
+      const trustLiveTranslation = !endpoint.codeSwitched;
+      const korean = fromInputLanguage ? original : (trustLiveTranslation ? liveTranslation : "");
+      const counterpart = fromInputLanguage ? (trustLiveTranslation ? liveTranslation : "") : original;
       nextEntries.push({ id: endpoint.id, speaker: speakerLabel(endpoint.speaker), original: counterpart, sourceLanguage, korean, direction: "incoming" });
-      if (koreanSource && !counterpart && !["recording", "finalizing"].includes(pushToTalkPhase)) {
-        nextJobs.push({ id: endpoint.id, text: original, targetLanguage, kind: "incoming-counterpart" });
-      } else if (!koreanSource && !korean) {
-        nextJobs.push({ id: endpoint.id, text: original, targetLanguage: "ko", kind: "incoming" });
+      if (fromInputLanguage && !counterpart && !["recording", "finalizing"].includes(pushToTalkPhase)) {
+        nextJobs.push({ id: endpoint.id, text: original, targetLanguage: targetLanguageRef.current, kind: "incoming-counterpart" });
+      } else if (!fromInputLanguage && !korean) {
+        nextJobs.push({ id: endpoint.id, text: original, targetLanguage: inputLanguageRef.current, kind: "incoming" });
       }
     }
     if (nextEntries.length) setEntries((current) => [...current, ...nextEntries]);
@@ -302,6 +355,7 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
     const translationLengths = { ...pushToTalkTranslationLengthsRef.current };
     const parts: string[] = [];
     const translationParts: string[] = [];
+    let codeSwitched = false;
     for (const endpoint of endpoints) {
       const speakerKey = endpoint.speaker ?? "unknown";
       const previousLength = lengths[speakerKey] ?? 0;
@@ -312,16 +366,18 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
       translationLengths[speakerKey] = endpoint.translationFinal.length;
       if (text) parts.push(text);
       if (translated) translationParts.push(translated);
+      if (endpoint.codeSwitched) codeSwitched = true;
     }
 
     return {
       text: parts.join(" ").trim(),
-      translation: translationParts.join(" ").trim(),
+      translation: codeSwitched ? "" : translationParts.join(" ").trim(),
       targetLanguage,
-      closingEndpointCount: capture.transcript.endpointCount,
+      closingEndpointCount: closingEndpointId,
       speaker: inferredSpeaker,
       voice: ttsVoice,
       speed: ttsSpeed,
+      codeSwitched,
     };
   };
 
@@ -335,14 +391,22 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
     }
     const id = outboundIdRef.current;
     outboundIdRef.current += 1;
-    setEntries((current) => [...current, {
-      id,
-      speaker: `${speakerLabel(frozen.speaker)} · Push-to-Talk`,
-      original: translation,
-      sourceLanguage: frozenTargetLanguage,
-      korean: text,
-      direction: "outbound",
-    }]);
+    setEntries((current) => [
+      ...current.filter((entry) => !(
+        entry.direction === "incoming"
+        && entry.id > pushToTalkEndpointRef.current
+        && entry.id <= frozen.closingEndpointCount
+        && entry.speaker === speakerLabel(frozen.speaker)
+      )),
+      {
+        id,
+        speaker: `${speakerLabel(frozen.speaker)} · Push-to-Talk`,
+        original: translation,
+        sourceLanguage: frozenTargetLanguage,
+        korean: text,
+        direction: "outbound" as const,
+      },
+    ]);
     if (translation) {
       setSpeechQueue((current) => [...current, { id, text: translation, language: frozenTargetLanguage, voice: frozen.voice, speed: frozen.speed }]);
       setPushToTalkPhase("speaking");
@@ -471,36 +535,173 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
     frozenPushToTalkRef.current = null;
     openingBoundaryRef.current = null;
     userSpeakerRef.current = null;
+    sessionIdRef.current = crypto.randomUUID();
+    sessionStartedAtRef.current = new Date().toISOString();
+    endInFlightRef.current = false;
     setEntries([]);
     setTranslationQueue([]);
     setPassiveTranslationQueue([]);
     setSpeechQueue([]);
     setPushToTalkPhase("idle");
     setError(null);
+    setSaveState("idle");
+    setSavedMeetingId(null);
+    setEndingRequested(false);
+    setSaveDialogOpen(false);
+    setMeetingTitle("");
+    endedAtRef.current = "";
     speech.stop();
     capture.reset();
     void capture.start({
       inputSource: "microphone",
-      translation: { mode: "two_way", languageA: "ko", languageB: targetLanguage },
+      translation: { mode: "two_way", languageA: inputLanguage, languageB: targetLanguage },
     });
   };
 
-  const stopMeeting = () => {
-    generationRef.current += 1;
-    abortRef.current?.abort();
-    passiveAbortRef.current?.abort();
-    processingRef.current = false;
-    passiveProcessingRef.current = false;
-    capture.stop();
+  const pauseMeeting = () => {
+    capture.pause();
     speech.stop();
+  };
+
+  const resumeMeeting = () => {
+    capture.resume();
+  };
+
+  const logEntries = (): GlobalMeetingLogEntry[] => entries.map((entry) => ({
+    speaker: entry.speaker,
+    korean: entry.korean,
+    counterpart: entry.original,
+    direction: entry.direction,
+  }));
+
+  const languageLabel = (value: string): string => LANGUAGES.find((language) => language.value === value)?.label ?? value;
+
+  const prepareMeetingSave = () => {
+    const preparedEntries = logEntries();
+    const transcript = buildGlobalMeetingTranscript(preparedEntries, {
+      inputLanguageLabel: languageLabel(inputLanguageRef.current),
+      targetLanguageLabel: languageLabel(targetLanguageRef.current),
+    });
+    if (!transcript) {
+      setEndingRequested(false);
+      setSaveState("error");
+      setError("저장할 대화가 없습니다. 발화가 기록된 뒤 다시 종료해 주세요.");
+      return;
+    }
+    const endedAt = endedAtRef.current || new Date().toISOString();
+    endedAtRef.current = endedAt;
+    setMeetingTitle(buildGlobalMeetingDefaultTitle({
+      startedAt: sessionStartedAtRef.current || endedAt,
+      endedAt,
+      entries: preparedEntries,
+    }));
+    setEndingRequested(false);
+    setSaveState("idle");
+    setSaveDialogOpen(true);
+  };
+
+  const reopenMeetingSave = () => {
+    const preparedEntries = logEntries();
+    if (preparedEntries.length === 0) {
+      setSaveState("error");
+      setError("저장할 대화가 없습니다. 발화가 기록된 뒤 다시 종료해 주세요.");
+      return;
+    }
+    const endedAt = endedAtRef.current || new Date().toISOString();
+    endedAtRef.current = endedAt;
+    if (!meetingTitle.trim()) {
+      setMeetingTitle(buildGlobalMeetingDefaultTitle({
+        startedAt: sessionStartedAtRef.current || endedAt,
+        endedAt,
+        entries: preparedEntries,
+      }));
+    }
+    setError(null);
+    setSaveState("idle");
+    setSaveDialogOpen(true);
+  };
+
+  const persistMeeting = () => {
+    if (endInFlightRef.current) return;
+    const preparedEntries = logEntries();
+    const transcript = buildGlobalMeetingTranscript(preparedEntries, {
+      inputLanguageLabel: languageLabel(inputLanguageRef.current),
+      targetLanguageLabel: languageLabel(targetLanguageRef.current),
+    });
+    const title = meetingTitle.trim();
+    if (!transcript || !title) {
+      setSaveState("error");
+      setError(!transcript
+        ? "저장할 대화가 없습니다. 발화가 기록된 뒤 다시 종료해 주세요."
+        : "회의록 이름을 입력해 주세요.");
+      return;
+    }
+    const id = sessionIdRef.current ?? crypto.randomUUID();
+    sessionIdRef.current = id;
+    const startedAt = sessionStartedAtRef.current || new Date().toISOString();
+    const minutesBody = buildGlobalMeetingMinutes({
+      title,
+      startedAt,
+      endedAt: endedAtRef.current || startedAt,
+      inputLanguageLabel: languageLabel(inputLanguageRef.current),
+      targetLanguageLabel: languageLabel(targetLanguageRef.current),
+      entries: preparedEntries,
+    });
+    endInFlightRef.current = true;
+    setError(null);
+    setSaveState("saving");
+    void fetch(`/api/meetings/${id}/session`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        startedAt,
+        durationMs: Math.max(0, new Date(endedAtRef.current || new Date().toISOString()).getTime() - new Date(startedAt).getTime()),
+        transcript,
+        minutesBody,
+        title,
+        ...(locationRef.current
+          ? { workspaceId: locationRef.current.workspaceId, folderId: locationRef.current.folderId }
+          : {}),
+      }),
+    }).then(async (response) => {
+      if (!response.ok) throw new Error("session_save_failed");
+      const payload = await response.json().catch(() => ({})) as { id?: unknown };
+      setSavedMeetingId(typeof payload.id === "string" ? payload.id : id);
+      setSaveState("saved");
+      setSaveDialogOpen(false);
+    }).catch(() => {
+      // Never clear the captured conversation or close the dialog on failure.
+      setSaveState("error");
+      setError("회의록을 저장하지 못했습니다. 대화는 그대로 남아 있으니 다시 시도해 주세요.");
+    }).finally(() => {
+      endInFlightRef.current = false;
+    });
+  };
+
+  const endMeeting = () => {
+    if (endInFlightRef.current || endingRequested) return;
+    setError(null);
+    setSaveState("idle");
+    setEndingRequested(true);
+    endedAtRef.current = new Date().toISOString();
+    speech.stop();
+    setSpeechQueue([]);
+    setPushToTalkPhase("idle");
     frozenPushToTalkRef.current = null;
     openingBoundaryRef.current = null;
     userSpeakerRef.current = null;
-    setTranslationQueue([]);
-    setPassiveTranslationQueue([]);
-    setSpeechQueue([]);
-    setPushToTalkPhase("idle");
+    capture.stop();
   };
+
+  useEffect(() => {
+    if (!endingRequested || !["idle", "finished", "error"].includes(capture.phase)) return;
+    if (translationQueue.length > 0 || passiveTranslationQueue.length > 0 || processingRef.current || passiveProcessingRef.current) return;
+    // Let the endpoint-processing effect commit the final Soniox boundary before
+    // snapshotting. This preserves the utterance that was still in progress when
+    // the user pressed “미팅 종료”.
+    const timer = window.setTimeout(prepareMeetingSave, 0);
+    return () => window.clearTimeout(timer);
+  }, [capture.phase, endingRequested, entries, passiveTranslationQueue.length, translationQueue.length]);
 
   const liveSpeaker = capture.transcript.activeSpeaker;
   const liveSpeakerKey = liveSpeaker ?? "unknown";
@@ -514,8 +715,39 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
   const liveOriginal = liveOriginalTrack.slice(originalLengthsRef.current[liveSpeakerKey] ?? 0).trim();
   const liveTranslation = liveTranslationTrack.slice(translationLengthsRef.current[liveSpeakerKey] ?? 0).trim();
   const liveSourceLanguage = liveTrack?.originalLanguage ?? "unknown";
-  const liveKorean = liveSourceLanguage.startsWith("ko") ? liveOriginal : liveTranslation;
-  const liveCounterpart = liveSourceLanguage.startsWith("ko") ? liveTranslation : liveOriginal;
+  const liveFromInputLanguage = liveSourceLanguage.startsWith(inputLanguage);
+  const liveKorean = liveFromInputLanguage ? liveOriginal : liveTranslation;
+  const liveCounterpart = liveFromInputLanguage ? liveTranslation : liveOriginal;
+  const inputLanguageLabel = languageLabel(inputLanguage);
+  const targetLanguageLabel = languageLabel(targetLanguage);
+  const summaryDraft = saveDialogOpen ? buildGlobalMeetingMinutes({
+    title: meetingTitle,
+    startedAt: sessionStartedAtRef.current || endedAtRef.current,
+    endedAt: endedAtRef.current || sessionStartedAtRef.current,
+    inputLanguageLabel,
+    targetLanguageLabel,
+    entries: logEntries(),
+  }) : "";
+  const registerNavigationBlocker = recorderSession?.registerNavigationBlocker;
+  const unregisterNavigationBlocker = recorderSession?.unregisterNavigationBlocker;
+
+  useEffect(() => {
+    if (!registerNavigationBlocker || !unregisterNavigationBlocker) return;
+    const hasUnsavedMeeting = active || (entries.length > 0 && saveState !== "saved");
+    if (!hasUnsavedMeeting) return;
+    registerNavigationBlocker({
+      id: "global-meeting-unsaved-session",
+      kind: "meeting_content_edit",
+      phase: saveState === "saving" ? "saving" : "dirty",
+      label: "트랜슬레이터 미팅",
+      discard: () => {
+        speechRef.current.stop();
+        captureRef.current.stop();
+      },
+      allowNavigation: (currentUrl, destinationUrl) => currentUrl === destinationUrl,
+    });
+    return () => unregisterNavigationBlocker("global-meeting-unsaved-session");
+  }, [active, entries.length, registerNavigationBlocker, saveState, unregisterNavigationBlocker]);
 
   const pushToTalkLabel = {
     idle: "마이크와 실시간 번역은 계속 실행됩니다. Left Shift로 내 송출 구간을 시작하세요.",
@@ -532,13 +764,31 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
         <div className="flex flex-col gap-4">
           <div>
             <h2 className="text-[20px] font-bold text-ink">자유 참여 글로벌 미팅</h2>
-            <p className="mt-1 text-[13px] leading-6 text-inkSoft">참석자 등록 없이 Soniox가 세션 화자를 자동 구분하고, 한국어와 선택한 상대 언어를 계속 실시간 양방향 번역합니다.</p>
+            <p className="mt-1 text-[13px] leading-6 text-inkSoft">참석자 등록 없이 Soniox가 세션 화자를 자동 구분하고, 선택한 입력 언어와 번역할 언어를 계속 실시간 양방향 번역합니다.</p>
           </div>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <label className="flex min-w-0 flex-col gap-2 text-[13px] font-semibold text-ink">
-              <span>내 송출 대상 언어</span>
-              <select aria-label="내 송출 대상 언어" value={targetLanguage} disabled={active} onChange={(event) => setTargetLanguage(event.target.value)} className="min-h-11 rounded-xl border border-line bg-bg px-3 text-[14px] text-ink disabled:opacity-50">
+              <span>입력 언어</span>
+              <select
+                aria-label="입력 언어"
+                value={inputLanguage}
+                disabled={active}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  setInputLanguage(next);
+                  if (targetLanguage === next) {
+                    setTargetLanguage(LANGUAGES.find((language) => language.value !== next)?.value ?? "ko");
+                  }
+                }}
+                className="min-h-11 rounded-xl border border-line bg-bg px-3 text-[14px] text-ink disabled:opacity-50"
+              >
                 {LANGUAGES.map((language) => <option key={language.value} value={language.value}>{language.label}</option>)}
+              </select>
+            </label>
+            <label className="flex min-w-0 flex-col gap-2 text-[13px] font-semibold text-ink">
+              <span>번역할 언어</span>
+              <select aria-label="번역할 언어" value={targetLanguage} disabled={active} onChange={(event) => setTargetLanguage(event.target.value)} className="min-h-11 rounded-xl border border-line bg-bg px-3 text-[14px] text-ink disabled:opacity-50">
+                {LANGUAGES.filter((language) => language.value !== inputLanguage).map((language) => <option key={language.value} value={language.value}>{language.label}</option>)}
               </select>
             </label>
             <label className="flex min-w-0 flex-col gap-2 text-[13px] font-semibold text-ink">
@@ -557,17 +807,52 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
           </div>
         </div>
         <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
-          <button type="button" onClick={(event) => {
-            event.currentTarget.blur();
-            if (active) stopMeeting();
-            else startMeeting();
-          }} className="min-h-11 rounded-full bg-ink px-5 text-[14px] font-semibold text-bg">
-            {active ? "미팅 중지" : "미팅 시작"}
-          </button>
+          {!active ? (
+            entries.length > 0 && saveState !== "saved" ? (
+              <button type="button" onClick={(event) => { event.currentTarget.blur(); reopenMeetingSave(); }} className="min-h-11 rounded-full bg-ink px-5 text-[14px] font-semibold text-bg">
+                회의록 저장 계속
+              </button>
+            ) : (
+              <button type="button" onClick={(event) => { event.currentTarget.blur(); startMeeting(); }} className="min-h-11 rounded-full bg-ink px-5 text-[14px] font-semibold text-bg">
+                미팅 시작
+              </button>
+            )
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={(event) => { event.currentTarget.blur(); if (paused) resumeMeeting(); else pauseMeeting(); }}
+                disabled={!paused && capture.phase !== "listening"}
+                className="min-h-11 rounded-full bg-ink px-5 text-[14px] font-semibold text-bg disabled:opacity-40"
+              >
+                {paused ? "이어서 진행" : "일시정지"}
+              </button>
+              <button
+                type="button"
+                onClick={(event) => { event.currentTarget.blur(); endMeeting(); }}
+                disabled={saveState === "saving"}
+                className="min-h-11 rounded-full border border-error px-5 text-[14px] font-semibold text-error disabled:opacity-40"
+              >
+                미팅 종료
+              </button>
+            </>
+          )}
           <button type="button" disabled={capture.phase !== "listening" || ["finalizing", "translating", "speaking"].includes(pushToTalkPhase) || ["connecting", "playing"].includes(speech.phase)} onClick={togglePushToTalk} className={`min-h-11 rounded-full border px-5 text-[14px] font-semibold disabled:opacity-40 ${pushToTalkPhase === "recording" ? "border-error bg-error/10 text-error" : "border-line text-accent"}`}>
             {pushToTalkPhase === "recording" ? "송출 구간 확정" : "송출 구간 시작"}
           </button>
         </div>
+        {saveState !== "idle" && (
+          <p role="status" className={`mt-4 text-[13px] font-medium ${saveState === "error" ? "text-error" : "text-ink"}`}>
+            {saveState === "saving" && "회의록을 저장하는 중…"}
+            {saveState === "saved" && (savedMeetingId
+              ? <>회의록을 저장했습니다. <a href={`/meetings/${savedMeetingId}`} className="text-accent underline underline-offset-4">회의록 보기</a></>
+              : "회의록을 저장했습니다.")}
+            {saveState === "error" && "회의록을 저장하지 못했습니다. 대화는 그대로 남아 있으니 다시 시도해 주세요."}
+          </p>
+        )}
+        {paused && (
+          <p role="status" className="mt-2 text-[13px] font-medium text-inkSoft">일시정지됨 · 음성 처리가 멈췄습니다. “이어서 진행”을 누르면 같은 세션으로 계속합니다.</p>
+        )}
         <div className="mt-4 rounded-xl border border-line bg-soft/40 p-4">
           <p className="text-[12px] font-bold text-ink">Push-to-Talk · Left Shift</p>
           <p role="status" aria-label="Push-to-Talk 상태" className="mt-1 text-[13px] leading-6 text-inkSoft">{pushToTalkLabel}</p>
@@ -576,26 +861,27 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-line bg-panel">
-        <table aria-label="Global Meeting 대화록" aria-live="polite" aria-relevant="additions text" className="w-full table-fixed border-collapse">
+        <table aria-label="트랜슬레이터 대화록" aria-live="polite" aria-relevant="additions text" className="w-full table-fixed border-collapse">
           <thead>
             <tr className="border-b border-line bg-soft/50">
-              <th scope="col" className="w-1/2 border-r border-line px-4 py-3 text-left text-[13px] font-bold text-ink sm:px-5">한국어</th>
-              <th scope="col" className="w-1/2 px-4 py-3 text-left text-[13px] font-bold text-ink sm:px-5">상대방 언어</th>
+              <th scope="col" className="w-1/2 border-r border-line px-4 py-3 text-left text-[13px] font-bold text-ink sm:px-5">{inputLanguageLabel}</th>
+              <th scope="col" className="w-1/2 px-4 py-3 text-left text-[13px] font-bold text-ink sm:px-5">{targetLanguageLabel}</th>
             </tr>
           </thead>
           <tbody>
             {entries.length === 0 && !liveOriginal && (
               <tr aria-label="대화 없음">
-                <td className="border-r border-line px-4 py-6 text-[13px] text-inkSoft sm:px-5">한국어 번역이 여기에 이어집니다.</td>
-                <td className="px-4 py-6 text-[13px] text-inkSoft sm:px-5">상대방 언어가 여기에 이어집니다.</td>
+                <td className="border-r border-line px-4 py-6 text-[13px] text-inkSoft sm:px-5">{inputLanguageLabel} 발화가 여기에 이어집니다.</td>
+                <td className="px-4 py-6 text-[13px] text-inkSoft sm:px-5">{targetLanguageLabel} 번역이 여기에 이어집니다.</td>
               </tr>
             )}
             {entries.map((entry) => {
               const ptt = entry.direction === "outbound";
-              const textClass = ptt ? "font-bold italic text-error" : "text-ink";
-              const rowLabel = ptt
-                ? `${entry.speaker.replace(" · ", " ")} 대화`
-                : `${entry.speaker} 대화`;
+              const textClass = ptt ? "font-bold text-ink" : "text-ink";
+              const speaker = entry.speaker.replace(" · ", " ");
+              const rowLabel = appPreferences
+                ? appPreferences.t("{speaker} 대화 행", { speaker })
+                : `${speaker} 대화 행`;
               return (
                 <Fragment key={entry.id}>
                   <tr>
@@ -603,10 +889,14 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
                   </tr>
                   <tr aria-label={rowLabel} className="border-b border-line">
                     <td className="min-w-0 border-r border-line px-4 pb-4 pt-2 align-top sm:px-5">
-                      <p data-i18n-user-content className={`whitespace-pre-wrap break-words text-[15px] leading-7 ${textClass}`}>{entry.korean || "번역 중…"}</p>
+                      <p className={`whitespace-pre-wrap break-words text-[15px] leading-7 ${textClass}`}>
+                        {entry.korean ? <span data-i18n-user-content>{entry.korean}</span> : "번역 중…"}
+                      </p>
                     </td>
                     <td className="min-w-0 px-4 pb-4 pt-2 align-top sm:px-5">
-                      <p data-i18n-user-content className={`whitespace-pre-wrap break-words text-[15px] leading-7 ${textClass}`}>{entry.original || "번역 중…"}</p>
+                      <p className={`whitespace-pre-wrap break-words text-[15px] leading-7 ${textClass}`}>
+                        {entry.original ? <span data-i18n-user-content>{entry.original}</span> : "번역 중…"}
+                      </p>
                     </td>
                   </tr>
                 </Fragment>
@@ -615,14 +905,25 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
             {liveOriginal && (
               <Fragment>
                 <tr className="bg-soft/30">
-                  <td colSpan={2} className="border-b border-line/70 px-4 pt-3 text-left text-[12px] font-semibold text-inkSoft sm:px-5">{speakerLabel(liveSpeaker)} · 실시간</td>
+                  <td colSpan={2} className="border-b border-line/70 px-4 pt-3 text-left text-[12px] font-semibold text-inkSoft sm:px-5">{speakerLabel(liveSpeaker)} <span>· 실시간</span></td>
                 </tr>
-                <tr aria-label={`${speakerLabel(liveSpeaker)} 실시간 대화`} className="bg-soft/30">
+                <tr
+                  aria-label={appPreferences
+                    ? appPreferences.t("{speaker} 실시간 대화 행", {
+                        speaker: speakerLabel(liveSpeaker),
+                      })
+                    : `${speakerLabel(liveSpeaker)} 실시간 대화 행`}
+                  className="bg-soft/30"
+                >
                   <td className="min-w-0 border-r border-line px-4 pb-4 pt-2 align-top sm:px-5">
-                    <p data-i18n-user-content className="whitespace-pre-wrap break-words text-[15px] leading-7 text-ink">{liveKorean || "실시간 번역 중…"}</p>
+                    <p className="whitespace-pre-wrap break-words text-[15px] leading-7 text-ink">
+                      {liveKorean ? <span data-i18n-user-content>{liveKorean}</span> : "실시간 번역 중…"}
+                    </p>
                   </td>
                   <td className="min-w-0 px-4 pb-4 pt-2 align-top sm:px-5">
-                    <p data-i18n-user-content className="whitespace-pre-wrap break-words text-[15px] leading-7 text-ink">{liveCounterpart || "실시간 번역 중…"}</p>
+                    <p className="whitespace-pre-wrap break-words text-[15px] leading-7 text-ink">
+                      {liveCounterpart ? <span data-i18n-user-content>{liveCounterpart}</span> : "실시간 번역 중…"}
+                    </p>
                   </td>
                 </tr>
               </Fragment>
@@ -631,7 +932,49 @@ export function TestProductMeetingPanel({ capture, speech }: { capture: Capture;
         </table>
       </section>
       {(error || capture.error || speech.error) && <p role="alert" className="text-[13px] font-medium text-error">{error || capture.error || speech.error}</p>}
-      <p className="text-[12px] leading-5 text-inkSoft">회의 오디오는 Soniox로 전송됩니다. Soniox 실시간 번역 결과가 없는 경우에만 전사 텍스트가 설정된 번역 모델로 전송됩니다. 번역 음성 생성을 위해 번역된 텍스트도 Soniox로 전송됩니다. 외부 제공자를 사용하면 해당 제공자의 정책과 사용량 기반 비용이 적용될 수 있습니다. Global Meeting 결과는 현재 화면에만 유지되고 자동 저장되지 않습니다. 번역 음성은 이 기기의 스피커에서 재생되며 다른 통화 앱으로 자동 전송되지는 않습니다.</p>
+      <p className="text-[12px] leading-5 text-inkSoft">회의 오디오는 Soniox로 전송됩니다. Soniox 실시간 번역 결과가 없거나 언어 혼용이 감지된 경우 전사 텍스트가 설정된 번역 모델로 전송됩니다. 번역 음성 생성을 위해 번역된 텍스트도 Soniox로 전송됩니다. 외부 제공자를 사용하면 해당 제공자의 정책과 사용량 기반 비용이 적용될 수 있습니다. “미팅 종료”를 누르면 저장 팝업에서 회의록 이름을 확인한 뒤 선택한 폴더에 저장할 수 있으며 오디오 파일은 보존하지 않습니다. 번역 음성은 이 기기의 스피커에서 재생되며 다른 통화 앱으로 자동 전송되지는 않습니다.</p>
+      <AppDialog
+        open={saveDialogOpen}
+        title="회의록 저장"
+        initialFocusRef={titleInputRef}
+        dismissible={saveState !== "saving"}
+        onDismiss={() => {
+          setSaveDialogOpen(false);
+          setSaveState("idle");
+          setError(null);
+        }}
+      >
+        {(dismiss) => (
+          <div className="mt-4 space-y-4">
+            <p className="text-[13px] leading-6 text-inkSoft">
+              회의 시간과 대화 내용을 바탕으로 기본 이름과 요약 초안을 만들었습니다. 이름을 수정하거나 그대로 저장하세요.
+            </p>
+            <label className="block text-[13px] font-semibold text-ink">
+              회의록 이름
+              <input
+                ref={titleInputRef}
+                aria-label="회의록 이름"
+                value={meetingTitle}
+                maxLength={200}
+                disabled={saveState === "saving"}
+                onChange={(event) => setMeetingTitle(event.target.value)}
+                className="mt-2 min-h-11 w-full rounded-xl border border-line bg-bg px-3 text-[14px] text-ink disabled:opacity-50"
+              />
+            </label>
+            <div className="rounded-xl border border-line bg-soft/40 p-4 text-[12px] leading-5 text-inkSoft">
+              <p className="font-semibold text-ink">요약 초안</p>
+              <p data-i18n-user-content className="mt-2 max-h-44 overflow-y-auto whitespace-pre-wrap">{summaryDraft}</p>
+            </div>
+            {saveState === "error" && error && <p role="alert" className="text-[13px] font-medium text-error">{error}</p>}
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button type="button" disabled={saveState === "saving"} onClick={() => dismiss("explicit_cancel")} className="min-h-11 rounded-full border border-line px-4 text-[13px] font-semibold text-accent disabled:opacity-40">취소</button>
+              <button type="button" disabled={saveState === "saving" || !meetingTitle.trim()} onClick={persistMeeting} className="min-h-11 rounded-full bg-ink px-5 text-[13px] font-semibold text-bg disabled:opacity-40">
+                {saveState === "saving" ? "저장 중…" : saveState === "error" ? "회의록 저장 다시 시도" : "회의록 저장"}
+              </button>
+            </div>
+          </div>
+        )}
+      </AppDialog>
     </div>
   );
 }

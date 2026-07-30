@@ -347,10 +347,9 @@ function SonioxToolLinks({
   onNavigationCommitted: () => void;
 }) {
   const tools: Array<{ tool: SonioxTool; label: string }> = [
-    { tool: "transcription", label: "Smart Scribe" },
-    { tool: "translator", label: "Translator" },
-    { tool: "test-product", label: "Global Meeting" },
-    { tool: "voice-typing", label: "Voice Typing" },
+    { tool: "transcription", label: "미팅 노트 스마트 스크라이브" },
+    { tool: "test-product", label: "트랜슬레이터" },
+    { tool: "voice-typing", label: "보이스 타이핑" },
   ];
   return <>{tools.map((item) => (
     <NavigationRow

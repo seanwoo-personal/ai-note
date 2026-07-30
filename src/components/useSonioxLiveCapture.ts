@@ -17,6 +17,7 @@ export type SonioxCapturePhase =
   | "requesting"
   | "connecting"
   | "listening"
+  | "paused"
   | "finishing"
   | "finished"
   | "error";
@@ -243,6 +244,30 @@ export function useSonioxLiveCapture() {
     }
   }, []);
 
+  const pause = useCallback(() => {
+    if (phaseRef.current !== "listening") return;
+    const recorder = recorderRef.current;
+    if (!recorder || recorder.state !== "recording" || finalizeRequestRef.current) return;
+    try {
+      recorder.pause();
+      transitionPhase("paused");
+    } catch {
+      // A recorder that refuses to pause simply keeps listening.
+    }
+  }, [transitionPhase]);
+
+  const resume = useCallback(() => {
+    if (phaseRef.current !== "paused") return;
+    const recorder = recorderRef.current;
+    if (!recorder || recorder.state !== "paused") return;
+    try {
+      recorder.resume();
+      transitionPhase("listening");
+    } catch {
+      // Keep the truthful paused phase when the browser refuses to resume.
+    }
+  }, [transitionPhase]);
+
   const stop = useCallback(() => {
     if (phaseRef.current === "requesting" || phaseRef.current === "connecting") {
       generationRef.current += 1;
@@ -266,5 +291,5 @@ export function useSonioxLiveCapture() {
     transitionPhase("idle");
   }, [closeCurrent, transitionPhase]);
 
-  return { phase, transcript, error, start, finalize, stop, reset };
+  return { phase, transcript, error, start, finalize, pause, resume, stop, reset };
 }

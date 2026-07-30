@@ -383,7 +383,8 @@ export const statusJsonSchema = z
     startedAt: timestampSchema,
     endedAt: timestampSchema.nullable(),
     durationMs: z.number().int().nonnegative().safe(),
-    audioMime: z.string().min(1),
+    recordingKind: z.enum(["audio", "transcript_only"]).optional(),
+    audioMime: z.string(),
     whisper: whisperStateSchema,
     transcriptionDispatch: transcriptionDispatchSchema.optional(),
     placementResolution: placementResolutionSchema.optional(),
@@ -394,7 +395,24 @@ export const statusJsonSchema = z
     contentRevision: contentRevisionSchema.optional(),
     updatedAt: timestampSchema,
   })
-  .passthrough();
+  .passthrough()
+  .superRefine((status, context) => {
+    const transcriptOnly = status.recordingKind === "transcript_only";
+    if (!transcriptOnly && status.audioMime.trim().length === 0) {
+      context.addIssue({
+        code: "custom",
+        path: ["audioMime"],
+        message: "audio recordings require a non-empty audio MIME type",
+      });
+    }
+    if (transcriptOnly && status.audioMime !== "") {
+      context.addIssue({
+        code: "custom",
+        path: ["audioMime"],
+        message: "transcript-only meetings must not claim retained audio",
+      });
+    }
+  });
 
 export function parseStatusJson(input: unknown, expectedMeetingId?: string): StatusJson {
   const parsed = statusJsonSchema.parse(input) as StatusJson;
@@ -514,6 +532,15 @@ export function classifyMeetingRecord(
     || observation.status.value.id !== observation.meetingId
   ) {
     return classified(observation, "corrupt_status", { preservePlacement: true });
+  }
+  if (
+    observation.status.value.recordingKind === "transcript_only"
+    && observation.status.value.contentRevision === undefined
+  ) {
+    // A transcript-only session is not public until its canonical transcript /
+    // summary pair has committed. A failed first publication remains retryable
+    // without exposing a status-only partial meeting to library reconciliation.
+    return classified(observation, "incomplete", { preservePlacement: true });
   }
   return classified(observation, "live", {
     visible: true,

@@ -23,15 +23,15 @@ describe("HomeQuickStart", () => {
     expect(recorder.render).toHaveBeenCalledWith(expect.objectContaining({
       requestedLocation: { workspaceId: "workspace-a", folderId: null },
     }));
-    expect(screen.getByRole("link", { name: "Smart Scribe 열기" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "미팅 노트 스마트 스크라이브 열기" })).toHaveAttribute(
       "href",
       "/soniox?workspace=workspace-a&tool=transcription",
     );
-    expect(screen.getByRole("link", { name: "Translator 열기" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "트랜슬레이터 열기" })).toHaveAttribute(
       "href",
-      "/soniox?workspace=workspace-a&tool=translator",
+      "/soniox?workspace=workspace-a&tool=test-product",
     );
-    expect(screen.getByRole("link", { name: "Voice Typing 열기" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "보이스 타이핑 열기" })).toHaveAttribute(
       "href",
       "/soniox?workspace=workspace-a&tool=voice-typing",
     );

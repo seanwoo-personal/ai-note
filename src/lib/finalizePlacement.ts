@@ -35,6 +35,13 @@ function deferUnresolved(record: ClassifiedMeetingRecord): "materialize" | "defe
   return state === "pending" || state === "unavailable" ? "defer" : "materialize";
 }
 
+export function resolveRequestedPlacementTarget(
+  document: LibraryDocument,
+  requested: FinalizeLocation,
+): { target: FinalizeLocation; fallbackReason: Exclude<FinalizePlacementFallbackReason, "library_degraded"> } {
+  return requestedTarget(document, requested);
+}
+
 function requestedTarget(
   document: LibraryDocument,
   requested: FinalizeLocation,

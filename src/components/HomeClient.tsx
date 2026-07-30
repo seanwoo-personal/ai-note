@@ -112,17 +112,17 @@ export function HomeQuickStart({ workspaceId }: { workspaceId: string }) {
   const workspace = encodeURIComponent(workspaceId);
   const tools = [
     {
-      title: "Smart Scribe",
+      title: "미팅 노트 스마트 스크라이브",
       description: "Soniox 실시간 자막으로 회의를 기록합니다.",
       href: `/soniox?workspace=${workspace}&tool=transcription`,
     },
     {
-      title: "Translator",
-      description: "마이크나 브라우저 탭 음성을 번역하고 음성으로 다시 듣습니다.",
-      href: `/soniox?workspace=${workspace}&tool=translator`,
+      title: "트랜슬레이터",
+      description: "자유롭게 참여해 실시간 양방향 번역과 회의록 저장을 사용합니다.",
+      href: `/soniox?workspace=${workspace}&tool=test-product`,
     },
     {
-      title: "Voice Typing",
+      title: "보이스 타이핑",
       description: "단축키로 받아쓰기와 번역 입력을 시작합니다.",
       href: `/soniox?workspace=${workspace}&tool=voice-typing`,
     },

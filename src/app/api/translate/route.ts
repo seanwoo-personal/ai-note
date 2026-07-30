@@ -52,6 +52,7 @@ export async function POST(request: Request) {
   const prompt = [
     "You are a real-time meeting translation engine.",
     `Translate the utterance below into ${targetName}.`,
+    "The utterance may code-switch between languages. Preserve every word or phrase already written in the target language exactly as-is; do not translate it back into another language.",
     "Preserve names, numbers, intent, and tone. Do not answer or explain the utterance.",
     "Return only the translated text with no label, quotation marks, Markdown, or commentary.",
     "<utterance>",

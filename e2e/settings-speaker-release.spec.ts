@@ -1,6 +1,6 @@
 import { expect, test } from "./support/synthetic-test";
 
-test("v1.15.6 release, independent scrolling, and meeting products are visible", async ({ page }) => {
+test("v1.16.0 release, independent scrolling, and meeting products are visible", async ({ page }) => {
   await page.addInitScript(() => {
     if (localStorage.getItem("e2e-release-initialized") !== "true") {
       localStorage.setItem("ai-note-locale", "ko");
@@ -17,12 +17,12 @@ test("v1.15.6 release, independent scrolling, and meeting products are visible",
     ? page.getByLabel("라이브러리 메뉴", { exact: true })
     : page.getByRole("navigation", { name: "라이브러리" });
 
-  await expect(navigation.getByText("제품 버전 1.15.6")).toBeVisible();
+  await expect(navigation.getByText("제품 버전 1.16.0")).toBeVisible();
   await navigation.getByRole("link", { name: "릴리즈 노트" }).click();
   await expect(page).toHaveURL(/\/settings\/releases$/);
   await expect(page.getByRole("heading", { name: "릴리즈 노트" })).toBeVisible();
-  await expect(page.getByText("v1.15.6", { exact: true })).toBeVisible();
-  await expect(page.getByText("기준판 이후 21회 업데이트", { exact: true })).toBeVisible();
+  await expect(page.getByText("v1.16.0", { exact: true })).toBeVisible();
+  await expect(page.getByText("기준판 이후 22회 업데이트", { exact: true })).toBeVisible();
   await expect(page.getByText("v1.0.0 · AI NOTE 오픈소스 기준판", { exact: true })).toBeVisible();
 
   await page.goto("/settings");
@@ -48,31 +48,16 @@ test("v1.15.6 release, independent scrolling, and meeting products are visible",
   }
 
   await page.goto("/soniox?tool=translator");
-  await expect(page.getByRole("button", { name: "단방향 트랜스레이터" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page).toHaveURL(/tool=test-product/);
   await expect(page.getByLabel("회의 참석자 수")).toHaveCount(0);
-
-  await page.getByRole("button", { name: "실시간 글로벌 미팅" }).click();
-  await expect(page.getByRole("heading", { name: "Real-time Global Meeting" })).toBeVisible();
-  await expect(page.getByLabel("회의 참석자 수")).toHaveValue("4");
-  await expect(page.getByLabel("화자 1 그룹")).toHaveValue("A");
-  await expect(page.getByLabel("화자 2 그룹")).toHaveValue("A");
-  await expect(page.getByLabel("화자 3 그룹")).toHaveValue("B");
-  await expect(page.getByLabel("화자 4 그룹")).toHaveValue("B");
-  await expect(page.getByLabel("그룹 A 상대 번역 언어")).toHaveValue("ja");
-  await expect(page.getByLabel("그룹 B 상대 번역 언어")).toHaveValue("ko");
-  await expect(page.getByRole("button", { name: "화자 등록 시작" })).toBeVisible();
-  await expect(page.getByRole("region", { name: "그룹 A 화면" })).toBeVisible();
-  await expect(page.getByRole("region", { name: "그룹 B 화면" })).toBeVisible();
-  await expect(page.getByText(/목소리를 영구 학습하거나 생체정보로 저장하지 않습니다/)).toBeVisible();
-
-  await page.goto("/soniox?tool=test-product");
-  await expect(page.getByRole("heading", { level: 1, name: "Global Meeting" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "트랜슬레이터" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "자유 참여 글로벌 미팅" })).toBeVisible();
   await expect(page.getByLabel("회의 참석자 수")).toHaveCount(0);
   await expect(page.getByText(/그룹 A|그룹 B/)).toHaveCount(0);
-  await expect(page.getByRole("combobox", { name: "내 송출 대상 언어" })).toHaveValue("en");
+  await expect(page.getByRole("combobox", { name: "입력 언어" })).toHaveValue("ko");
+  await expect(page.getByRole("combobox", { name: "번역할 언어" })).toHaveValue("en");
   await expect(page.getByRole("combobox", { name: "번역 음성" })).toHaveValue("Maya");
   await expect(page.getByRole("combobox", { name: "음성 속도" })).toHaveValue("1");
-  await expect(page.getByRole("table", { name: "Global Meeting 대화록" })).toBeVisible();
+  await expect(page.getByRole("table", { name: "트랜슬레이터 대화록" })).toBeVisible();
   await expect(page.getByRole("status", { name: "Push-to-Talk 상태" })).toContainText("마이크와 실시간 번역");
 });

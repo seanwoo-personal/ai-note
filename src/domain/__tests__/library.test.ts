@@ -247,6 +247,18 @@ describe("runtime StatusJson contract", () => {
     expect(() => parseStatusJson(status("meeting-2"), "meeting-1")).toThrow();
   });
 
+  it("accepts an audio-less session status (empty audioMime) for streamed Global Meetings", () => {
+    // Global Meeting sessions stream to Soniox and retain no audio blob, so their
+    // status truthfully carries an empty audioMime instead of a fabricated MIME.
+    const parsed = parseStatusJson({
+      ...status(),
+      recordingKind: "transcript_only",
+      audioMime: "",
+    }, "meeting-1");
+    expect(parsed.recordingKind).toBe("transcript_only");
+    expect(parsed.audioMime).toBe("");
+  });
+
   it("accepts strict content revisions and keeps legacy status virtual metadata-free", () => {
     const shaA = "a".repeat(64);
     const shaB = "b".repeat(64);
@@ -334,6 +346,20 @@ describe("runtime StatusJson contract", () => {
       error: { message: "bad", action: "retry_everything" },
     })).toThrow();
   });
+
+  it("requires an explicit transcript-only discriminator before accepting no retained audio", () => {
+    expect(() => parseStatusJson({ ...status(), audioMime: "" })).toThrow(/audio MIME/i);
+    expect(parseStatusJson({
+      ...status(),
+      recordingKind: "transcript_only",
+      audioMime: "",
+    }).recordingKind).toBe("transcript_only");
+    expect(() => parseStatusJson({
+      ...status(),
+      recordingKind: "transcript_only",
+      audioMime: "audio/webm",
+    })).toThrow(/must not claim retained audio/i);
+  });
 });
 
 describe("meeting record classifier", () => {
@@ -368,6 +394,36 @@ describe("meeting record classifier", () => {
 
   it("treats a valid legacy status-only directory as live", () => {
     expect(classifyMeetingRecord(observation({ hasAudio: false })).kind).toBe("live");
+  });
+
+  it("hides transcript-only records until their canonical pair revision has committed", () => {
+    const transcriptOnly = {
+      ...status(),
+      recordingKind: "transcript_only" as const,
+      audioMime: "",
+    };
+    expect(classifyMeetingRecord(observation({
+      hasAudio: false,
+      status: { kind: "valid", value: transcriptOnly },
+    }))).toMatchObject({ kind: "incomplete", visible: false });
+
+    const contentRevision = {
+      transcript: {
+        source: "manual" as const,
+        sha256: "a".repeat(64),
+        updatedAt: "2026-07-10T02:01:00.000Z",
+      },
+      summary: {
+        source: "generated" as const,
+        sha256: "b".repeat(64),
+        basedOnTranscriptSha256: "a".repeat(64),
+        updatedAt: "2026-07-10T02:02:00.000Z",
+      },
+    };
+    expect(classifyMeetingRecord(observation({
+      hasAudio: false,
+      status: { kind: "valid", value: { ...transcriptOnly, contentRevision } },
+    }))).toMatchObject({ kind: "live", visible: true });
   });
 
   it("keeps counting after invalid records and separates count meanings", () => {

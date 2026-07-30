@@ -78,7 +78,7 @@ test("all non-Korean locales translate Home and Translator without overflow or t
 
     await page.goto("/soniox?tool=translator");
     await expect(page.locator("main h1")).toBeVisible();
-    await expect(page.locator("main input[type='checkbox']")).toHaveCount(1);
+    await expect(page.locator("main select")).toHaveCount(4);
     await expectLocalizedSurface(page);
   }
 });

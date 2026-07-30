@@ -1,4 +1,4 @@
-export type SonioxTool = "transcription" | "translator" | "voice-typing" | "test-product";
+export type SonioxTool = "transcription" | "voice-typing" | "test-product";
 
 export interface SonioxWorkspaceSelection {
   workspaceId: string;
@@ -12,7 +12,7 @@ interface SonioxLibraryLike {
   folders: Array<{ id: string; workspaceId: string }>;
 }
 
-const SONIOX_TOOLS = new Set<SonioxTool>(["transcription", "translator", "voice-typing", "test-product"]);
+const SONIOX_TOOLS = new Set<SonioxTool>(["transcription", "voice-typing", "test-product"]);
 
 export function resolveSonioxWorkspaceSelection(
   search: URLSearchParams,
@@ -27,8 +27,12 @@ export function resolveSonioxWorkspaceSelection(
   const folderId = workspaceFolders.some((folder) => folder.id === requestedFolderId)
     ? requestedFolderId
     : null;
-  const requestedTool = search.get("tool") as SonioxTool | null;
-  const tool = requestedTool && SONIOX_TOOLS.has(requestedTool) ? requestedTool : "transcription";
+  const requestedTool = search.get("tool");
+  const tool = requestedTool === "translator"
+    ? "test-product"
+    : requestedTool && SONIOX_TOOLS.has(requestedTool as SonioxTool)
+      ? requestedTool as SonioxTool
+      : "transcription";
   return { workspaceId, folderId, tool };
 }
 

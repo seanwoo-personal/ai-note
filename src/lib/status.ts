@@ -36,6 +36,7 @@ export interface InitialStatusInput {
   startedAt: string;
   endedAt: string;
   durationMs: number;
+  recordingKind?: "audio" | "transcript_only";
   audioMime: string;
 }
 
@@ -59,6 +60,7 @@ export function initialStatus(id: string, input: InitialStatusInput): StatusJson
     startedAt: input.startedAt,
     endedAt: input.endedAt,
     durationMs: input.durationMs,
+    ...(input.recordingKind ? { recordingKind: input.recordingKind } : {}),
     audioMime: input.audioMime,
     whisper: { jobId: null, progress: 0 },
     paths: {

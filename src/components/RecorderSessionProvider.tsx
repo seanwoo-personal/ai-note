@@ -60,7 +60,7 @@ export interface NavigationBlockerDescriptor {
   id: string;
   kind: "meeting_content_edit";
   phase: NavigationBlockerPhase;
-  label: "전체 스크립트 수정" | "회의록 요약 수정";
+  label: "전체 스크립트 수정" | "회의록 요약 수정" | "트랜슬레이터 미팅";
   discard: () => void;
   allowNavigation: (currentUrl: string, destinationUrl: string) => boolean;
 }

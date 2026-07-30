@@ -37,6 +37,7 @@ import {
   publishSummarizeAttempt,
   reconcileSummarizeAttempt,
   SummarizePublishError,
+  type SummarizePublisherOptions,
 } from "@/lib/summarizePublisher";
 import { buildCorrectionPrompt, buildSummaryPrompt } from "@/lib/summarizePrompts";
 import { inspectTranscriptionPublication } from "@/lib/transcriptionArtifacts";
@@ -44,6 +45,31 @@ import { getConfiguredAdapter } from "@/services/llm";
 import type { LlmAdapter } from "@/services/llm/types";
 
 export const MAX_SUMMARIZE_ATTEMPTS = 3;
+
+// Canonical transcript/summary publication remains owned by this module even
+// when the pair was produced without an LLM (for example a streamed Global
+// Meeting session). Callers may prepare content, but cannot bypass the single
+// lease-owning publication and reconciliation boundary.
+export function publishPreparedMeetingPair(
+  input: {
+    id: string;
+    ownerToken: string;
+    attempt: SummarizeAttempt;
+    transcript: string;
+    summary: string;
+  },
+  options: SummarizePublisherOptions = {},
+) {
+  return publishSummarizeAttempt(input, options);
+}
+
+export function reconcilePreparedMeetingPair(
+  id: string,
+  ownerToken: string,
+  options: SummarizePublisherOptions = {},
+) {
+  return reconcileSummarizeAttempt(id, ownerToken, options);
+}
 
 export type GenerationIntent =
   | "initial"

@@ -30,6 +30,12 @@ export interface SonioxSpeakerTrack {
   translation: SonioxTextTrack;
   originalLanguage?: string;
   translationLanguage?: string;
+  /**
+   * Character counts of final original tokens by language within the current
+   * utterance (reset at each endpoint). Used to classify the dominant source
+   * language and detect intra-utterance code-switching.
+   */
+  segmentOriginalLanguages?: Record<string, number>;
 }
 
 export interface SonioxEndpointEvent {
@@ -37,6 +43,8 @@ export interface SonioxEndpointEvent {
   kind?: "end" | "fin";
   speaker: string | null;
   originalLanguage?: string;
+  /** True when this utterance's original tokens span more than one language. */
+  codeSwitched?: boolean;
   originalFinal: string;
   translationFinal: string;
 }
@@ -49,6 +57,8 @@ export interface SonioxTranscript {
   endpointCount: number;
   lastEndpointSpeaker: string | null;
   endpoints?: SonioxEndpointEvent[];
+  /** Global (no-speaker) per-utterance original-language char counts, reset at each endpoint. */
+  segmentOriginalLanguages?: Record<string, number>;
 }
 
 export function emptySonioxTranscript(): SonioxTranscript {
@@ -60,11 +70,30 @@ export function emptySonioxTranscript(): SonioxTranscript {
     endpointCount: 0,
     lastEndpointSpeaker: null,
     endpoints: [],
+    segmentOriginalLanguages: {},
   };
 }
 
 function tokenTrack(token: SonioxToken): "original" | "translation" {
   return token.translation_status === "translation" ? "translation" : "original";
+}
+
+function dominantLanguage(counts: Record<string, number> | undefined): string | undefined {
+  if (!counts) return undefined;
+  let best: string | undefined;
+  let bestCount = 0;
+  for (const [language, count] of Object.entries(counts)) {
+    if (count > bestCount) {
+      best = language;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
+function isCodeSwitched(counts: Record<string, number> | undefined): boolean {
+  if (!counts) return false;
+  return Object.values(counts).filter((count) => count > 0).length > 1;
 }
 
 export function applySonioxResult(
@@ -83,6 +112,7 @@ export function applySonioxResult(
     endpointCount: current.endpointCount,
     lastEndpointSpeaker: current.lastEndpointSpeaker,
     endpoints: current.endpoints ?? [],
+    segmentOriginalLanguages: { ...(current.segmentOriginalLanguages ?? {}) },
   };
   for (const token of result.tokens ?? []) {
     if (!token.text) continue;
@@ -91,23 +121,34 @@ export function applySonioxResult(
       const speaker = token.speaker ?? next.activeSpeaker;
       next.lastEndpointSpeaker = speaker;
       const speakerTrack = speaker ? next.speakers[speaker] : undefined;
+      const segmentCounts = speakerTrack?.segmentOriginalLanguages ?? next.segmentOriginalLanguages;
       next.endpoints = [
         ...(next.endpoints ?? []).slice(-99),
         {
           id: next.endpointCount,
           kind: token.text === "<fin>" ? "fin" : "end",
           speaker,
-          originalLanguage: speakerTrack?.originalLanguage,
+          originalLanguage: speakerTrack?.originalLanguage ?? dominantLanguage(next.segmentOriginalLanguages),
+          codeSwitched: isCodeSwitched(segmentCounts),
           originalFinal: speakerTrack?.original.final ?? next.original.final,
           translationFinal: speakerTrack?.translation.final ?? next.translation.final,
         },
       ];
+      // Reset per-utterance language accounting so the next utterance is classified fresh.
+      if (speakerTrack) speakerTrack.segmentOriginalLanguages = {};
+      next.segmentOriginalLanguages = {};
       continue;
     }
 
     const track = tokenTrack(token);
     if (token.is_final) next[track].final += token.text;
     else next[track].provisional += token.text;
+    if (track === "original" && token.is_final && token.language) {
+      next.segmentOriginalLanguages = {
+        ...next.segmentOriginalLanguages,
+        [token.language]: (next.segmentOriginalLanguages?.[token.language] ?? 0) + token.text.length,
+      };
+    }
     if (track === "original" && token.speaker) next.activeSpeaker = token.speaker;
     const speaker = token.speaker ?? next.activeSpeaker;
     if (!speaker) continue;
@@ -117,7 +158,15 @@ export function applySonioxResult(
     };
     if (token.is_final) speakerTrack[track].final += token.text;
     else speakerTrack[track].provisional += token.text;
-    if (track === "original" && token.language) speakerTrack.originalLanguage = token.language;
+    if (track === "original" && token.language) {
+      if (token.is_final) {
+        speakerTrack.segmentOriginalLanguages = {
+          ...speakerTrack.segmentOriginalLanguages,
+          [token.language]: (speakerTrack.segmentOriginalLanguages?.[token.language] ?? 0) + token.text.length,
+        };
+      }
+      speakerTrack.originalLanguage = dominantLanguage(speakerTrack.segmentOriginalLanguages) ?? token.language;
+    }
     if (track === "translation" && token.language) speakerTrack.translationLanguage = token.language;
     next.speakers[speaker] = speakerTrack;
   }

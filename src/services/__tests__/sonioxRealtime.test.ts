@@ -64,6 +64,39 @@ describe("Soniox real-time transcript", () => {
     expect(second.activeSpeaker).toBe("2");
   });
 
+  it("classifies a code-switched utterance by dominant original language, not the last token", () => {
+    // A primarily Korean speaker who ends with an English word ("okay") must stay ko-source
+    // so the panel does not swap columns and translate the English target back into Korean.
+    const transcript = applySonioxResult(emptySonioxTranscript(), {
+      tokens: [
+        { text: "회의를 지금 시작하겠습니다 ", is_final: true, speaker: "1", language: "ko", translation_status: "original" },
+        { text: "okay", is_final: true, speaker: "1", language: "en", translation_status: "original" },
+        { text: "Let's start the meeting now", is_final: true, speaker: "1", language: "en", source_language: "ko", translation_status: "translation" },
+        { text: " 오케이", is_final: true, speaker: "1", language: "ko", source_language: "en", translation_status: "translation" },
+        { text: "<end>", is_final: true, speaker: "1", translation_status: "original" },
+      ],
+    });
+
+    const speaker = transcript.speakers["1"];
+    expect(speaker.originalLanguage).toBe("ko");
+    const endpoint = transcript.endpoints?.[0];
+    expect(endpoint?.originalLanguage).toBe("ko");
+    expect(endpoint?.codeSwitched).toBe(true);
+  });
+
+  it("keeps a single-language utterance uncode-switched with its own dominant language", () => {
+    const transcript = applySonioxResult(emptySonioxTranscript(), {
+      tokens: [
+        { text: "Hello everyone, nice to meet you", is_final: true, speaker: "2", language: "en", translation_status: "original" },
+        { text: "여러분 반갑습니다", is_final: true, speaker: "2", language: "ko", source_language: "en", translation_status: "translation" },
+        { text: "<end>", is_final: true, speaker: "2", translation_status: "original" },
+      ],
+    });
+    const endpoint = transcript.endpoints?.[0];
+    expect(endpoint?.originalLanguage).toBe("en");
+    expect(endpoint?.codeSwitched).toBe(false);
+  });
+
   it("keeps every endpoint event in order when Soniox batches multiple utterances", () => {
     const transcript = applySonioxResult(emptySonioxTranscript(), {
       tokens: [

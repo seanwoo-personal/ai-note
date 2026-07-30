@@ -121,6 +121,8 @@ export interface StatusJson {
   startedAt: string;
   endedAt: string | null;
   durationMs: number;
+  /** Absent on legacy/audio recordings; explicit for sessions that retain no audio. */
+  recordingKind?: "audio" | "transcript_only";
   audioMime: string;
   whisper: WhisperState;
   transcriptionDispatch?: TranscriptionDispatch;

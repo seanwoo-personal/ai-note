@@ -153,6 +153,31 @@ describe("useSonioxLiveCapture", () => {
     unmount();
   });
 
+  it("pauses and resumes the live recorder while keeping the same Soniox session open", async () => {
+    const track = new FakeTrack();
+    installMediaDevices({ getUserMedia: async () => new FakeMediaStream([track]) as unknown as MediaStream });
+    const { result } = renderHook(() => useSonioxLiveCapture());
+    await act(async () => { await result.current.start(START_OPTIONS); });
+    const recorder = FakeMediaRecorder.instance!;
+    expect(result.current.phase).toBe("listening");
+
+    act(() => result.current.pause());
+    expect(recorder.pause).toHaveBeenCalledTimes(1);
+    expect(result.current.phase).toBe("paused");
+    // The session is preserved: no finish/close, tracks stay live.
+    expect(soniox.finish).not.toHaveBeenCalled();
+    expect(soniox.close).not.toHaveBeenCalled();
+    expect(track.stop).not.toHaveBeenCalled();
+
+    act(() => result.current.resume());
+    expect(recorder.resume).toHaveBeenCalledTimes(1);
+    expect(result.current.phase).toBe("listening");
+
+    // Idempotence: resume while listening and pause after stop are no-ops.
+    act(() => result.current.resume());
+    expect(recorder.resume).toHaveBeenCalledTimes(1);
+  });
+
   it("remains mounted through the Strict Mode setup-cleanup-setup cycle", async () => {
     const track = new FakeTrack();
     installMediaDevices({ getUserMedia: async () => new FakeMediaStream([track]) as unknown as MediaStream });

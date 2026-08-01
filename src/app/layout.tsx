@@ -11,7 +11,7 @@ import { APP_PREFERENCES_BOOTSTRAP_SCRIPT } from "@/lib/appPreferences";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "헤이홈 AI 기록도구",
+  title: "Vision AI 미팅 에이전트",
   description: "회의 녹음, 실시간 전사·번역, 회의록 요약",
 };
 

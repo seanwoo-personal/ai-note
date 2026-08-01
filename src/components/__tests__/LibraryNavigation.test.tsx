@@ -62,6 +62,11 @@ vi.mock("@/components/useHealth", () => ({
   }),
 }));
 
+const connectionState = vi.hoisted(() => ({ status: "disconnected" as string, session: 0 }));
+vi.mock("@/components/useSonioxConnection", () => ({
+  useSonioxConnection: () => ({ status: connectionState.status, session: connectionState.session }),
+}));
+
 vi.mock("@/components/AppPreferences", () => {
   const preferences = {
     t: (source: string, values: Record<string, string | number> = {}) => source.replace(
@@ -241,8 +246,12 @@ describe("activated library navigation", () => {
 
     const nav = screen.getByRole("navigation", { name: "라이브러리" });
     expect(within(nav).getByTestId("app-preferences-controls")).toBeInTheDocument();
-    expect(within(nav).getAllByRole("link", { name: "헤이홈 AI 기록도구 홈" })).toHaveLength(2);
-    expect(within(nav).getAllByRole("link", { name: "헤이홈 AI 기록도구 홈" }).every((link) => link.getAttribute("href") === "/")).toBe(true);
+    expect(within(nav).getAllByRole("link", { name: "Vision AI 미팅 에이전트 홈" })).toHaveLength(2);
+    expect(within(nav).getAllByRole("link", { name: "Vision AI 미팅 에이전트 홈" }).every((link) => link.getAttribute("href") === "/")).toBe(true);
+    // Exact Vision header treatment: "Vision" wordmark + exact second line. No legacy names.
+    expect(within(nav).getAllByText("Vision").length).toBeGreaterThan(0);
+    expect(within(nav).getAllByText("AI 미팅 에이전트(AI Meeting Agent)").length).toBeGreaterThan(0);
+    expect(within(nav).queryByText("헤이홈 AI 기록도구")).not.toBeInTheDocument();
     expect(within(nav).queryByLabelText("제품 전환")).not.toBeInTheDocument();
     expect(within(nav).queryByRole("link", { name: "AI NOTE" })).not.toBeInTheDocument();
     expect(within(nav).queryByRole("link", { name: "SONIOX" })).not.toBeInTheDocument();
@@ -425,23 +434,39 @@ describe("activated library navigation", () => {
     observer.disconnect();
   });
 
-  it("shows two simple system rows (로컬/외부 모델) without vendor or model names", () => {
+  it("shows a distinct realtime row (로컬/요약/실시간) instead of one combined 외부 모델 row", () => {
     renderShell();
     const nav = screen.getByRole("navigation", { name: "라이브러리" });
 
+    // Three separate rows now — the realtime connection is no longer folded
+    // into a single LLM+realtime "외부 모델" row.
     expect(within(nav).getByText("로컬")).toBeInTheDocument();
-    expect(within(nav).getByText("준비 완료")).toBeInTheDocument();
-    expect(within(nav).getByText("외부 모델")).toBeInTheDocument();
-    expect(within(nav).getByText("준비됨")).toBeInTheDocument();
-    expect(within(nav).queryByText(/soniox|whisper|codex|base|sonnet/i)).not.toBeInTheDocument();
+    expect(within(nav).getByText("요약")).toBeInTheDocument();
+    expect(within(nav).getByText("실시간")).toBeInTheDocument();
+    expect(within(nav).queryByText("외부 모델")).not.toBeInTheDocument();
+
+    expect(within(nav).getByText("준비 완료")).toBeInTheDocument(); // local transcription
+    expect(within(nav).getByText("준비됨")).toBeInTheDocument(); // summary model
+    // No live session yet, but the key is configured → standby (not "connected").
+    expect(within(nav).getByText("대기")).toBeInTheDocument();
+    // Vendor and model names never leak into the sidebar rows.
+    expect(within(nav).queryByText(/soniox|soniworks|whisper|codex|base|sonnet/i)).not.toBeInTheDocument();
   });
 
-  it("marks the external-model row not ready when the realtime key is missing", () => {
+  it("marks the realtime row unset when the realtime key is missing", () => {
     healthState.soniox = { kind: "unconfigured" as never };
     renderShell();
     const nav = screen.getByRole("navigation", { name: "라이브러리" });
-    expect(within(nav).getByText("준비 안됨")).toBeInTheDocument();
+    expect(within(nav).getByText("미설정")).toBeInTheDocument();
     healthState.soniox = { kind: "configured" as never };
+  });
+
+  it("shows the realtime row connected from live WebSocket state, not config polling", () => {
+    connectionState.status = "connected";
+    renderShell();
+    const nav = screen.getByRole("navigation", { name: "라이브러리" });
+    expect(within(nav).getByText("연결됨")).toBeInTheDocument();
+    connectionState.status = "disconnected";
   });
 
   it("keeps the native workspace combobox while reserving an aria-hidden chevron inset", () => {

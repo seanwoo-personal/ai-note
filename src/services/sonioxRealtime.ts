@@ -1,3 +1,8 @@
+import {
+  sonioxConnectionStore,
+  type SonioxSessionPublisher,
+} from "@/services/sonioxConnectionStore";
+
 export type SonioxTranslationOptions =
   | { mode: "none" }
   | { mode: "one_way"; targetLanguage: string }
@@ -226,6 +231,11 @@ export interface ConnectSonioxRealtimeOptions {
   onError?: (message: string) => void;
   onFinished?: () => void;
   signal?: AbortSignal;
+  /**
+   * Authoritative connection publisher for this attempt. Defaults to a fresh
+   * session on the app-wide singleton store. Injectable for deterministic tests.
+   */
+  connection?: SonioxSessionPublisher;
 }
 
 const SONIOX_WEBSOCKET_URL = "wss://stt-rt.soniox.com/transcribe-websocket";
@@ -233,6 +243,22 @@ const CONNECT_TIMEOUT_MS = 10_000;
 
 export async function connectSonioxRealtime(
   options: ConnectSonioxRealtimeOptions,
+): Promise<SonioxRealtimeSession> {
+  // Publish authoritative lifecycle to the connection store. beginSession()
+  // already emits an optimistic "connecting"; any failure before we return a
+  // live session must land on "disconnected" so no stale "connected" survives.
+  const connection = options.connection ?? sonioxConnectionStore.beginSession();
+  try {
+    return await establishSonioxRealtime(options, connection);
+  } catch (error) {
+    connection.disconnected();
+    throw error;
+  }
+}
+
+async function establishSonioxRealtime(
+  options: ConnectSonioxRealtimeOptions,
+  connection: SonioxSessionPublisher,
 ): Promise<SonioxRealtimeSession> {
   const fetchController = new AbortController();
   const abortFetch = () => fetchController.abort();
@@ -278,6 +304,9 @@ export async function connectSonioxRealtime(
     closing = true;
     clearFinishTimeout();
     detachRuntimeHandlers();
+    // Publish disconnected BEFORE closing the socket / notifying the caller, so a
+    // detached onclose handler can never leave the store on a stale "connected".
+    connection.disconnected();
     if (closeSocket) socket.close();
     options.onError?.(message);
   };
@@ -303,6 +332,8 @@ export async function connectSonioxRealtime(
         options.languageHints,
         options.context,
       )));
+      // Authoritative "connected": WebSocket open AND config sent.
+      connection.connected();
       resolve();
     };
     socket.onerror = () => fail("soniox_websocket_unavailable");
@@ -323,7 +354,10 @@ export async function connectSonioxRealtime(
       transcript = applySonioxResult(transcript, result);
       options.onTranscript(transcript);
       if (result.finished) {
+        // Provider terminal response is the authoritative disconnect boundary
+        // for finish(): end-of-input alone did not disconnect us.
         clearFinishTimeout();
+        connection.disconnected();
         options.onFinished?.();
       }
     } catch {
@@ -355,6 +389,9 @@ export async function connectSonioxRealtime(
       clearFinishTimeout();
       closing = true;
       detachRuntimeHandlers();
+      // Emit disconnected before detaching from the socket so the store is
+      // updated even though our onclose handler is now removed.
+      connection.disconnected();
       socket.close();
     },
   };

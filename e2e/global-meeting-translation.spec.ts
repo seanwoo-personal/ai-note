@@ -868,20 +868,19 @@ test.describe("Global Meeting translation — real browser", () => {
     await saveShot(page, testInfo, "states-after-recovered");
   });
 
-  test("ko/en/ja/zh use the exact product brand in visible and document metadata", async ({ page }) => {
+  test("every locale shows the exact Vision brand treatment and product name", async ({ page }) => {
     await installHarness(page);
-    for (const localeCase of [
-      { locale: "ko", brand: "헤이홈", title: "헤이홈 AI 기록도구" },
-      { locale: "en", brand: "Soniox", title: "Soniox AI Notes" },
-      { locale: "ja", brand: "Hejhome", title: "Hejhome AI記録ツール" },
-      { locale: "zh", brand: "Hejhome", title: "Hejhome AI 记录工具" },
-    ] as const) {
+    for (const locale of ["ko", "en", "ja", "zh"] as const) {
       await page.goto(LIVE_URL);
-      await page.evaluate((locale) => localStorage.setItem("ai-note-locale", locale), localeCase.locale);
+      await page.evaluate((value) => localStorage.setItem("ai-note-locale", value), locale);
       await page.reload();
-      await expect(page.locator("a:visible", { hasText: localeCase.title }).first()).toBeVisible();
-      expect(await page.locator("body").innerText()).toContain(localeCase.brand);
-      expect(await page.title()).toContain(localeCase.brand);
+      // Locale-invariant Vision treatment: "Vision" wordmark + exact second line.
+      await expect(page.getByText("Vision", { exact: true }).first()).toBeVisible();
+      await expect(page.getByText("AI 미팅 에이전트(AI Meeting Agent)", { exact: true }).first()).toBeVisible();
+      await expect(page.getByRole("link", { name: "Vision AI 미팅 에이전트 홈" }).first()).toBeVisible();
+      expect(await page.title()).toBe("Vision AI 미팅 에이전트");
+      // No legacy customer-facing product name survives on the shell.
+      expect(await page.locator("body").innerText()).not.toContain("헤이홈");
     }
   });
 

@@ -16,10 +16,11 @@ const fixtureModule = importRuntimeModule(pathToFileURL(join(
 
 type Locale = "en" | "zh" | "ja";
 
+// The product name is the locale-invariant Vision customer brand.
 const titles: Record<Locale, string> = {
-  en: "Soniox AI Notes",
-  zh: "Hejhome AI 记录工具",
-  ja: "Hejhome AI記録ツール",
+  en: "Vision AI 미팅 에이전트",
+  zh: "Vision AI 미팅 에이전트",
+  ja: "Vision AI 미팅 에이전트",
 };
 
 async function expectLocalizedSurface(page: Page) {

@@ -34,11 +34,11 @@ describe("app preferences", () => {
     expect(parseFontSize(null)).toBe("default");
   });
 
-  it("uses the exact localized Hejhome brand spelling", () => {
-    expect(brandNameForLocale("ko")).toBe("헤이홈");
-    expect(brandNameForLocale("en")).toBe("Soniox");
-    expect(brandNameForLocale("zh")).toBe("Hejhome");
-    expect(brandNameForLocale("ja")).toBe("Hejhome");
+  it("uses the locale-invariant Vision customer brand", () => {
+    expect(brandNameForLocale("ko")).toBe("Vision");
+    expect(brandNameForLocale("en")).toBe("Vision");
+    expect(brandNameForLocale("zh")).toBe("Vision");
+    expect(brandNameForLocale("ja")).toBe("Vision");
   });
 
   it("applies browser fallbacks before hydration when localStorage is denied", () => {

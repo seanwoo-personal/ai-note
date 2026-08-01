@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  formatExternalStatus,
   formatLlmStatus,
+  formatRealtimeStatus,
+  formatSummaryModelStatus,
   formatWhisperStatus,
   getLlmReadiness,
   providerLabel,
@@ -64,34 +65,74 @@ describe("healthStatus", () => {
     expect(getLlmReadiness({ configured: true, provider: "claude-cli", ok: true, detail: "ready" })).toBe("ready");
   });
 
-  it("shows a single external-model row that is green only when everything is configured", () => {
-    const llmReady = { configured: true as const, provider: "claude-cli", ok: true, detail: "ready" };
-
-    expect(formatExternalStatus(llmReady, { kind: "configured" })).toMatchObject({
-      label: "외부 모델 · 준비됨",
+  it("shows a vendor-neutral summary-model row separate from the realtime row", () => {
+    expect(formatSummaryModelStatus(null)).toMatchObject({
+      label: "요약 모델 · 확인 중",
+      shortLabel: "확인 중",
+      tone: "neutral",
+    });
+    expect(formatSummaryModelStatus({ configured: false })).toMatchObject({
+      label: "요약 모델 · 미설정",
+      shortLabel: "미설정",
+      tone: "warn",
+    });
+    expect(
+      formatSummaryModelStatus({ configured: true, provider: "claude-cli", ok: true, detail: "ready", model: "sonnet" }),
+    ).toMatchObject({
+      label: "요약 모델 · 준비됨",
       shortLabel: "준비됨",
       tone: "success",
     });
-    expect(formatExternalStatus(llmReady, { kind: "unconfigured" })).toMatchObject({
-      label: "외부 모델 · 준비 안됨",
-      shortLabel: "준비 안됨",
-      tone: "warn",
+    expect(
+      formatSummaryModelStatus({ configured: true, provider: "ollama", ok: false, detail: "down", model: "x" }),
+    ).toMatchObject({
+      label: "요약 모델 · 실패",
+      shortLabel: "실패",
+      tone: "error",
     });
-    expect(formatExternalStatus({ configured: false }, { kind: "configured" })).toMatchObject({
-      label: "외부 모델 · 준비 안됨",
-      title: expect.stringContaining("요약 모델"),
-      tone: "warn",
+    // The sidebar summary row never leaks the provider/model name (settings does that, not here).
+    const ready = formatSummaryModelStatus({ configured: true, provider: "claude-cli", ok: true, detail: "ready", model: "sonnet" });
+    expect(`${ready.label} ${ready.shortLabel} ${ready.title}`).not.toMatch(/soniox|codex|claude|ollama|sonnet/i);
+  });
+
+  it("derives the realtime row from live WebSocket connection truth, not config polling", () => {
+    // Connection state is authoritative and overrides the capability signal.
+    expect(formatRealtimeStatus("connected", { kind: "unconfigured" })).toMatchObject({
+      label: "실시간 · 연결됨",
+      shortLabel: "연결됨",
+      tone: "success",
     });
-    expect(formatExternalStatus(null, { kind: "checking" })).toMatchObject({
-      label: "외부 모델 · 확인 중",
+    expect(formatRealtimeStatus("connecting", { kind: "configured" })).toMatchObject({
+      label: "실시간 · 연결 중",
+      shortLabel: "연결 중",
       tone: "neutral",
     });
-    expect(formatExternalStatus(llmReady, { kind: "unknown" })).toMatchObject({
-      label: "외부 모델 · 확인 불가",
+    // When there is no live session, the config-presence capability distinguishes states.
+    expect(formatRealtimeStatus("disconnected", null)).toMatchObject({
+      label: "실시간 · 확인 중",
+      tone: "neutral",
+    });
+    expect(formatRealtimeStatus("disconnected", { kind: "checking" })).toMatchObject({
+      label: "실시간 · 확인 중",
+      tone: "neutral",
+    });
+    expect(formatRealtimeStatus("disconnected", { kind: "unknown" })).toMatchObject({
+      label: "실시간 · 확인 불가",
+      shortLabel: "확인 불가",
       tone: "warn",
     });
-    // No vendor names leak into the customer-facing status row.
-    expect(formatExternalStatus(llmReady, { kind: "configured" }).label).not.toMatch(/soniox|codex/i);
-    expect(formatExternalStatus(llmReady, { kind: "configured" }).title).not.toMatch(/soniox|codex/i);
+    expect(formatRealtimeStatus("disconnected", { kind: "unconfigured" })).toMatchObject({
+      label: "실시간 · 미설정",
+      shortLabel: "미설정",
+      tone: "warn",
+    });
+    expect(formatRealtimeStatus("disconnected", { kind: "configured" })).toMatchObject({
+      label: "실시간 · 대기",
+      shortLabel: "대기",
+      tone: "neutral",
+    });
+    // No vendor name leaks into the realtime row.
+    const connected = formatRealtimeStatus("connected", { kind: "configured" });
+    expect(`${connected.label} ${connected.shortLabel} ${connected.title}`).not.toMatch(/soniox|soniworks/i);
   });
 });

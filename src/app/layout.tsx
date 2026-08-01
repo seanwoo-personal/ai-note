@@ -8,10 +8,11 @@ import { LibraryNavigation } from "@/components/LibraryNavigation";
 import { RecorderSessionProvider } from "@/components/RecorderSessionProvider";
 import { MEETING_ASSISTANT_ENABLED } from "@/lib/features";
 import { APP_PREFERENCES_BOOTSTRAP_SCRIPT } from "@/lib/appPreferences";
+import { BRAND_PRODUCT_NAME } from "@/lib/brand";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Vision AI 미팅 에이전트",
+  title: BRAND_PRODUCT_NAME,
   description: "회의 녹음, 실시간 전사·번역, 회의록 요약",
 };
 

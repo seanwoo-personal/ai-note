@@ -1,7 +1,7 @@
 # 0024 — 외부 provider 예외와 vendor 중립 UI
 
 - **날짜:** 2026-07-30
-- **상태:** 채택됨
+- **상태:** 채택됨 — 단, 사이드바 시스템 상태 행 구성은 [0025](0025-vision-customer-brand-and-split-system-rows.md)가 대체한다(vendor 중립 계약 자체는 유효).
 
 ## 무엇을 결정했나
 
@@ -10,7 +10,7 @@
 1. **실시간 전사·번역 provider(스트리밍 STT/TTS).** `.env.local`의 `SONIOX_API_KEY`가 있을 때만 활성화된다. 장수 키는 서버 환경에만 존재하고, `/api/realtime/temporary-key`가 60초 single-use 임시 키만 브라우저에 발급한다(`redirect:"error"`, 10초 timeout, 장수 키·provider 응답 본문 미노출). 이 route는 이 저장소에서 유일하게 허용되는 비-loopback egress이며, 대상 host는 provider의 고정 HTTPS endpoint 하나다.
 2. **외부 요약 모델 API(고객사 배포용).** `.env.local`의 `CODEX_API_KEY`(fallback `OPENAI_API_KEY`)가 있으면 `codex-cli` backend가 CLI 대신 provider HTTPS completion API를 직접 호출한다. 키가 없으면 기존 CLI 폴백을 유지한다. 키는 핸들러 안에서 지연 조회하고(build-green), 저장·로그·응답에 절대 넣지 않으며 실패는 opaque 코드(`summary_api_status_*`)로만 드러낸다.
 
-**Vendor 중립 UI 계약:** 사용자에게 보이는 모든 표면(화면 문구, i18n 카탈로그, 상태 칩, 오류 메시지, URL 경로)은 외부 provider의 상호(Soniox, Codex, OpenAI 등)를 노출하지 않는다. 실시간 도구 페이지는 `/live`, 키 발급은 `/api/realtime/temporary-key`를 사용한다. 사이드바 시스템 상태는 `로컬`(전사)과 `외부 모델` 두 행으로 단순화하고, 로컬 전사는 엔진·모델명(Whisper, large-v3 등) 없이 준비 상태만 보여 준다. Provider의 raw error text는 렌더하지 않고 generic 메시지 + 숫자 코드로 대체한다. 내부 코드 식별자(`sonioxRealtime.ts`, `SonioxWorkspaceClient` 등)와 env 변수 이름은 이 계약의 대상이 아니다.
+**Vendor 중립 UI 계약:** 사용자에게 보이는 모든 표면(화면 문구, i18n 카탈로그, 상태 칩, 오류 메시지, URL 경로)은 외부 provider의 상호(Soniox, Codex, OpenAI 등)를 노출하지 않는다. 실시간 도구 페이지는 `/live`, 키 발급은 `/api/realtime/temporary-key`를 사용한다. 사이드바 시스템 상태는 `로컬`(전사)과 `외부 모델` 두 행으로 단순화하고(→ **[0025](0025-vision-customer-brand-and-split-system-rows.md)가 `로컬`·`요약`·`실시간` 3행으로 대체**), 로컬 전사는 엔진·모델명(Whisper, large-v3 등) 없이 준비 상태만 보여 준다. Provider의 raw error text는 렌더하지 않고 generic 메시지 + 숫자 코드로 대체한다. 내부 코드 식별자(`sonioxRealtime.ts`, `SonioxWorkspaceClient` 등)와 env 변수 이름은 이 계약의 대상이 아니다.
 
 **앱은 여전히 API 키를 저장하지 않는다.** 두 키 모두 gitignored `.env.local`에만 있으며 `data/settings.json`·runtime metadata에 기록하지 않는다. 키가 없으면 로컬 녹음·전사·요약(CLI/Ollama)은 기존대로 완전히 동작한다.
 

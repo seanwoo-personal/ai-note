@@ -12,6 +12,7 @@ import {
 import { GuardedLink, useGuardedRouter } from "@/components/RecorderNavigation";
 import { AppPreferencesControls, useAppPreferences } from "@/components/AppPreferences";
 import { AppDrawer } from "@/components/AppDialog";
+import { BrandWordmark } from "@/components/BrandWordmark";
 import {
   ChevronDownIcon,
   ChevronRightIcon,
@@ -41,6 +42,7 @@ import { useHealth } from "@/components/useHealth";
 import { useSonioxConnection } from "@/components/useSonioxConnection";
 import type { SonioxConnectionSnapshot } from "@/services/sonioxConnectionStore";
 import type { LibraryColor, LibraryFolder, LibraryWorkspace } from "@/domain/library";
+import { BRAND_HOME_LABEL } from "@/lib/brand";
 import { folderFormSchema, workspaceFormSchema } from "@/lib/libraryClient";
 import packageMetadata from "../../package.json";
 import {
@@ -57,26 +59,6 @@ type Editor =
   | { kind: "folder-move"; folder: LibraryFolder; trigger: HTMLElement | null }
   | { kind: "folder-delete"; folder: LibraryFolder; trigger: HTMLElement | null }
   | { kind: "workspace-delete"; workspace: LibraryWorkspace; trigger: HTMLElement | null };
-
-// Customer-facing Vision brand. Rendered as brand literals (locale-invariant)
-// and excluded from the i18n MutationObserver via data-i18n-user-content /
-// data-i18n-user-attributes. NOTE: the "Vision" wordmark is a typography-only
-// fallback — no official Vision logo asset is embedded because first-party
-// evidence grants no logo-use rights (see docs/vision-rebrand-identity.md).
-export const BRAND_PRODUCT_NAME = "Vision AI 미팅 에이전트";
-export const BRAND_TAGLINE = "AI 미팅 에이전트(AI Meeting Agent)";
-export const BRAND_HOME_LABEL = "Vision AI 미팅 에이전트 홈";
-
-function BrandWordmark({ compact = false }: { compact?: boolean }) {
-  return (
-    <span data-i18n-user-content className="flex min-w-0 flex-col leading-tight">
-      <span className={`font-extrabold tracking-tight text-ink ${compact ? "text-[15px]" : "text-[16px]"}`}>
-        Vision
-      </span>
-      <span className="truncate text-[11px] font-semibold text-inkSoft">{BRAND_TAGLINE}</span>
-    </span>
-  );
-}
 
 const COLORS: Array<{ value: LibraryColor; label: string; className: string }> = [
   { value: "brown", label: "브라운", className: "bg-[#8a6f5a]" },

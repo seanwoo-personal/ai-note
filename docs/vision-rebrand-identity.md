@@ -4,7 +4,7 @@
 > 목적: 고객사 데모용 리브랜드의 근거를 first-party(공식·1차) 출처로만 확립하고, 로고/브랜드 자산의 사용 권리 여부를 기록한다.
 > 조사일: **2026-08-01**. 검색·본문 추출은 WebSearch/WebFetch로 수행. 아래 timestamp는 해당 날짜의 **date-level, JST(Asia/Tokyo)** 로 기록한다(정확한 분 단위는 검증 불가 → 날조하지 않고 date-level로 명시).
 
-관련 결정: [ADR 0024 — 외부 provider 예외와 vendor 중립 UI](decisions/0024-external-provider-exception-and-vendor-neutral-ui.md).
+관련 결정: **[ADR 0025 — Vision 고객사 브랜드와 분리된 시스템 상태 행](decisions/0025-vision-customer-brand-and-split-system-rows.md)**(이 조사가 근거가 된 결정) · [ADR 0024 — 외부 provider 예외와 vendor 중립 UI](decisions/0024-external-provider-exception-and-vendor-neutral-ui.md).
 
 ---
 
@@ -66,7 +66,7 @@
 **잔여 법적 리스크:** 마크는 등록상표이고 전 IP가 유보되어 있어, 서면 허가 없이 로고를 복제/임베드/변형하면 상표·저작권 침해 리스크. TSE Prime 로고는 제3자 마크로 사용 금지.
 
 ### 이 저장소의 준수 방식 (구현된 대로)
-- **공식 로고 자산 미사용.** 헤더는 **타이포그래피 전용 `Vision` 워드마크**(복제 그래픽 자산 없음)로 구현 — `src/components/LibraryNavigation.tsx`의 `BrandWordmark`.
+- **공식 로고 자산 미사용.** 헤더는 **타이포그래피 전용 `Vision` 워드마크**(복제 그래픽 자산 없음)로 구현 — `src/components/BrandWordmark.tsx`, 문자열 단일 소스는 `src/lib/brand.ts`.
 - 이 타이포 fallback은 **공식 로고 수용 기준을 완전히 충족하지 않는다.** 공식 로고 사용은 Vision의 서면 라이선스 또는 저장소 내 고객 승인 근거가 확보된 뒤에만 가능하다(현재 없음). 이 사실을 여기 명시하며, PASS를 날조하지 않는다.
 
 ---

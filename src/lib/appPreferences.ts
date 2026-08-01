@@ -29,11 +29,3 @@ export function parseFontSize(value: string | null | undefined): FontSizePrefere
 export function resolveTheme(theme: ThemePreference, systemDark: boolean): ResolvedTheme {
   return theme === "system" ? (systemDark ? "dark" : "light") : theme;
 }
-
-// Customer-facing product brand. Vision is the customer (a Japanese Wi-Fi-router
-// rental company), not an external AI provider, so showing it does not violate
-// the ADR 0024 vendor-neutral contract. Locale-invariant by design.
-export function brandNameForLocale(locale: AppLocale): "Vision" {
-  void locale;
-  return "Vision";
-}

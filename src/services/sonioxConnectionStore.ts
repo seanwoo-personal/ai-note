@@ -4,14 +4,23 @@
 // derived ONLY from real lifecycle events published by `connectSonioxRealtime`
 // (WebSocket open + config-send boundary → connected; close/error/abort/finish
 // terminal → disconnected). It never infers "connected" from configuration
-// presence or from periodic health polling (ADR 0024 keeps the config-presence
-// signal separate; see healthStatus.ts).
+// presence or from periodic health polling (ADR 0025 keeps the config-presence
+// signal separate as a capability hint; see healthStatus.ts).
 //
 // Every connection attempt is a distinct monotonic session ("generation").
 // Events carry (session, sequence) so the store can suppress duplicate, stale,
 // out-of-order, and delayed old-session events: once a newer session begins, any
 // trailing event from an older session is ignored, so a late close/connected can
 // never resurrect a stale state.
+//
+// SCOPE: the newest session is authoritative ("last attempt wins"). This models
+// the sequential lifecycle the app actually drives — start, fail, reconnect. It
+// deliberately does NOT aggregate concurrent connections: if two live captures
+// ever overlap, the newer session's disconnect reports the row as disconnected
+// while the older one is still streaming. The consequence is confined to the
+// sidebar indicator (no capture, audio, or transcript is affected). Aggregating
+// would require tracking a live session set; do that only if overlapping
+// captures become a supported product state.
 
 export type SonioxConnectionStatus = "disconnected" | "connecting" | "connected";
 
@@ -93,9 +102,14 @@ export function createSonioxConnectionStore(): SonioxConnectionStore {
     beginSession,
     apply,
     reset: () => {
-      activeSession = 0;
+      // A hard fence, not a rewind. Every publisher handed out so far holds a
+      // session <= nextSession, so advancing the active session past all of
+      // them makes their late events stale by the same rule that suppresses a
+      // trailing event across a normal reconnect. Rewinding the counter to 0
+      // would instead let a pre-reset publisher's next event look like a brand
+      // new session and resurrect the state this reset just cleared.
+      activeSession = ++nextSession;
       lastSequence = 0;
-      nextSession = 0;
       snapshot = { status: "disconnected", session: 0 };
       notify();
     },

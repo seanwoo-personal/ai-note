@@ -109,4 +109,24 @@ describe("sonioxConnectionStore — authoritative event-driven connection state"
     store.reset();
     expect(store.getSnapshot()).toEqual({ status: "disconnected", session: 0 });
   });
+
+  it("reset() fences outstanding publishers instead of rewinding the session counter", () => {
+    const stale = store.beginSession();
+    stale.connected();
+    store.reset();
+
+    // reset() is a hard fence, not a rewind: a publisher that was live before
+    // the reset must never resurrect state afterwards. Rewinding the counter
+    // would let its next event reuse a session id the store treats as new.
+    stale.connected();
+    stale.disconnected();
+    expect(store.getSnapshot()).toEqual({ status: "disconnected", session: 0 });
+
+    // A genuinely new session after the reset still takes charge.
+    const fresh = store.beginSession();
+    expect(fresh.session).toBeGreaterThan(stale.session);
+    expect(store.getSnapshot()).toEqual({ status: "connecting", session: fresh.session });
+    stale.disconnected(); // still fenced, even against the new session
+    expect(store.getSnapshot()).toEqual({ status: "connecting", session: fresh.session });
+  });
 });

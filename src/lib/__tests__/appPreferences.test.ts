@@ -2,7 +2,6 @@ import { runInNewContext } from "node:vm";
 import { describe, expect, it } from "vitest";
 
 import {
-  brandNameForLocale,
   APP_PREFERENCES_BOOTSTRAP_SCRIPT,
   parseFontSize,
   parseLocale,
@@ -32,13 +31,6 @@ describe("app preferences", () => {
     ]);
     expect(parseFontSize("huge")).toBe("default");
     expect(parseFontSize(null)).toBe("default");
-  });
-
-  it("uses the locale-invariant Vision customer brand", () => {
-    expect(brandNameForLocale("ko")).toBe("Vision");
-    expect(brandNameForLocale("en")).toBe("Vision");
-    expect(brandNameForLocale("zh")).toBe("Vision");
-    expect(brandNameForLocale("ja")).toBe("Vision");
   });
 
   it("applies browser fallbacks before hydration when localStorage is denied", () => {

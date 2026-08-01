@@ -11,9 +11,9 @@ import {
   useState,
 } from "react";
 
+import { BRAND_NAME, BRAND_PRODUCT_NAME } from "@/lib/brand";
 import {
   type AppLocale,
-  brandNameForLocale,
   type FontSizePreference,
   parseFontSize,
   parseLocale,
@@ -36,7 +36,7 @@ type AppPreferencesValue = {
   theme: ThemePreference;
   resolvedTheme: ResolvedTheme;
   fontSize: FontSizePreference;
-  brandName: "Vision";
+  brandName: typeof BRAND_NAME;
   setLocale: (locale: AppLocale) => void;
   setTheme: (theme: ThemePreference) => void;
   setFontSize: (fontSize: FontSizePreference) => void;
@@ -119,8 +119,8 @@ export function AppPreferencesProvider({ children }: { children: ReactNode }) {
   }, [fontSize, fontSizeLoaded]);
 
   useEffect(() => {
-    // Product name is a locale-invariant Vision brand string.
-    const title = "Vision AI 미팅 에이전트";
+    // The product name is a locale-invariant brand; only the description is UI copy.
+    const title = BRAND_PRODUCT_NAME;
     const description = translateUi(locale, "회의 녹음, 실시간 전사·번역, 회의록 요약");
     const maintainLocalizedMetadata = () => {
       if (document.title !== title) document.title = title;
@@ -225,7 +225,7 @@ export function AppPreferencesProvider({ children }: { children: ReactNode }) {
     theme,
     resolvedTheme,
     fontSize,
-    brandName: brandNameForLocale(locale),
+    brandName: BRAND_NAME,
     setLocale,
     setTheme,
     setFontSize,

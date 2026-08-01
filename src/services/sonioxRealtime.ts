@@ -289,6 +289,9 @@ async function establishSonioxRealtime(
   socket.binaryType = "arraybuffer";
   let transcript = emptySonioxTranscript();
   let closing = false;
+  // Set once the provider sends its terminal response. The socket close that
+  // follows is the normal end of a finished stream, not a failure.
+  let finished = false;
   let finishTimeout: ReturnType<typeof setTimeout> | null = null;
   const clearFinishTimeout = () => {
     if (finishTimeout !== null) clearTimeout(finishTimeout);
@@ -310,7 +313,12 @@ async function establishSonioxRealtime(
     connection.disconnected();
     socket.close();
   };
-  const runtimeAbort = () => closeRuntime();
+  // A function declaration, not a const: `closeRuntime` and `failRuntimeSession`
+  // both need this listener reference to detach it, and hoisting keeps that
+  // mutual reference safe regardless of how the teardown helpers are ordered.
+  function runtimeAbort() {
+    closeRuntime();
+  }
   const failRuntimeSession = (message: string, closeSocket = true) => {
     if (closing) return;
     closing = true;
@@ -375,7 +383,10 @@ async function establishSonioxRealtime(
       options.onTranscript(transcript);
       if (result.finished) {
         // Provider terminal response is the authoritative disconnect boundary
-        // for finish(): end-of-input alone did not disconnect us.
+        // for finish(): end-of-input alone did not disconnect us. Handlers stay
+        // attached so the socket close that follows tears down cleanly instead
+        // of leaking, but it must no longer be reported as a failure.
+        finished = true;
         clearFinishTimeout();
         connection.disconnected();
         options.onFinished?.();
@@ -384,8 +395,17 @@ async function establishSonioxRealtime(
       failRuntimeSession("실시간 전사 응답을 확인할 수 없습니다.");
     }
   };
-  socket.onerror = () => failRuntimeSession("실시간 전사 연결에 오류가 발생했습니다.");
+  socket.onerror = () => {
+    if (finished) return;
+    failRuntimeSession("실시간 전사 연결에 오류가 발생했습니다.");
+  };
   socket.onclose = () => {
+    // Expected teardown after the provider finished the stream — tear down
+    // quietly rather than surfacing "연결이 종료되었습니다" for a clean finish.
+    if (finished) {
+      closeRuntime();
+      return;
+    }
     failRuntimeSession("실시간 전사 연결이 종료되었습니다.", false);
   };
 

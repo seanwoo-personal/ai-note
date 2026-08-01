@@ -120,6 +120,30 @@ describe("connectSonioxRealtime — authoritative connection publication", () =>
     expect(store.getSnapshot().status).toBe("disconnected");
   });
 
+  it("treats the close after a provider finish as a clean end, not an error", async () => {
+    stubTempKey();
+    const errors: string[] = [];
+    const store = createSonioxConnectionStore();
+    const connecting = connectSonioxRealtime({
+      translation: { mode: "none" },
+      onTranscript: () => {},
+      onError: (message) => errors.push(message),
+      connection: store.beginSession(),
+    });
+    await vi.waitFor(() => expect(FakeWebSocket.instance).not.toBeNull());
+    FakeWebSocket.instance!.open();
+    await connecting;
+    const socket = FakeWebSocket.instance!;
+
+    socket.onmessage?.({ data: JSON.stringify({ finished: true }) });
+    expect(store.getSnapshot().status).toBe("disconnected");
+    // The provider closes the socket right after its terminal response. That is
+    // the normal end of a finished stream — the user must not see a failure.
+    socket.onclose?.();
+    expect(errors).toEqual([]);
+    expect(store.getSnapshot().status).toBe("disconnected");
+  });
+
   it("publishes disconnected when the socket closes before opening", async () => {
     stubTempKey();
     const store = createSonioxConnectionStore();

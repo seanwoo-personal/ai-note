@@ -36,7 +36,7 @@ describe("app preferences", () => {
 
   it("uses the exact localized Hejhome brand spelling", () => {
     expect(brandNameForLocale("ko")).toBe("헤이홈");
-    expect(brandNameForLocale("en")).toBe("Hejhome");
+    expect(brandNameForLocale("en")).toBe("Soniox");
     expect(brandNameForLocale("zh")).toBe("Hejhome");
     expect(brandNameForLocale("ja")).toBe("Hejhome");
   });

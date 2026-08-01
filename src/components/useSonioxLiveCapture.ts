@@ -215,10 +215,18 @@ export function useSonioxLiveCapture() {
     } catch (caught) {
       if (!mountedRef.current || generation !== generationRef.current) return;
       const message = caught instanceof DOMException && caught.name === "NotAllowedError"
-        ? "마이크 또는 화면 공유 권한이 필요합니다."
-        : caught instanceof Error
-          ? caught.message
-          : "실시간 세션을 시작할 수 없습니다.";
+        ? "마이크 또는 화면 공유 권한이 필요합니다. 권한을 허용한 뒤 미팅 시작을 다시 눌러 주세요."
+        : caught instanceof Error && [
+            "soniox_temporary_key_unavailable",
+            "soniox_temporary_key_invalid",
+            "soniox_websocket_unavailable",
+            "soniox_websocket_closed",
+            "soniox_websocket_timeout",
+          ].includes(caught.message)
+          ? "실시간 번역을 시작하지 못했습니다. 네트워크 연결과 Soniox 설정을 확인한 뒤 미팅 시작을 다시 눌러 주세요."
+          : caught instanceof Error
+            ? caught.message
+            : "실시간 세션을 시작할 수 없습니다. 잠시 후 미팅 시작을 다시 눌러 주세요.";
       failCurrent(generation, message);
     }
   }, [closeCurrent, failCurrent, stopTracks, transitionPhase]);

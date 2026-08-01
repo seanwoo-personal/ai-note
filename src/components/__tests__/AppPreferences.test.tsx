@@ -52,15 +52,15 @@ describe("AppPreferencesProvider", () => {
 
     render(<AppPreferencesProvider><AppPreferencesControls /><LocalizedText source="헤이홈 AI 기록도구" /><Probe /></AppPreferencesProvider>);
 
-    await waitFor(() => expect(screen.getByTestId("preferences")).toHaveTextContent("en:dark:dark:Hejhome"));
+    await waitFor(() => expect(screen.getByTestId("preferences")).toHaveTextContent("en:dark:dark:Soniox"));
     expect(document.documentElement).toHaveAttribute("lang", "en");
     expect(document.documentElement).toHaveAttribute("data-theme", "dark");
     expect(screen.getByTestId("locale-select")).toHaveValue("en");
     expect(screen.getByTestId("theme-select")).toHaveValue("dark");
-    expect(screen.getByText("Hejhome AI Notes")).toBeInTheDocument();
-    expect(document.title).toBe("Hejhome AI Notes");
+    expect(screen.getByText("Soniox AI Notes")).toBeInTheDocument();
+    expect(document.title).toBe("Soniox AI Notes");
     document.title = "AI NOTE";
-    await waitFor(() => expect(document.title).toBe("Hejhome AI Notes"));
+    await waitFor(() => expect(document.title).toBe("Soniox AI Notes"));
   });
 
   it("localizes registered fixed DOM copy while preserving marked user content", async () => {
@@ -133,7 +133,7 @@ describe("AppPreferencesProvider", () => {
     });
 
     render(<AppPreferencesProvider><AppPreferencesControls /><Probe /></AppPreferencesProvider>);
-    await waitFor(() => expect(screen.getByTestId("preferences")).toHaveTextContent("en:system:light:Hejhome"));
+    await waitFor(() => expect(screen.getByTestId("preferences")).toHaveTextContent("en:system:light:Soniox"));
 
     expect(() => {
       fireEvent.change(screen.getByTestId("locale-select"), { target: { value: "ja" } });
@@ -147,14 +147,14 @@ describe("AppPreferencesProvider", () => {
   it("uses the browser locale when a stored locale is corrupt", async () => {
     window.localStorage.setItem("ai-note-locale", "fr");
     render(<AppPreferencesProvider><Probe /></AppPreferencesProvider>);
-    await waitFor(() => expect(screen.getByTestId("preferences")).toHaveTextContent("en:system:light:Hejhome"));
+    await waitFor(() => expect(screen.getByTestId("preferences")).toHaveTextContent("en:system:light:Soniox"));
   });
 
   it("keeps locale and theme usable when matchMedia is unavailable", async () => {
     vi.stubGlobal("matchMedia", vi.fn(() => { throw new TypeError("blocked"); }));
     render(<AppPreferencesProvider><Probe /></AppPreferencesProvider>);
 
-    await waitFor(() => expect(screen.getByTestId("preferences")).toHaveTextContent("en:system:light:Hejhome"));
+    await waitFor(() => expect(screen.getByTestId("preferences")).toHaveTextContent("en:system:light:Soniox"));
     expect(document.documentElement).toHaveAttribute("lang", "en");
     expect(document.documentElement).toHaveAttribute("data-theme", "light");
   });

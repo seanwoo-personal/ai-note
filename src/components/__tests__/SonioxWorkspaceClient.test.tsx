@@ -207,7 +207,7 @@ describe("SonioxWorkspaceClient", () => {
     expect(speaker2).toHaveTextContent("はじめまして");
     expect(transcript).not.toHaveTextContent("화자 2");
     expect(translate).toHaveBeenCalledTimes(1);
-    expect(translate).toHaveBeenCalledWith("/api/translate", expect.objectContaining({ body: JSON.stringify({ text: "はじめまして", targetLanguage: "ko" }) }));
+    expect(translate).toHaveBeenCalledWith("/api/translate", expect.objectContaining({ body: JSON.stringify({ text: "はじめまして", targetLanguage: "en" }) }));
   });
 
   it("falls back to the selected counterpart language when a Korean endpoint has no final translation", async () => {
@@ -278,7 +278,7 @@ describe("SonioxWorkspaceClient", () => {
     vi.stubGlobal("fetch", translate);
     navigation.search = "workspace=workspace-a&tool=test-product";
     const view = render(<SonioxWorkspaceClient />);
-    fireEvent.change(screen.getByRole("combobox", { name: "번역할 언어" }), { target: { value: "ja" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "상대방 언어" }), { target: { value: "ja" } });
     fireEvent.change(screen.getByRole("combobox", { name: "번역 음성" }), { target: { value: "Daniel" } });
     fireEvent.change(screen.getByRole("combobox", { name: "음성 속도" }), { target: { value: "1.2" } });
     fireEvent.click(screen.getByRole("button", { name: "미팅 시작" }));
@@ -286,6 +286,7 @@ describe("SonioxWorkspaceClient", () => {
     view.rerender(<SonioxWorkspaceClient />);
 
     fireEvent.keyDown(window, { code: "ShiftLeft", key: "Shift", repeat: false });
+    fireEvent.keyUp(window, { code: "ShiftLeft", key: "Shift" });
     expect(screen.getByRole("status", { name: "Push-to-Talk 상태" })).toHaveTextContent("실시간 번역 및 음성 연결 준비 중");
     expect(speech.prepare).toHaveBeenCalledWith({ language: "ja", voice: "Daniel", speed: 1.2 });
     completePttOpeningBoundary(view);
@@ -303,6 +304,7 @@ describe("SonioxWorkspaceClient", () => {
     };
     view.rerender(<SonioxWorkspaceClient />);
     fireEvent.keyDown(window, { code: "ShiftLeft", key: "Shift", repeat: false });
+    fireEvent.keyUp(window, { code: "ShiftLeft", key: "Shift" });
 
     const pttRow = await screen.findByRole("row", { name: "Speaker 1 Push-to-Talk 대화 행" });
     expect(pttRow).toHaveTextContent("こんにちは");
@@ -327,9 +329,10 @@ describe("SonioxWorkspaceClient", () => {
     navigation.search = "workspace=workspace-a&tool=test-product";
     capture.phase = "listening";
     const view = render(<SonioxWorkspaceClient />);
-    fireEvent.change(screen.getByRole("combobox", { name: "번역할 언어" }), { target: { value: "ja" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "상대방 언어" }), { target: { value: "ja" } });
 
     fireEvent.keyDown(window, { code: "ShiftLeft", key: "Shift" });
+    fireEvent.keyUp(window, { code: "ShiftLeft", key: "Shift" });
     completePttOpeningBoundary(view);
     capture.transcript = {
       original: { final: "", provisional: "안녕하세요" },
@@ -349,6 +352,7 @@ describe("SonioxWorkspaceClient", () => {
     };
     view.rerender(<SonioxWorkspaceClient />);
     fireEvent.keyDown(window, { code: "ShiftLeft", key: "Shift" });
+    fireEvent.keyUp(window, { code: "ShiftLeft", key: "Shift" });
 
     expect(capture.finalize).toHaveBeenCalledTimes(2);
     expect(screen.getByRole("status", { name: "Push-to-Talk 상태" })).toHaveTextContent("마지막 토큰 확정 중");
@@ -427,9 +431,10 @@ describe("SonioxWorkspaceClient", () => {
     navigation.search = "workspace=workspace-a&tool=test-product";
     capture.phase = "listening";
     const view = render(<SonioxWorkspaceClient />);
-    fireEvent.change(screen.getByRole("combobox", { name: "번역할 언어" }), { target: { value: "ja" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "상대방 언어" }), { target: { value: "ja" } });
 
     fireEvent.keyDown(window, { code: "ShiftLeft", key: "Shift" });
+    fireEvent.keyUp(window, { code: "ShiftLeft", key: "Shift" });
     completePttOpeningBoundary(view);
     capture.transcript = {
       original: { final: "안녕하세요", provisional: "" },
@@ -444,8 +449,9 @@ describe("SonioxWorkspaceClient", () => {
     };
     view.rerender(<SonioxWorkspaceClient />);
     fireEvent.keyDown(window, { code: "ShiftLeft", key: "Shift" });
+    fireEvent.keyUp(window, { code: "ShiftLeft", key: "Shift" });
     expect(capture.finalize).toHaveBeenCalledTimes(2);
-    fireEvent.change(screen.getByRole("combobox", { name: "번역할 언어" }), { target: { value: "zh" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "상대방 언어" }), { target: { value: "zh" } });
 
     capture.transcript = {
       original: { final: "안녕하세요추가 발화", provisional: "" },
@@ -509,6 +515,7 @@ describe("SonioxWorkspaceClient", () => {
     const view = render(<SonioxWorkspaceClient />);
 
     fireEvent.keyDown(window, { code: "ShiftLeft", key: "Shift" });
+    fireEvent.keyUp(window, { code: "ShiftLeft", key: "Shift" });
     completePttOpeningBoundary(view);
     capture.transcript = {
       original: { final: "말", provisional: "" },
@@ -523,6 +530,7 @@ describe("SonioxWorkspaceClient", () => {
     };
     view.rerender(<SonioxWorkspaceClient />);
     fireEvent.keyDown(window, { code: "ShiftLeft", key: "Shift" });
+    fireEvent.keyUp(window, { code: "ShiftLeft", key: "Shift" });
     expect(screen.getByRole("status", { name: "Push-to-Talk 상태" })).toHaveTextContent("마지막 토큰 확정 중");
 
     act(() => vi.advanceTimersByTime(8_000));
@@ -549,6 +557,7 @@ describe("SonioxWorkspaceClient", () => {
 
     fireEvent.keyUp(document.activeElement ?? window, { code: "ShiftRight", key: "Shift" });
     fireEvent.keyDown(document.activeElement ?? window, { code: "ShiftLeft", key: "Shift" });
+    fireEvent.keyUp(document.activeElement ?? window, { code: "ShiftLeft", key: "Shift" });
     expect(capture.finalize).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("status", { name: "Push-to-Talk 상태" })).toHaveTextContent("Left Shift를 다시 누르세요");
 
@@ -588,6 +597,7 @@ describe("SonioxWorkspaceClient", () => {
     const view = render(<SonioxWorkspaceClient />);
 
     fireEvent.keyDown(window, { code: "ShiftLeft", key: "Shift" });
+    fireEvent.keyUp(window, { code: "ShiftLeft", key: "Shift" });
     completePttOpeningBoundary(view);
     capture.transcript = {
       original: { final: "안녕하세요", provisional: "" },
@@ -602,6 +612,7 @@ describe("SonioxWorkspaceClient", () => {
     };
     view.rerender(<SonioxWorkspaceClient />);
     fireEvent.keyDown(window, { code: "ShiftLeft", key: "Shift" });
+    fireEvent.keyUp(window, { code: "ShiftLeft", key: "Shift" });
 
     await act(async () => {
       await Promise.resolve();

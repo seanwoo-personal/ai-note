@@ -14,10 +14,22 @@ import {
 
 const roots: string[] = [];
 const originalEvidenceRoot = process.env.AI_EXECUTE_BROWSER_EVIDENCE_DIR;
+const originalSnapshotRoot = process.env.AI_NOTE_E2E_SNAPSHOT_ROOT;
+const originalReporterStatusPath = process.env.AI_NOTE_E2E_REPORTER_STATUS_PATH;
+const originalReporterFailure = process.env.AI_NOTE_E2E_INJECT_REPORTER_FAILURE;
+const originalExitCode = process.exitCode;
+
+function restoreEnv(name: string, value: string | undefined) {
+  if (value === undefined) delete process.env[name];
+  else process.env[name] = value;
+}
 
 afterEach(async () => {
-  if (originalEvidenceRoot === undefined) delete process.env.AI_EXECUTE_BROWSER_EVIDENCE_DIR;
-  else process.env.AI_EXECUTE_BROWSER_EVIDENCE_DIR = originalEvidenceRoot;
+  restoreEnv("AI_EXECUTE_BROWSER_EVIDENCE_DIR", originalEvidenceRoot);
+  restoreEnv("AI_NOTE_E2E_SNAPSHOT_ROOT", originalSnapshotRoot);
+  restoreEnv("AI_NOTE_E2E_REPORTER_STATUS_PATH", originalReporterStatusPath);
+  restoreEnv("AI_NOTE_E2E_INJECT_REPORTER_FAILURE", originalReporterFailure);
+  process.exitCode = originalExitCode;
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
@@ -54,6 +66,8 @@ async function evidenceRoot() {
   roots.push(root);
   const evidence = join(root, "playwright-evidence");
   process.env.AI_EXECUTE_BROWSER_EVIDENCE_DIR = evidence;
+  process.env.AI_NOTE_E2E_SNAPSHOT_ROOT = root;
+  process.env.AI_NOTE_E2E_REPORTER_STATUS_PATH = join(root, ".e2e-reporter-status.json");
   return evidence;
 }
 
@@ -92,7 +106,7 @@ describe("Playwright evidence requirement contract", () => {
       }],
     })).toMatchObject({
       complete: false,
-      missingViewports: ["mobile-390", "mobile-320"],
+      missingViewports: ["mobile-390", "mobile-360", "mobile-320"],
       incompleteTests: ["desktop-only"],
     });
   });
@@ -103,6 +117,7 @@ describe("Playwright evidence requirement contract", () => {
       fakeTest("desktop-1440", "fresh hierarchy", ["R7", "R9"]),
       fakeTest("desktop-1440", "dirty navigation", ["R8"]),
       fakeTest("mobile-390", "mobile flow", ["R7", "R8", "R9"]),
+      fakeTest("mobile-360", "exact responsive mobile flow", ["R7", "R8", "R9"]),
       fakeTest("mobile-320", "small mobile flow", ["R7", "R8", "R9"]),
     ];
     const reporter = new EvidenceReporter();
@@ -111,18 +126,19 @@ describe("Playwright evidence requirement contract", () => {
     reporter.onTestEnd(tests[1] as never, fakeResult("browser-screenshot:guard") as never);
     reporter.onTestEnd(tests[2] as never, fakeResult() as never);
     reporter.onTestEnd(tests[3] as never, fakeResult() as never);
+    reporter.onTestEnd(tests[4] as never, fakeResult() as never);
 
     await expect(reporter.onEnd({ status: "passed" } as never)).resolves.toEqual({});
     const manifest = JSON.parse(await readFile(join(evidence, "manifest.json"), "utf8"));
     expect(manifest.coveredRequirements).toEqual(["R7", "R8", "R9"]);
     expect(manifest.browser.fixtureId).toBe("ai-note-synthetic-library-v1");
-    expect(manifest.browser.artifacts.screenshots).toHaveLength(4);
+    expect(manifest.browser.artifacts.screenshots).toHaveLength(5);
     expect(manifest.browser.artifacts.screenshots.filter(
       (item: { viewport: string }) => item.viewport === "desktop-1440",
     )).toHaveLength(2);
     expect(new Set(manifest.browser.artifacts.screenshots.map(
       (item: { path: string }) => item.path,
-    )).size).toBe(4);
+    )).size).toBe(5);
   });
 
   it("marks the run failed when a required viewport or automatic attachment is missing", async () => {
@@ -143,4 +159,36 @@ describe("Playwright evidence requirement contract", () => {
 
     await expect(reporter.onEnd({ status: "passed" } as never)).resolves.toEqual({ status: "failed" });
   });
+
+  it.each(["setup", "onEnd", "artifact-copy", "manifest"])(
+    "leaves no completed success marker when %s fails",
+    async (failure) => {
+      await evidenceRoot();
+      process.env.AI_NOTE_E2E_INJECT_REPORTER_FAILURE = failure;
+      const statusPath = process.env.AI_NOTE_E2E_REPORTER_STATUS_PATH!;
+      const tests = REQUIRED_SYNTHETIC_VIEWPORTS.map((project) => (
+        fakeTest(project, `${project} failure injection`, ["R9"])
+      ));
+      const reporter = new EvidenceReporter();
+      if (failure === "setup") {
+        expect(() => reporter.onBegin({} as never, { allTests: () => tests } as never))
+          .toThrow("injected evidence reporter setup failure");
+        expect(process.exitCode).toBe(1);
+        await expect(readFile(statusPath, "utf8")).resolves.toContain(
+          `"reporterErrorClassification":"${failure}"`,
+        );
+        return;
+      }
+      reporter.onBegin({} as never, { allTests: () => tests } as never);
+      for (const test of tests) reporter.onTestEnd(test as never, fakeResult() as never);
+      await expect(reporter.onEnd({ status: "passed" } as never)).resolves.toEqual(
+        { status: "failed" },
+      );
+      expect(process.exitCode).toBe(1);
+      await expect(readFile(statusPath, "utf8")).resolves.toContain(
+        `"reporterErrorClassification":"${failure}"`,
+      );
+      await expect(readFile(statusPath, "utf8")).resolves.not.toContain('"phase":"completed"');
+    },
+  );
 });

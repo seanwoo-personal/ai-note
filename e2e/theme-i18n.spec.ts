@@ -17,7 +17,7 @@ const fixtureModule = importRuntimeModule(pathToFileURL(join(
 type Locale = "en" | "zh" | "ja";
 
 const titles: Record<Locale, string> = {
-  en: "Hejhome AI Notes",
+  en: "Soniox AI Notes",
   zh: "Hejhome AI 记录工具",
   ja: "Hejhome AI記録ツール",
 };

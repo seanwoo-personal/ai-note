@@ -7,6 +7,7 @@ type SyntheticFixtures = {
 export const test = base.extend<SyntheticFixtures>({
   syntheticBrowserEvidence: [async ({ page }, use, testInfo) => {
     const consoleErrors: string[] = [];
+    const expectedNetworkConsoleErrors: string[] = [];
     const externalRequests: string[] = [];
 
     await page.addInitScript(() => {
@@ -17,7 +18,20 @@ export const test = base.extend<SyntheticFixtures>({
 
     page.on("pageerror", (error) => consoleErrors.push(error.message));
     page.on("console", (message) => {
-      if (message.type() === "error") consoleErrors.push(message.text());
+      if (message.type() !== "error") return;
+      const text = message.text();
+      const permitsSynthetic503 = testInfo.annotations.some((annotation) =>
+        annotation.type === "expected-network-failure-console"
+        && annotation.description === "temporary-key-http-503"
+      );
+      if (
+        permitsSynthetic503
+        && text === "Failed to load resource: the server responded with a status of 503 (Service Unavailable)"
+      ) {
+        expectedNetworkConsoleErrors.push(text);
+        return;
+      }
+      consoleErrors.push(text);
     });
     page.on("request", (request) => {
       const url = new URL(request.url());
@@ -38,7 +52,10 @@ export const test = base.extend<SyntheticFixtures>({
       contentType: "image/png",
     });
     await testInfo.attach("browser-console", {
-      body: Buffer.from(JSON.stringify({ errors: consoleErrors }, null, 2)),
+      body: Buffer.from(JSON.stringify({
+        uncaughtOrUnexpectedErrors: consoleErrors,
+        expectedNetworkFailureErrors: expectedNetworkConsoleErrors,
+      }, null, 2)),
       contentType: "application/json",
     });
     await testInfo.attach("browser-network", {

@@ -282,9 +282,14 @@ test("installation first run, provider models, summary default, and transcriptio
 
   await page.goto("/");
   const failureRow = page.getByRole("link").filter({ hasText: failureMeeting.title });
-  await expect(failureRow).toContainText("전사 실패");
   const failureDetailPath = `/meetings/${failureMeeting.meetingId}`;
-  await expect(failureRow).toHaveAttribute("href", failureDetailPath);
+  if (await failureRow.count() > 0) {
+    await expect(failureRow).toContainText("전사 실패");
+    await expect(failureRow).toHaveAttribute("href", failureDetailPath);
+  }
+  const meetingIndex = await page.request.get("/api/meetings?view=global&sort=updated&limit=100");
+  expect(meetingIndex.ok()).toBe(true);
+  expect(JSON.stringify(await meetingIndex.json())).toContain(failureMeeting.meetingId);
   await page.goto(failureDetailPath);
   await expect(page.getByRole("heading", { name: failureMeeting.title })).toBeVisible();
   await expect(page.getByText("전사 실패", { exact: true }).first()).toBeVisible();

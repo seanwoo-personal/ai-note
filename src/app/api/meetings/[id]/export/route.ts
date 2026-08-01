@@ -2,7 +2,7 @@ import { summarySchema } from "@/domain/summarySchema";
 import { readArtifactPair } from "@/lib/artifactPair";
 import { guardLocalApiRequest } from "@/lib/localRequestGuard";
 import { meetingFenceResponse } from "@/lib/meetingFence";
-import { contentDispositionForMeeting } from "@/lib/meetingFilename";
+import { contentDispositionForMeeting, meetingDownloadBaseName } from "@/lib/meetingFilename";
 import { assertSafeId } from "@/lib/meetingId";
 import { publicErrorResponse } from "@/lib/publicApi";
 import { automaticMeetingTitle, readStatus } from "@/lib/status";
@@ -64,6 +64,29 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const effectiveTitle = status?.titleOverride
     ?? (status ? automaticMeetingTitle(status.startedAt, summary.title) : summary.title);
 
+  // Dated download names are Global Meeting-only. The discriminator is the explicit
+  // save-path marker `recordingKind === "transcript_only"`, which only the Global
+  // Meeting session save (globalMeetingSave) writes — the ordinary audio finalize
+  // path never sets it. Ordinary meetings keep their effective-title filename
+  // byte-for-byte; we never infer "global" from title text nor broaden this default.
+  const isGlobalMeeting = status?.recordingKind === "transcript_only";
+  // Global download name = `YYYYMMDD_HHMMSS one-sentence-summary` from the immutable
+  // meeting start time. A user title override is the best one-sentence descriptor;
+  // otherwise the summarizer's one-liner, then its title; the meeting id is the
+  // last-resort fallback so the name is never empty even if the summary lacks
+  // descriptors. Both md and json use the same base for a Global Meeting.
+  const oneSentenceSummary = status?.titleOverride?.trim()
+    || summary.oneLine?.trim()
+    || summary.title?.trim()
+    || "";
+  const downloadFilenameTitle = isGlobalMeeting
+    ? meetingDownloadBaseName({
+        startedAt: status?.startedAt ?? "",
+        summary: oneSentenceSummary,
+        fallback: id,
+      })
+    : effectiveTitle;
+
   const fmt = new URL(request.url).searchParams.get("fmt") ?? "md";
 
   if (fmt === "json") {
@@ -74,7 +97,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       headers: {
         "content-type": "application/json",
         "content-disposition": contentDispositionForMeeting({
-          title: effectiveTitle,
+          title: downloadFilenameTitle,
           fallbackId: id,
           extension: "json",
         }),
@@ -100,7 +123,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     headers: {
       "content-type": "text/markdown; charset=utf-8",
       "content-disposition": contentDispositionForMeeting({
-        title: effectiveTitle,
+        title: downloadFilenameTitle,
         fallbackId: id,
         extension: "md",
       }),

@@ -66,7 +66,7 @@ describe("manual editing synthetic fixture", () => {
     })).rejects.toThrow("unknown existing content");
   });
 
-  it("creates exactly three isolated viewport meetings and is idempotent only with its exact sentinel", async () => {
+  it("creates exactly four isolated viewport meetings and is idempotent only with its exact sentinel", async () => {
     const root = await snapshotRoot();
     const env = { AI_NOTE_E2E_SNAPSHOT_ROOT: root };
 
@@ -78,11 +78,11 @@ describe("manual editing synthetic fixture", () => {
       "meetings",
     ]);
     const library = JSON.parse(await readFile(join(root, "data", "library.json"), "utf8"));
-    expect(library.placements).toHaveLength(3);
+    expect(library.placements).toHaveLength(4);
     expect(library.placements.map((placement) => placement.meetingId).sort()).toEqual(
       MANUAL_EDITING_PROJECTS.map((project) => project.meetingId).sort(),
     );
-    expect(new Set(MANUAL_EDITING_PROJECTS.map((project) => project.meetingId)).size).toBe(3);
+    expect(new Set(MANUAL_EDITING_PROJECTS.map((project) => project.meetingId)).size).toBe(4);
 
     for (const project of MANUAL_EDITING_PROJECTS) {
       const meetingRoot = join(root, "data", "meetings", project.meetingId);
@@ -103,7 +103,7 @@ describe("manual editing synthetic fixture", () => {
     await expect(installManualEditingFixture({ env })).rejects.toThrow("sentinel");
   });
 
-  it("maps only the three configured Playwright projects to their own meeting", () => {
+  it("maps only the four configured Playwright projects to their own meeting", () => {
     for (const project of MANUAL_EDITING_PROJECTS) {
       expect(manualEditingMeetingForProject(project.projectName)).toEqual(project);
     }

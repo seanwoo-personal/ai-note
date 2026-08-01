@@ -117,11 +117,11 @@ describe("installation and first-run synthetic fixture", () => {
       "meetings",
     ]);
     const library = JSON.parse(await readFile(join(root, "data", "library.json"), "utf8"));
-    expect(library.placements).toHaveLength(6);
+    expect(library.placements).toHaveLength(8);
     expect(library.placements.map((placement) => placement.meetingId)).toEqual(
       expect.arrayContaining(manualMeetingIds),
     );
-    expect(new Set(FIRST_RUN_PROJECTS.map((project) => project.meetingId)).size).toBe(3);
+    expect(new Set(FIRST_RUN_PROJECTS.map((project) => project.meetingId)).size).toBe(4);
 
     for (const project of FIRST_RUN_PROJECTS) {
       const rootForMeeting = join(root, "data", "meetings", project.meetingId);
@@ -171,7 +171,7 @@ describe("installation and first-run synthetic fixture", () => {
     await expect(installFirstRunFixture({ env })).rejects.toThrow("first-run sentinel");
   });
 
-  it("maps only the three configured Playwright projects to their own failure meeting", () => {
+  it("maps only the four configured Playwright projects to their own failure meeting", () => {
     for (const project of FIRST_RUN_PROJECTS) {
       expect(firstRunMeetingForProject(project.projectName)).toEqual(project);
     }

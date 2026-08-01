@@ -22,21 +22,21 @@ function contrastRatio(foreground: string, background: string) {
 }
 
 describe("Hejhome typography assets", () => {
-  it("self-hosts Noto Sans KR 500 and 700 with the required OFL notice", () => {
+  it("self-hosts SUIT 500 and 700 with the required OFL notice", () => {
     const css = read("src/app/globals.css").toString("utf8");
-    const medium = read("public/fonts/NotoSansKR/NotoSansKR-Medium.otf");
-    const bold = read("public/fonts/NotoSansKR/NotoSansKR-Bold.otf");
-    const license = read("public/fonts/NotoSansKR/LICENSE.txt").toString("utf8");
+    const medium = read("public/fonts/SUIT/SUIT-Medium.woff2");
+    const bold = read("public/fonts/SUIT/SUIT-Bold.woff2");
+    const license = read("public/fonts/SUIT/OFL.txt").toString("utf8");
 
     const faces = css.match(/@font-face\s*{[^}]*}/gs) ?? [];
-    const mediumFace = faces.find((face) => face.includes("NotoSansKR-Medium.otf"));
-    const boldFace = faces.find((face) => face.includes("NotoSansKR-Bold.otf"));
+    const mediumFace = faces.find((face) => face.includes("SUIT-Medium.woff2"));
+    const boldFace = faces.find((face) => face.includes("SUIT-Bold.woff2"));
 
-    expect(medium.subarray(0, 4).toString("ascii")).toBe("OTTO");
-    expect(bold.subarray(0, 4).toString("ascii")).toBe("OTTO");
-    expect(mediumFace).toContain('font-family: "Noto Sans KR"');
+    expect(medium.subarray(0, 4).toString("ascii")).toBe("wOF2");
+    expect(bold.subarray(0, 4).toString("ascii")).toBe("wOF2");
+    expect(mediumFace).toContain('font-family: "SUIT"');
     expect(mediumFace).toContain("font-weight: 500");
-    expect(boldFace).toContain('font-family: "Noto Sans KR"');
+    expect(boldFace).toContain('font-family: "SUIT"');
     expect(boldFace).toContain("font-weight: 700");
     expect(css).toContain("font-family: var(--font-sans)");
     expect(license).toContain("SIL OPEN FONT LICENSE Version 1.1");
@@ -47,28 +47,30 @@ describe("Hejhome typography assets", () => {
     const dark = css.match(/:root\[data-theme="dark"\]\s*{[^}]*}/s)?.[0] ?? "";
 
     for (const token of [
-      "--hej-color-background-canvas",
-      "--hej-color-background-surface",
-      "--hej-color-background-subtle",
-      "--hej-color-background-navigation",
-      "--hej-color-text-primary",
-      "--hej-color-text-secondary",
-      "--hej-color-text-disabled",
-      "--hej-color-action-primary",
-      "--hej-color-border-default",
-      "--hej-color-status-success-surface",
-      "--hej-color-status-warning-surface",
+      "--ld-color-bg-e1",
+      "--ld-color-bg-e2",
+      "--ld-color-bg-primary-e1",
+      "--ld-color-bg-primary-e2",
+      "--ld-color-contents",
+      "--ld-color-contents-sub",
+      "--ld-color-contents-disabled",
+      "--ld-color-primary",
+      "--ld-color-divider",
+      "--ld-color-item-yellow",
+      "--ld-color-danger",
     ]) expect(dark).toContain(token);
 
     const color = (token: string) => dark.match(new RegExp(`${token}:\\s*(#[0-9a-f]{6})`, "i"))?.[1] ?? "";
     for (const [foreground, background] of [
-      ["--hej-color-text-primary", "--hej-color-background-canvas"],
-      ["--hej-color-text-secondary", "--hej-color-background-canvas"],
-      ["--hej-color-text-disabled", "--hej-color-background-surface"],
-      ["--hej-color-action-primary", "--hej-color-background-surface"],
-      ["--hej-color-status-warning", "--hej-color-status-warning-surface"],
-      ["--hej-color-status-error", "--hej-color-background-surface"],
+      ["--ld-color-contents", "--ld-color-bg-e2"],
+      ["--ld-color-contents-sub", "--ld-color-bg-e2"],
+      ["--ld-color-primary", "--ld-color-bg-e1"],
+      ["--ld-color-item-yellow", "--ld-color-bg-e2"],
+      ["--ld-color-danger", "--ld-color-bg-e1"],
     ]) expect(contrastRatio(color(foreground), color(background))).toBeGreaterThanOrEqual(4.5);
+    // Leende's disabled semantic is intentionally de-emphasized. Disabled controls
+    // are not operable content under WCAG 1.4.3, but keep a measurable 3:1 floor.
+    expect(contrastRatio(color("--ld-color-contents-disabled"), color("--ld-color-bg-e1"))).toBeGreaterThanOrEqual(3);
   });
 
   it("keeps light warning text above WCAG AA contrast", () => {
@@ -76,9 +78,28 @@ describe("Hejhome typography assets", () => {
     const light = css.match(/:root\s*{[^}]*}/s)?.[0] ?? "";
     const color = (token: string) => light.match(new RegExp(`${token}:\\s*(#[0-9a-f]{6})`, "i"))?.[1] ?? "";
     expect(contrastRatio(
-      color("--hej-color-status-warning"),
-      color("--hej-color-status-warning-surface"),
+      color("--ld-color-item-yellow"),
+      color("--ld-color-bg-e2"),
     )).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("keeps every light interactive pair at WCAG AA and separates brand fill from link text", () => {
+    const css = read("src/app/globals.css").toString("utf8");
+    const light = css.match(/:root\s*{[^}]*}/s)?.[0] ?? "";
+    const color = (token: string) => light.match(new RegExp(`${token}:\\s*(#[0-9a-f]{6})`, "i"))?.[1] ?? "";
+
+    expect(color("--ld-color-primary")).toBe("#00a872");
+    expect(color("--ld-color-primary-text")).not.toBe(color("--ld-color-primary"));
+    for (const [foreground, background] of [
+      ["--ld-color-primary-text", "--ld-color-bg-e1"],
+      ["--ld-color-primary-text", "--ld-color-bg-e2"],
+      ["--ld-color-contents-on", "--hej-color-action-primary-surface"],
+      ["--ld-color-danger", "--ld-color-bg-e1"],
+      ["--hej-color-focus-strong", "--ld-color-bg-e1"],
+    ]) expect(contrastRatio(color(foreground), color(background))).toBeGreaterThanOrEqual(4.5);
+
+    expect(css).toContain(":where(a, button, input, select, textarea, [tabindex]):focus-visible");
+    expect(css).toContain("outline: 3px solid var(--hej-color-focus-strong)");
   });
 
   it("uses only defined semantic Tailwind ring tokens in navigation", () => {

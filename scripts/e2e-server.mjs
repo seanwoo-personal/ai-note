@@ -12,8 +12,9 @@ import {
 import { basename, join, resolve } from "node:path";
 
 import {
+  assertE2eSnapshotOwnership,
   E2E_SNAPSHOT_ENTRIES,
-  assertRealDirectory,
+  E2E_OWNERSHIP_MARKER,
   assertRegularTree,
   buildE2eServerEnv,
   parseE2ePort,
@@ -26,9 +27,10 @@ const port = parseE2ePort(process.env.AI_NOTE_E2E_PORT);
 
 const sourceRoot = await realpath(process.cwd());
 const snapshotRoot = resolveE2eSnapshotRoot(process.env.AI_NOTE_E2E_SNAPSHOT_ROOT);
-await assertRealDirectory(snapshotRoot, "snapshot root");
-if ((await readdir(snapshotRoot)).length > 0) {
-  throw new Error(`E2E snapshot root must start empty: ${snapshotRoot}`);
+await assertE2eSnapshotOwnership(snapshotRoot, process.env.AI_NOTE_E2E_OWNERSHIP_TOKEN);
+const initialEntries = await readdir(snapshotRoot);
+if (initialEntries.length !== 1 || initialEntries[0] !== E2E_OWNERSHIP_MARKER) {
+  throw new Error(`E2E snapshot root must start with only its ownership marker: ${snapshotRoot}`);
 }
 async function copyAllowedEntry(entry) {
   const source = join(sourceRoot, entry);

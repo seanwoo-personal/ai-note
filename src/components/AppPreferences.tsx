@@ -36,7 +36,7 @@ type AppPreferencesValue = {
   theme: ThemePreference;
   resolvedTheme: ResolvedTheme;
   fontSize: FontSizePreference;
-  brandName: "헤이홈" | "Hejhome";
+  brandName: "헤이홈" | "Soniox" | "Hejhome";
   setLocale: (locale: AppLocale) => void;
   setTheme: (theme: ThemePreference) => void;
   setFontSize: (fontSize: FontSizePreference) => void;

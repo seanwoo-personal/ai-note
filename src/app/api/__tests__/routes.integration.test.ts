@@ -579,11 +579,19 @@ describe("title edit / delete / export overlay", () => {
     const mdResponse = await exportGET(appRequest(`http://t/api/meetings/${id}/export?fmt=md`), ctx(id));
     const md = await mdResponse.text();
     expect(md).toContain("# 내보내기 제목");
-    expect(decodeURIComponent(mdResponse.headers.get("content-disposition") ?? ""))
-      .toContain("내보내기 제목.md");
+    // D2: an ORDINARY meeting (audio; no recordingKind) keeps its byte-for-byte
+    // effective-title filename — the dated prefix is Global Meeting-only and must
+    // never be applied here.
+    const mdDisposition = decodeURIComponent(mdResponse.headers.get("content-disposition") ?? "");
+    expect(mdDisposition).toContain("내보내기 제목.md");
+    expect(mdDisposition).not.toMatch(/UTF-8''.*\d{8}_\d{6} /u);
 
-    const jsonText = await (await exportGET(appRequest(`http://t/api/meetings/${id}/export?fmt=json`), ctx(id))).text();
+    const jsonResponse = await exportGET(appRequest(`http://t/api/meetings/${id}/export?fmt=json`), ctx(id));
+    const jsonText = await jsonResponse.text();
     expect(JSON.parse(jsonText).title).toBe("데일리 스크럼 2026-07-05"); // raw summary.title, not overridden
+    // D2: ordinary JSON filename is also undated (effective title / id fallback).
+    expect(decodeURIComponent(jsonResponse.headers.get("content-disposition") ?? ""))
+      .not.toMatch(/UTF-8''.*\d{8}_\d{6} /u);
   });
 
   it("export md combines the dated automatic title with summary.title when there is no titleOverride", async () => {
@@ -592,9 +600,45 @@ describe("title edit / delete / export overlay", () => {
     const response = await exportGET(appRequest(`http://t/api/meetings/${id}/export?fmt=md`), ctx(id));
     const md = await response.text();
     expect(md).toMatch(/^# 회의 \d{4}-\d{2}-\d{2} \d{2}:\d{2} · 데일리 스크럼 2026-07-05$/mu);
-    expect(decodeURIComponent(response.headers.get("content-disposition") ?? ""))
-      .toContain("· 데일리 스크럼 2026-07-05.md");
+    // D2: ordinary meeting → undated effective-title filename (no dated prefix).
+    const nooverrideDisposition = decodeURIComponent(response.headers.get("content-disposition") ?? "");
+    expect(nooverrideDisposition).toContain("· 데일리 스크럼 2026-07-05.md");
+    expect(nooverrideDisposition).not.toMatch(/UTF-8''.*\d{8}_\d{6} /u);
     expect(md).not.toContain("현재 스크립트 변경 후 회의록 요약이 갱신되지 않음");
+  });
+
+  it("D1+D2: a Global Meeting (transcript_only) dates BOTH md and json filenames in product-local time", async () => {
+    // Explicit save-path discriminator: recordingKind === "transcript_only" is set
+    // only by globalMeetingSave (never by the ordinary finalize path). The dated
+    // filename is scoped to it; ordinary meetings above stay byte-for-byte undated.
+    const id = "m-global-export";
+    const p = meetingPaths(id);
+    mkdirSync(p.dir, { recursive: true });
+    await writeStatus(id, {
+      ...initialStatus(id, { ...INIT, recordingKind: "transcript_only", audioMime: "" }),
+      status: "transcribed",
+    });
+    writeFileSync(p.raw, "안녕하세요, 오늘 회의를 시작하겠습니다.\n");
+    writeFileSync(p.transcript, "교정된 전사\n");
+    writeFileSync(p.summary, readFileSync(join(originalCwd, "fixtures", "summary.happy.json"), "utf-8"));
+
+    // Local wall-clock compact prefix from INIT.startedAt (matches status.ts).
+    const d = new Date(INIT.startedAt);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const ts = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+    const expectedBase = `${ts} 딜러십 재고 견적 기능을 마무리하고 이번 주 RIDE 온보딩 개선에 착수한다`;
+
+    const mdResponse = await exportGET(appRequest(`http://t/api/meetings/${id}/export?fmt=md`), ctx(id));
+    expect(mdResponse.status).toBe(200);
+    expect(decodeURIComponent(mdResponse.headers.get("content-disposition") ?? ""))
+      .toContain(`${expectedBase}.md`);
+
+    const jsonResponse = await exportGET(appRequest(`http://t/api/meetings/${id}/export?fmt=json`), ctx(id));
+    expect(jsonResponse.status).toBe(200);
+    // JSON body stays the raw summary contract; only the download filename is dated.
+    expect(JSON.parse(await jsonResponse.text()).title).toBe("데일리 스크럼 2026-07-05");
+    expect(decodeURIComponent(jsonResponse.headers.get("content-disposition") ?? ""))
+      .toContain(`${expectedBase}.json`);
   });
 
   it("exports a manual body as current Markdown and raw canonical JSON", async () => {

@@ -21,7 +21,7 @@ test("synthetic library shell is usable without external traffic", async ({ page
   ).toBe(true);
   expect(await libraryResponse.json(), "synthetic library state").toMatchObject({
     mode: "ready",
-    library: { counts: { visibleMeetingCount: 6 } },
+    library: { counts: { visibleMeetingCount: 8 } },
   });
   expect(await whisperResponse.json(), "synthetic Whisper state").toMatchObject({ connected: false });
   expect(await llmResponse.json(), "synthetic LLM state").toEqual({ configured: false });

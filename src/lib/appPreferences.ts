@@ -30,6 +30,7 @@ export function resolveTheme(theme: ThemePreference, systemDark: boolean): Resol
   return theme === "system" ? (systemDark ? "dark" : "light") : theme;
 }
 
-export function brandNameForLocale(locale: AppLocale): "헤이홈" | "Hejhome" {
-  return locale === "ko" ? "헤이홈" : "Hejhome";
+export function brandNameForLocale(locale: AppLocale): "헤이홈" | "Soniox" | "Hejhome" {
+  if (locale === "ko") return "헤이홈";
+  return locale === "en" ? "Soniox" : "Hejhome";
 }

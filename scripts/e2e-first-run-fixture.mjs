@@ -30,6 +30,11 @@ export const FIRST_RUN_PROJECTS = Object.freeze([
     title: "합성 전사 실패 모바일 390 회의 — 실제 사용자 데이터 아님",
   }),
   Object.freeze({
+    projectName: "mobile-360",
+    meetingId: "synthetic-first-run-mobile-360",
+    title: "합성 전사 실패 모바일 360 회의 — 실제 사용자 데이터 아님",
+  }),
+  Object.freeze({
     projectName: "mobile-320",
     meetingId: "synthetic-first-run-mobile-320",
     title: "합성 전사 실패 모바일 320 회의 — 실제 사용자 데이터 아님",

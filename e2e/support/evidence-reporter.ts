@@ -37,6 +37,8 @@ interface ScreenshotRecord extends ArtifactRecord {
   viewport: string;
 }
 
+type ReporterErrorClassification = "setup" | "onEnd" | "artifact-copy" | "manifest";
+
 function safeName(value: string): string {
   return value.replace(/[^A-Za-z0-9._-]/g, "_");
 }
@@ -80,6 +82,18 @@ export default class EvidenceReporter implements Reporter {
   private readonly evidenceRoot = resolve(
     process.env.AI_EXECUTE_BROWSER_EVIDENCE_DIR ?? "test-results/evidence",
   );
+  private readonly reporterStatusPath = (() => {
+    const raw = process.env.AI_NOTE_E2E_REPORTER_STATUS_PATH;
+    const snapshotRoot = process.env.AI_NOTE_E2E_SNAPSHOT_ROOT;
+    if (!raw || !snapshotRoot) throw new Error("E2E reporter completion status path is required");
+    const path = resolve(raw);
+    if (dirname(path) !== resolve(snapshotRoot) || basename(path) !== ".e2e-reporter-status.json") {
+      throw new Error(`unsafe E2E reporter completion status path: ${path}`);
+    }
+    return path;
+  })();
+  private readonly injectedFailure = process.env.AI_NOTE_E2E_INJECT_REPORTER_FAILURE;
+  private reporterErrorClassification: ReporterErrorClassification | null = null;
   private readonly screenshots: Array<{
     project: string;
     name: string;
@@ -87,13 +101,22 @@ export default class EvidenceReporter implements Reporter {
   }> = [];
   private readonly attachmentCoverage: TestAttachmentCoverage[] = [];
   private readonly consoleErrors: string[] = [];
+  private readonly expectedNetworkConsoleErrors: string[] = [];
   private readonly externalRequests: string[] = [];
   private readonly tests: Array<{ project: string; title: string; status: string; errors: string[] }> = [];
   private suiteTests: TestCase[] = [];
 
   onBegin(_config: FullConfig, suite: Suite): void {
-    this.suiteTests = suite.allTests();
-    prepareEvidenceRoot(this.evidenceRoot, this.runnerOwned);
+    this.runReporterPhase("setup", () => {
+      this.suiteTests = suite.allTests();
+      prepareEvidenceRoot(this.evidenceRoot, this.runnerOwned);
+      if (this.injectedFailure === "setup") throw new Error("injected evidence reporter setup failure");
+      writeFileSync(this.reporterStatusPath, JSON.stringify({
+        schemaVersion: 1,
+        phase: "begun",
+        status: "pending",
+      }), { flag: "wx", mode: 0o600 });
+    });
   }
 
   onTestEnd(test: TestCase, result: TestResult): void {
@@ -122,10 +145,22 @@ export default class EvidenceReporter implements Reporter {
         }
       }
       if (attachment.name === "browser-console") {
-        const parsed = parseAttachmentJson(attachment) as { errors?: unknown } | null;
-        if (Array.isArray(parsed?.errors)) {
+        const parsed = parseAttachmentJson(attachment) as {
+          errors?: unknown;
+          uncaughtOrUnexpectedErrors?: unknown;
+          expectedNetworkFailureErrors?: unknown;
+        } | null;
+        const unexpected = Array.isArray(parsed?.uncaughtOrUnexpectedErrors)
+          ? parsed.uncaughtOrUnexpectedErrors
+          : parsed?.errors;
+        if (Array.isArray(unexpected)) {
           consoleCount += 1;
-          this.consoleErrors.push(...parsed.errors.filter((item): item is string => typeof item === "string"));
+          this.consoleErrors.push(...unexpected.filter((item): item is string => typeof item === "string"));
+          if (Array.isArray(parsed?.expectedNetworkFailureErrors)) {
+            this.expectedNetworkConsoleErrors.push(
+              ...parsed.expectedNetworkFailureErrors.filter((item): item is string => typeof item === "string"),
+            );
+          }
         }
       }
       if (attachment.name === "browser-network") {
@@ -148,9 +183,26 @@ export default class EvidenceReporter implements Reporter {
   }
 
   async onEnd(result: FullResult): Promise<{ status?: FullResult["status"] }> {
+    if (this.reporterErrorClassification) return { status: "failed" };
+    try {
+      return this.runReporterPhase("onEnd", () => this.finish(result));
+    } catch {
+      // Playwright intentionally isolates reporter exceptions. Returning a failed
+      // FullResult override is what makes the Playwright child itself fail closed.
+      return { status: "failed" };
+    }
+  }
+
+  private finish(result: FullResult): { status?: FullResult["status"] } {
+    if (this.injectedFailure === "onEnd") throw new Error("injected evidence reporter onEnd failure");
     const artifactsRoot = join(this.evidenceRoot, "artifacts");
     const screenshotRecords: ScreenshotRecord[] = [];
     const screenshotIndexes = new Map<string, number>();
+    if (this.injectedFailure === "artifact-copy") {
+      this.runReporterPhase("artifact-copy", () => {
+        throw new Error("injected evidence reporter artifact-copy failure");
+      });
+    }
     for (const screenshot of this.screenshots) {
       const index = (screenshotIndexes.get(screenshot.project) ?? 0) + 1;
       screenshotIndexes.set(screenshot.project, index);
@@ -191,7 +243,10 @@ export default class EvidenceReporter implements Reporter {
     );
     writeFileSync(
       consolePath,
-      JSON.stringify({ errors: this.consoleErrors }, null, 2),
+      JSON.stringify({
+        uncaughtOrUnexpectedErrors: this.consoleErrors,
+        expectedNetworkFailureErrors: this.expectedNetworkConsoleErrors,
+      }, null, 2),
       { mode: 0o600 },
     );
 
@@ -217,8 +272,48 @@ export default class EvidenceReporter implements Reporter {
     };
     const manifestPath = join(this.evidenceRoot, "manifest.json");
     mkdirSync(dirname(manifestPath), { recursive: true, mode: 0o700 });
+    if (this.injectedFailure === "manifest") {
+      this.runReporterPhase("manifest", () => {
+        throw new Error("injected evidence reporter manifest failure");
+      });
+    }
     writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), { mode: 0o600 });
+    writeFileSync(this.reporterStatusPath, JSON.stringify({
+      schemaVersion: 1,
+      phase: "completed",
+      status: passed ? "passed" : "failed",
+      playwrightStatus: result.status,
+      manifest: this.record(manifestPath),
+    }), { mode: 0o600 });
     return passed ? {} : { status: "failed" };
+  }
+
+  private runReporterPhase<T>(phase: ReporterErrorClassification, operation: () => T): T {
+    try {
+      return operation();
+    } catch (error) {
+      this.reporterErrorClassification ??= phase;
+      process.exitCode = 1;
+      const normalized = error instanceof Error
+        ? { name: error.name, message: error.message }
+        : { name: "Error", message: String(error) };
+      try {
+        writeFileSync(this.reporterStatusPath, JSON.stringify({
+          schemaVersion: 1,
+          phase: "failed",
+          status: "failed",
+          reporterErrorClassification: this.reporterErrorClassification,
+          reporterError: normalized,
+        }), { mode: 0o600 });
+      } catch (statusError) {
+        console.error("[evidence-reporter] failed to persist reporter failure status", statusError);
+      }
+      console.error(`[evidence-reporter] reporter_error=${JSON.stringify({
+        classification: this.reporterErrorClassification,
+        ...normalized,
+      })}`);
+      throw error;
+    }
   }
 
   private record(path: string): ArtifactRecord {

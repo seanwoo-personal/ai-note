@@ -101,12 +101,38 @@ describe("TestProductMeetingPanel — Global Meeting", () => {
     expect(values).toContain("2");
   });
 
-  it("selects ko/en/zh/ja input languages and keeps Soniox source distinct from the translation target", () => {
+  it("defaults 내 언어 to Korean and starts two_way translation to the selected target", () => {
     const capture = makeCapture();
     render(<TestProductMeetingPanel capture={capture} speech={makeSpeech()} location={LOCATION} />);
-    const input = screen.getByRole("combobox", { name: "입력 언어" }) as HTMLSelectElement;
-    const target = screen.getByRole("combobox", { name: "번역할 언어" }) as HTMLSelectElement;
+    const input = screen.getByRole("combobox", { name: "내 언어" }) as HTMLSelectElement;
+    const target = screen.getByRole("combobox", { name: "상대방 언어" }) as HTMLSelectElement;
     expect(Array.from(input.options).map((option) => option.value)).toEqual(["ko", "en", "zh", "ja"]);
+    expect(input.value).toBe("ko");
+    expect(target.value).toBe("en");
+    fireEvent.click(screen.getByRole("button", { name: "미팅 시작" }));
+    expect(capture.start).toHaveBeenCalledWith({
+      inputSource: "microphone",
+      translation: { mode: "two_way", languageA: "ko", languageB: "en" },
+    });
+  });
+
+  it("sends the user's explicitly selected 상대방 언어 into the two-way request payload", () => {
+    const capture = makeCapture();
+    render(<TestProductMeetingPanel capture={capture} speech={makeSpeech()} location={LOCATION} />);
+    const target = screen.getByRole("combobox", { name: "상대방 언어" }) as HTMLSelectElement;
+    fireEvent.change(target, { target: { value: "ja" } });
+    fireEvent.click(screen.getByRole("button", { name: "미팅 시작" }));
+    expect(capture.start).toHaveBeenCalledWith({
+      inputSource: "microphone",
+      translation: { mode: "two_way", languageA: "ko", languageB: "ja" },
+    });
+  });
+
+  it("keeps a concrete 내 언어 selection on two_way and distinct from 상대방 언어", () => {
+    const capture = makeCapture();
+    render(<TestProductMeetingPanel capture={capture} speech={makeSpeech()} location={LOCATION} />);
+    const input = screen.getByRole("combobox", { name: "내 언어" }) as HTMLSelectElement;
+    const target = screen.getByRole("combobox", { name: "상대방 언어" }) as HTMLSelectElement;
 
     fireEvent.change(input, { target: { value: "en" } });
     expect(target.value).not.toBe("en");
@@ -115,6 +141,121 @@ describe("TestProductMeetingPanel — Global Meeting", () => {
       inputSource: "microphone",
       translation: { mode: "two_way", languageA: "en", languageB: target.value },
     });
+  });
+
+  it.each([
+    { label: "Chinese", source: "zh", original: "你好，我们开始吧", translated: "안녕하세요, 시작합시다" },
+    { label: "Japanese", source: "ja", original: "会議を始めましょう", translated: "회의를 시작합시다" },
+  ])("routes an automatically recognized $label utterance's original into 입력 and its generated target into 번역", async ({ source, original, translated }) => {
+    const capture = makeCapture();
+    const { rerender } = render(
+      <TestProductMeetingPanel capture={capture} speech={makeSpeech()} location={LOCATION} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "미팅 시작" }));
+    rerender(<TestProductMeetingPanel capture={makeCapture({ phase: "listening" })} speech={makeSpeech()} location={LOCATION} />);
+
+    const transcript = transcriptFrom([{
+      tokens: [
+        { text: original, is_final: true, speaker: "3", language: source, translation_status: "original" },
+        { text: translated, is_final: true, speaker: "3", language: "ko", source_language: source, translation_status: "translation" },
+        { text: "<end>", is_final: true, speaker: "3", translation_status: "original" },
+      ],
+    }]);
+    rerender(<TestProductMeetingPanel capture={makeCapture({ phase: "listening", transcript })} speech={makeSpeech()} location={LOCATION} />);
+
+    const row = await screen.findByRole("row", { name: "Speaker 3 대화 행" });
+    const cells = within(row).getAllByRole("cell");
+    expect(within(cells[0]).getByText(original)).toBeTruthy();
+    expect(within(cells[1]).getByText(translated)).toBeTruthy();
+  });
+
+  function liveTranscript(provisional: string): SonioxTranscript {
+    return {
+      ...emptySonioxTranscript(),
+      original: { final: "", provisional },
+      speakers: {
+        "1": {
+          original: { final: "", provisional },
+          translation: { final: "", provisional: "" },
+          originalLanguage: "ko",
+        },
+      },
+      activeSpeaker: "1",
+    };
+  }
+
+  it("autoscrolls the live transcript to the latest content while the user is following the bottom", () => {
+    const { rerender } = render(
+      <TestProductMeetingPanel capture={makeCapture({ phase: "listening", transcript: liveTranscript("안녕") })} speech={makeSpeech()} location={LOCATION} />,
+    );
+    const scroll = screen.getByTestId("global-meeting-transcript-scroll");
+    Object.defineProperty(scroll, "clientHeight", { configurable: true, value: 100 });
+    Object.defineProperty(scroll, "scrollHeight", { configurable: true, value: 500 });
+    // Pinned near the bottom → following.
+    scroll.scrollTop = 480;
+    fireEvent.scroll(scroll);
+
+    rerender(<TestProductMeetingPanel capture={makeCapture({ phase: "listening", transcript: liveTranscript("안녕하세요 반갑습니다 오늘 회의를 시작합니다") })} speech={makeSpeech()} location={LOCATION} />);
+    // The effect follows the growing content to the exact bottom.
+    expect(scroll.scrollTop).toBe(500);
+    expect(scroll.className).toContain("overflow-y-auto");
+  });
+
+  it("does not yank the transcript down when the user has scrolled up to read history", () => {
+    const { rerender } = render(
+      <TestProductMeetingPanel capture={makeCapture({ phase: "listening", transcript: liveTranscript("안녕") })} speech={makeSpeech()} location={LOCATION} />,
+    );
+    const scroll = screen.getByTestId("global-meeting-transcript-scroll");
+    Object.defineProperty(scroll, "clientHeight", { configurable: true, value: 100 });
+    Object.defineProperty(scroll, "scrollHeight", { configurable: true, value: 500 });
+    // The user scrolls up well beyond the follow threshold to read earlier lines.
+    fireEvent.wheel(scroll);
+    scroll.scrollTop = 50;
+    fireEvent.scroll(scroll);
+
+    rerender(<TestProductMeetingPanel capture={makeCapture({ phase: "listening", transcript: liveTranscript("안녕하세요 반갑습니다 오늘 회의를 시작합니다 계속 이어집니다") })} speech={makeSpeech()} location={LOCATION} />);
+    // New content arrives but the reader is not pulled back to the bottom.
+    expect(scroll.scrollTop).toBe(50);
+  });
+
+  it("keeps active core controls sticky, opaque, and bounded above scrolling transcript content", () => {
+    render(<TestProductMeetingPanel capture={makeCapture({ phase: "listening" })} speech={makeSpeech()} location={LOCATION} />);
+    const controls = screen.getByTestId("global-meeting-controls");
+    expect(controls.className).toContain("sticky");
+    expect(controls.className).toContain("top-0");
+    expect(controls.className).toMatch(/\bz-\d/u);
+    expect(controls.className).toContain("bg-panel");
+    // Narrow viewports bound the settings region to (under) the viewport height with
+    // its own vertical overflow, so a controls region taller than a small screen
+    // stays fully within the viewport and every core control remains reachable.
+    expect(controls.className).toContain("overflow-y-auto");
+    expect(controls.className).toMatch(/max-h-\[/u);
+    // D3: the narrow (non-lg) cap must leave >=40% of the viewport for the
+    // transcript, so its dynamic-viewport height is bounded to <=60dvh. A 92dvh cap
+    // (the regression) leaves only ~8% and fails this bound.
+    const dvhCap = controls.className.match(/max-h-\[(\d+)dvh\]/u);
+    expect(dvhCap).not.toBeNull();
+    expect(Number(dvhCap![1])).toBeLessThanOrEqual(60);
+    // Desktop keeps the natural, unbounded in-flow layout.
+    expect(controls.className).toContain("lg:max-h-none");
+    // The full core controls (start/broadcast-segment/end) stay present and clickable
+    // with >=44px (min-h-11) touch targets.
+    const pause = screen.getByRole("button", { name: "일시정지" });
+    const end = screen.getByRole("button", { name: "미팅 종료" });
+    const broadcast = screen.getByRole("button", { name: "송출 구간 시작" });
+    expect(pause).toBeEnabled();
+    expect(end).toBeEnabled();
+    expect(broadcast).toBeInTheDocument();
+    for (const control of [pause, end, broadcast]) {
+      expect(control.className).toContain("min-h-11");
+    }
+  });
+
+  it("exposes the in-flow start control before a meeting begins", () => {
+    render(<TestProductMeetingPanel capture={makeCapture()} speech={makeSpeech()} location={LOCATION} />);
+    const controls = screen.getByTestId("global-meeting-controls");
+    expect(controls.className).not.toContain("sticky");
+    expect(within(controls).getByRole("button", { name: "미팅 시작" })).toBeEnabled();
   });
 
   it("keeps live placeholders translatable while marking only recognized speech as user content", () => {
@@ -193,6 +334,7 @@ describe("TestProductMeetingPanel — Global Meeting", () => {
     );
     // Left Shift starts push-to-talk; incoming counterpart jobs are now suppressed.
     fireEvent.keyDown(window, { code: "ShiftLeft" });
+    fireEvent.keyUp(window, { code: "ShiftLeft" });
 
     const transcript = transcriptFrom([{
       tokens: [

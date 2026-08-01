@@ -1,10 +1,16 @@
 import { createServer } from "node:net";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { mkdtemp, readFile, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 
-import { buildE2eRunnerEnv, resolveE2eNodeModules } from "./e2e-harness.mjs";
+import {
+  buildE2eRunnerEnv,
+  E2E_OWNERSHIP_MARKER,
+  removeOwnedE2eSnapshotRoot,
+  resolveE2eNodeModules,
+} from "./e2e-harness.mjs";
 
 function allocateLoopbackPort() {
   return new Promise((resolvePort, reject) => {
@@ -26,11 +32,28 @@ const packageJson = JSON.parse(await readFile(new URL("../package.json", import.
 const nodeModules = await resolveE2eNodeModules(process.cwd(), packageJson.devDependencies?.["@playwright/test"]);
 const cli = join(nodeModules, "@playwright", "test", "cli.js");
 const port = await allocateLoopbackPort();
-const snapshotRoot = await mkdtemp(join(tmpdir(), "ai-note-e2e-"));
+const snapshotRoot = await realpath(await mkdtemp(join(tmpdir(), "ai-note-e2e-")));
+const ownershipToken = randomUUID();
+const reporterStatusPath = join(snapshotRoot, ".e2e-reporter-status.json");
+const injectedReporterFailure = process.env.AI_NOTE_E2E_INJECT_REPORTER_FAILURE;
+const allowedReporterFailures = new Set(["setup", "onEnd", "artifact-copy", "manifest"]);
+if (injectedReporterFailure !== undefined && !allowedReporterFailures.has(injectedReporterFailure)) {
+  throw new Error(`unsupported E2E reporter failure injection: ${injectedReporterFailure}`);
+}
+await writeFile(
+  join(snapshotRoot, E2E_OWNERSHIP_MARKER),
+  JSON.stringify({ token: ownershipToken }),
+  { encoding: "utf8", flag: "wx", mode: 0o600 },
+);
+const childEnv = {
+  ...buildE2eRunnerEnv(process.env, String(port), snapshotRoot, ownershipToken),
+  AI_NOTE_E2E_REPORTER_STATUS_PATH: reporterStatusPath,
+  ...(injectedReporterFailure ? { AI_NOTE_E2E_INJECT_REPORTER_FAILURE: injectedReporterFailure } : {}),
+};
 const child = spawn(process.execPath, [cli, "test", ...process.argv.slice(2)], {
   cwd: process.cwd(),
   stdio: "inherit",
-  env: buildE2eRunnerEnv(process.env, String(port), snapshotRoot),
+  env: childEnv,
 });
 
 let requestedExitCode = null;
@@ -57,5 +80,40 @@ const childResult = await new Promise((resolveChild) => {
   });
 });
 
-await rm(snapshotRoot, { recursive: true, force: true });
-process.exitCode = requestedExitCode ?? childResult.code;
+let reporterExitCode = 1;
+let reporterErrorClassification = "missing-status";
+try {
+  const reporterStatus = JSON.parse(await readFile(reporterStatusPath, "utf8"));
+  if (
+    reporterStatus?.schemaVersion === 1
+    && reporterStatus?.phase === "completed"
+    && reporterStatus?.status === "passed"
+  ) {
+    reporterExitCode = 0;
+    reporterErrorClassification = null;
+  } else {
+    reporterErrorClassification = reporterStatus?.reporterErrorClassification ?? "incomplete-status";
+    console.error(`[evidence-reporter] fail-closed status: ${JSON.stringify(reporterStatus)}`);
+  }
+} catch (error) {
+  console.error("[evidence-reporter] missing or unreadable completion status", error);
+}
+console.log(`[evidence-reporter] reporter_exit=${reporterExitCode}`);
+let cleanupExitCode = 0;
+try {
+  await removeOwnedE2eSnapshotRoot({ snapshotRoot, ownershipToken });
+} catch (error) {
+  cleanupExitCode = 1;
+  console.error("[e2e-runner] failed to remove owned snapshot root", error);
+}
+const wrapperExitCode = requestedExitCode
+  ?? (childResult.code !== 0 ? childResult.code : (reporterExitCode !== 0 ? reporterExitCode : cleanupExitCode));
+console.log(`[e2e-runner] termination=${JSON.stringify({
+  commandExit: wrapperExitCode,
+  playwrightExit: childResult.code,
+  reporterExit: reporterExitCode,
+  reporterErrorClassification,
+  cleanupExit: cleanupExitCode,
+  wrapperExit: wrapperExitCode,
+})}`);
+process.exitCode = wrapperExitCode;

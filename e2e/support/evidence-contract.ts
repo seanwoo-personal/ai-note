@@ -1,6 +1,7 @@
 export const REQUIRED_SYNTHETIC_VIEWPORTS = [
   "desktop-1440",
   "mobile-390",
+  "mobile-360",
   "mobile-320",
 ] as const;
 

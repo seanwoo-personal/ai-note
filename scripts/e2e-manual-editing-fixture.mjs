@@ -28,6 +28,12 @@ export const MANUAL_EDITING_PROJECTS = Object.freeze([
     participant: "가상 참석자 모바일 390",
   }),
   Object.freeze({
+    projectName: "mobile-360",
+    meetingId: "synthetic-manual-mobile-360",
+    title: "합성 모바일 360 회의 — 실제 사용자 데이터 아님",
+    participant: "가상 참석자 모바일 360",
+  }),
+  Object.freeze({
     projectName: "mobile-320",
     meetingId: "synthetic-manual-mobile-320",
     title: "합성 모바일 320 회의 — 실제 사용자 데이터 아님",

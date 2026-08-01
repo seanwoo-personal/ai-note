@@ -3,39 +3,71 @@
 @tailwind utilities;
 
 @font-face {
-  font-family: "Noto Sans KR";
-  src: url("/fonts/NotoSansKR/NotoSansKR-Medium.otf") format("opentype");
+  font-family: "SUIT";
+  src: url("/fonts/SUIT/SUIT-Medium.woff2") format("woff2");
   font-style: normal;
   font-weight: 500;
   font-display: swap;
 }
 
 @font-face {
-  font-family: "Noto Sans KR";
-  src: url("/fonts/NotoSansKR/NotoSansKR-Bold.otf") format("opentype");
+  font-family: "SUIT";
+  src: url("/fonts/SUIT/SUIT-Bold.woff2") format("woff2");
   font-style: normal;
   font-weight: 700;
   font-display: swap;
 }
 
 :root {
-  /* Hejhome semantic aliases. Official palette values remain source-controlled upstream. */
-  --hej-color-background-canvas: #f7f8f7;
-  --hej-color-background-surface: #ffffff;
-  --hej-color-background-subtle: #f1f4f2;
-  --hej-color-background-navigation: #f8faf9;
-  --hej-color-text-primary: #202522;
-  --hej-color-text-secondary: #5f6963;
-  --hej-color-text-disabled: #89928d;
-  --hej-color-action-primary: #385448;
-  --hej-color-border-default: #dce2de;
-  --hej-color-brand-green: #00a872;
-  --hej-color-status-success: #287a55;
-  --hej-color-status-success-surface: #e5f4ec;
-  --hej-color-status-warning: #98640b;
-  --hej-color-status-warning-surface: #fff4d9;
-  --hej-color-status-error: #b42318;
-  --font-sans: "Noto Sans KR", "Noto Sans", "Noto Sans JP", ui-sans-serif, system-ui, sans-serif;
+  /* Hejhome Brand Kit 1.0.0 · Leende semantic tokens (no raw ramp use in components). */
+  --ld-color-contents: #10100e;
+  --ld-color-contents-sub: #504d49;
+  --ld-color-contents-hover: #312f2c;
+  --ld-color-contents-sub-hover: #797672;
+  --ld-color-contents-disabled: #bcb6ae;
+  --ld-color-contents-on: #ffffff;
+  --ld-color-bg-e1: #ffffff;
+  --ld-color-bg-e2: #f7f4f1;
+  --ld-color-bg-primary-e1: #eef9f3;
+  --ld-color-bg-primary-e2: #ddf2e7;
+  --ld-color-bg-danger-e1: #fdeded;
+  --ld-color-divider: #efe8e1;
+  --ld-color-primary: #00a872;
+  /* Brand fill is not legible as small light-theme text; use this AA link/control foreground. */
+  --ld-color-primary-text: #006b4d;
+  --ld-color-primary-hover: #009368;
+  --ld-color-primary-ghost: #eef9f3;
+  --ld-color-btn-secondary: #f7f4f1;
+  --ld-color-btn-border: #bcb6ae;
+  --ld-color-danger: #bb3a3a;
+  --ld-color-info: #4979a5;
+  --ld-color-item-green: #035544;
+  --ld-color-item-yellow: #764423;
+  --ld-color-focus: #000000;
+  --hej-color-focus-strong: #007559;
+  --ld-rd-4: 4px;
+  --ld-rd-8: 8px;
+  --ld-rd-circular: 999px;
+
+  --hej-color-background-canvas: var(--ld-color-bg-e2);
+  --hej-color-background-surface: var(--ld-color-bg-e1);
+  --hej-color-background-subtle: var(--ld-color-bg-primary-e1);
+  --hej-color-background-navigation: var(--ld-color-bg-primary-e1);
+  --hej-color-text-primary: var(--ld-color-contents);
+  --hej-color-text-secondary: var(--ld-color-contents-sub);
+  --hej-color-text-disabled: var(--ld-color-contents-disabled);
+  --hej-color-action-primary: var(--ld-color-primary-text);
+  /* Guide green-700 is the smallest primary-surface adjustment that keeps the
+     canonical white `contents-on` meaning while reaching WCAG AA for UI text. */
+  --hej-color-action-primary-surface: #007559;
+  --hej-color-border-default: var(--ld-color-divider);
+  --hej-color-brand-green: var(--ld-color-primary);
+  --hej-color-status-success: var(--ld-color-item-green);
+  --hej-color-status-success-surface: var(--ld-color-bg-primary-e2);
+  --hej-color-status-warning: var(--ld-color-item-yellow);
+  --hej-color-status-warning-surface: var(--ld-color-bg-e2);
+  --hej-color-status-error: var(--ld-color-danger);
+  --font-sans: "SUIT", "Pretendard", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
   --hej-text-11: 11px;
   --hej-text-12: 12px;
@@ -102,21 +134,30 @@
 .text-\[19px\] { font-size: var(--hej-text-19) !important; }
 
 :root[data-theme="dark"] {
-  --hej-color-background-canvas: #111512;
-  --hej-color-background-surface: #191e1b;
-  --hej-color-background-subtle: #222925;
-  --hej-color-background-navigation: #151a17;
-  --hej-color-text-primary: #f2f5f3;
-  --hej-color-text-secondary: #b8c2bc;
-  --hej-color-text-disabled: #7f8b84;
-  --hej-color-action-primary: #b8dac9;
-  --hej-color-border-default: #38433d;
-  --hej-color-brand-green: #36d39d;
-  --hej-color-status-success: #71d49e;
-  --hej-color-status-success-surface: #173c2a;
-  --hej-color-status-warning: #f0c36a;
-  --hej-color-status-warning-surface: #3d2f13;
-  --hej-color-status-error: #ff8a80;
+  color-scheme: dark;
+  --ld-color-contents: #eef3ec;
+  --ld-color-contents-sub: #bcd3ca;
+  --ld-color-contents-disabled: #5a7a70;
+  --ld-color-contents-on: #03251e;
+  --ld-color-bg-e1: #03251e;
+  --ld-color-bg-e2: #083b30;
+  --ld-color-bg-primary-e1: #0c3f33;
+  --ld-color-bg-primary-e2: #0f5140;
+  --ld-color-bg-danger-e1: #461616;
+  --ld-color-divider: #124c3d;
+  --ld-color-primary: #19c98d;
+  --ld-color-primary-text: #82d1ad;
+  --ld-color-primary-hover: #4bb98c;
+  --ld-color-primary-ghost: #0c3f33;
+  --ld-color-btn-secondary: #083b30;
+  --ld-color-btn-border: #2f6a58;
+  --ld-color-danger: #ec9c9c;
+  --ld-color-info: #92c3eb;
+  --ld-color-item-green: #82d1ad;
+  --ld-color-item-yellow: #ffdf8e;
+  --ld-color-focus: #ffffff;
+  --hej-color-focus-strong: #ffffff;
+  --hej-color-action-primary-surface: var(--ld-color-primary);
 }
 
 body {
@@ -131,6 +172,17 @@ input,
 select,
 textarea {
   font: inherit;
+}
+
+/* One keyboard contract for every interactive control, including legacy surfaces. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid var(--hej-color-focus-strong) !important;
+  outline-offset: 3px !important;
+}
+
+.ld-action-primary {
+  background-color: var(--hej-color-action-primary-surface);
+  color: var(--ld-color-contents-on);
 }
 
 ::selection {

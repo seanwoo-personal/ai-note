@@ -30,7 +30,10 @@ export function resolveTheme(theme: ThemePreference, systemDark: boolean): Resol
   return theme === "system" ? (systemDark ? "dark" : "light") : theme;
 }
 
-export function brandNameForLocale(locale: AppLocale): "헤이홈" | "Soniox" | "Hejhome" {
-  if (locale === "ko") return "헤이홈";
-  return locale === "en" ? "Soniox" : "Hejhome";
+// Customer-facing product brand. Vision is the customer (a Japanese Wi-Fi-router
+// rental company), not an external AI provider, so showing it does not violate
+// the ADR 0024 vendor-neutral contract. Locale-invariant by design.
+export function brandNameForLocale(locale: AppLocale): "Vision" {
+  void locale;
+  return "Vision";
 }

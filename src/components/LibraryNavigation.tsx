@@ -30,13 +30,16 @@ import { LibraryDialogShell } from "@/components/LibraryPrimitives";
 import { LibraryLocationPicker } from "@/components/LibraryLocationPicker";
 import { useLibrary } from "@/components/LibraryProvider";
 import {
-  formatExternalStatus,
+  formatRealtimeStatus,
+  formatSummaryModelStatus,
   formatWhisperStatus,
   type LlmHealthState,
   type SonioxHealthState,
   type WhisperHealthState,
 } from "@/components/healthStatus";
 import { useHealth } from "@/components/useHealth";
+import { useSonioxConnection } from "@/components/useSonioxConnection";
+import type { SonioxConnectionSnapshot } from "@/services/sonioxConnectionStore";
 import type { LibraryColor, LibraryFolder, LibraryWorkspace } from "@/domain/library";
 import { folderFormSchema, workspaceFormSchema } from "@/lib/libraryClient";
 import packageMetadata from "../../package.json";
@@ -54,6 +57,26 @@ type Editor =
   | { kind: "folder-move"; folder: LibraryFolder; trigger: HTMLElement | null }
   | { kind: "folder-delete"; folder: LibraryFolder; trigger: HTMLElement | null }
   | { kind: "workspace-delete"; workspace: LibraryWorkspace; trigger: HTMLElement | null };
+
+// Customer-facing Vision brand. Rendered as brand literals (locale-invariant)
+// and excluded from the i18n MutationObserver via data-i18n-user-content /
+// data-i18n-user-attributes. NOTE: the "Vision" wordmark is a typography-only
+// fallback — no official Vision logo asset is embedded because first-party
+// evidence grants no logo-use rights (see docs/vision-rebrand-identity.md).
+export const BRAND_PRODUCT_NAME = "Vision AI 미팅 에이전트";
+export const BRAND_TAGLINE = "AI 미팅 에이전트(AI Meeting Agent)";
+export const BRAND_HOME_LABEL = "Vision AI 미팅 에이전트 홈";
+
+function BrandWordmark({ compact = false }: { compact?: boolean }) {
+  return (
+    <span data-i18n-user-content className="flex min-w-0 flex-col leading-tight">
+      <span className={`font-extrabold tracking-tight text-ink ${compact ? "text-[15px]" : "text-[16px]"}`}>
+        Vision
+      </span>
+      <span className="truncate text-[11px] font-semibold text-inkSoft">{BRAND_TAGLINE}</span>
+    </span>
+  );
+}
 
 const COLORS: Array<{ value: LibraryColor; label: string; className: string }> = [
   { value: "brown", label: "브라운", className: "bg-[#8a6f5a]" },
@@ -78,6 +101,7 @@ export function LibraryNavigation() {
   const library = useLibrary();
   const router = useGuardedRouter();
   const { whisper, llm, soniox } = useHealth();
+  const connection = useSonioxConnection();
   const pathname = usePathname() ?? "/";
   const search = useSearchParams();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -213,6 +237,7 @@ export function LibraryNavigation() {
       whisper={whisper}
       llm={llm}
       soniox={soniox}
+      connection={connection}
       expanded={library.expandedFolderIds}
       toggleFolder={library.toggleFolder}
       onEdit={setEditor}
@@ -225,6 +250,7 @@ export function LibraryNavigation() {
       whisper={whisper}
       llm={llm}
       soniox={soniox}
+      connection={connection}
       onNavigationCommitted={navigationCommitted}
       onOpenSearch={openSearch}
     />
@@ -238,10 +264,11 @@ export function LibraryNavigation() {
       <div className="flex min-h-16 items-center justify-between gap-3 px-4 lg:hidden">
         <GuardedLink
           href="/"
-          aria-label={t("헤이홈 AI 기록도구 홈")}
-          className="flex min-h-11 items-center text-[15px] font-bold text-ink"
+          data-i18n-user-content
+          aria-label={BRAND_HOME_LABEL}
+          className="flex min-h-11 items-center"
         >
-          {t("헤이홈 AI 기록도구")}
+          <BrandWordmark compact />
         </GuardedLink>
         <button
           ref={menuButtonRef}
@@ -270,7 +297,7 @@ export function LibraryNavigation() {
           {(dismiss) => (
             <>
               <div className="flex min-h-16 items-center justify-between border-b border-line px-4">
-                <span className="text-[15px] font-bold text-ink">{t("헤이홈 AI 기록도구")}</span>
+                <BrandWordmark compact />
                 <button
                   ref={drawerCloseRef}
                   type="button"
@@ -373,6 +400,7 @@ function NavigationContents({
   whisper,
   llm,
   soniox,
+  connection,
   expanded,
   toggleFolder,
   onEdit,
@@ -390,6 +418,7 @@ function NavigationContents({
   whisper: WhisperHealthState | null;
   llm: LlmHealthState | null;
   soniox: SonioxHealthState | null;
+  connection: SonioxConnectionSnapshot;
   expanded: Set<string>;
   toggleFolder: (id: string) => void;
   onEdit: (editor: Editor) => void;
@@ -418,12 +447,13 @@ function NavigationContents({
       <div className="space-y-3 border-b border-line px-4 py-5">
         <GuardedLink
           href="/"
-          aria-label={t("헤이홈 AI 기록도구 홈")}
+          data-i18n-user-content
+          aria-label={BRAND_HOME_LABEL}
           aria-current={homePath ? "page" : undefined}
           onNavigationCommitted={onNavigationCommitted}
-          className="flex min-h-11 items-center px-1 text-[16px] font-bold text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+          className="flex min-h-11 items-center px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
         >
-          {t("헤이홈 AI 기록도구")}
+          <BrandWordmark />
         </GuardedLink>
         <p className="px-1 text-[12px] font-semibold text-inkSoft">{t("내 워크스페이스")}</p>
         <label className="block">
@@ -527,7 +557,7 @@ function NavigationContents({
         <NavigationRow href="/settings/releases" active={pathname.startsWith("/settings/releases")} label={t("릴리즈 노트")} onNavigationCommitted={onNavigationCommitted} />
       </div>
       <AppPreferencesControls />
-      <SystemRows whisper={whisper} llm={llm} soniox={soniox} />
+      <SystemRows whisper={whisper} llm={llm} soniox={soniox} connection={connection} />
     </>
   );
 }
@@ -539,6 +569,7 @@ function FallbackNavigation({
   whisper,
   llm,
   soniox,
+  connection,
   onNavigationCommitted,
   onOpenSearch,
 }: {
@@ -546,13 +577,14 @@ function FallbackNavigation({
   whisper: WhisperHealthState | null;
   llm: LlmHealthState | null;
   soniox: SonioxHealthState | null;
+  connection: SonioxConnectionSnapshot;
   onNavigationCommitted: () => void;
   onOpenSearch: (trigger: HTMLElement) => void;
 }) {
   const { t } = useAppPreferences();
   return (
     <div className="flex h-full flex-col p-3">
-      <GuardedLink href="/" aria-label={t("헤이홈 AI 기록도구 홈")} className="px-3 py-3 text-[15px] font-bold text-ink" onNavigationCommitted={onNavigationCommitted}>{t("헤이홈 AI 기록도구")}</GuardedLink>
+      <GuardedLink href="/" data-i18n-user-content aria-label={BRAND_HOME_LABEL} className="px-3 py-3" onNavigationCommitted={onNavigationCommitted}><BrandWordmark compact /></GuardedLink>
       <SearchTrigger onOpenSearch={onOpenSearch} />
       <NavigationRow href="/" active={pathname === "/"} label={t("모든 내용")} onNavigationCommitted={onNavigationCommitted} />
       <div className="mt-auto">
@@ -560,7 +592,7 @@ function FallbackNavigation({
         <NavigationRow href="/settings" active={pathname === "/settings"} label={t("설정")} onNavigationCommitted={onNavigationCommitted} />
         <NavigationRow href="/settings/releases" active={pathname.startsWith("/settings/releases")} label={t("릴리즈 노트")} onNavigationCommitted={onNavigationCommitted} />
         <AppPreferencesControls />
-        <SystemRows whisper={whisper} llm={llm} soniox={soniox} />
+        <SystemRows whisper={whisper} llm={llm} soniox={soniox} connection={connection} />
       </div>
     </div>
   );
@@ -698,19 +730,24 @@ function ColorDot({ color }: { color: LibraryColor }) {
   return <span title={option.label} aria-label={option.label} className={`h-2.5 w-2.5 shrink-0 rounded-full ${option.className}`} />;
 }
 
-function SystemRows({ whisper, llm, soniox }: {
+function SystemRows({ whisper, llm, soniox, connection }: {
   whisper: WhisperHealthState | null;
   llm: LlmHealthState | null;
   soniox: SonioxHealthState | null;
+  connection: SonioxConnectionSnapshot;
 }) {
   const { t } = useAppPreferences();
   const whisperStatus = formatWhisperStatus(whisper);
-  const externalStatus = formatExternalStatus(llm, soniox);
+  const summaryStatus = formatSummaryModelStatus(llm);
+  // The realtime row derives its connection truth from the live WebSocket store,
+  // not from the config-presence poll (that only distinguishes idle 미설정/대기).
+  const realtimeStatus = formatRealtimeStatus(connection.status, soniox);
   return (
     <div className="border-t border-line p-3">
       <p className="px-2 text-[11px] font-semibold text-inkSoft">{t("시스템")}</p>
       <SystemRow label={t("로컬")} status={{ ...whisperStatus, shortLabel: t(whisperStatus.shortLabel), title: t(whisperStatus.title) }} />
-      <SystemRow label={t("외부 모델")} status={{ ...externalStatus, shortLabel: t(externalStatus.shortLabel), title: t(externalStatus.title) }} />
+      <SystemRow label={t("요약")} status={{ ...summaryStatus, shortLabel: t(summaryStatus.shortLabel), title: t(summaryStatus.title) }} />
+      <SystemRow label={t("실시간")} status={{ ...realtimeStatus, shortLabel: t(realtimeStatus.shortLabel), title: t(realtimeStatus.title) }} />
       <p className="mt-1 flex min-h-11 items-center rounded-md px-2 text-[11px] font-semibold text-inkSoft">
         {t("제품 버전")} {packageMetadata.version}
       </p>

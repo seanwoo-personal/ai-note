@@ -6,7 +6,6 @@ import {
   AppPreferencesControls,
   AppPreferencesProvider,
   FontSizeSettingsCard,
-  LocalizedText,
   useAppPreferences,
 } from "@/components/AppPreferences";
 
@@ -50,17 +49,17 @@ describe("AppPreferencesProvider", () => {
     window.localStorage.setItem("ai-note-locale", "en");
     window.localStorage.setItem("ai-note-theme", "dark");
 
-    render(<AppPreferencesProvider><AppPreferencesControls /><LocalizedText source="헤이홈 AI 기록도구" /><Probe /></AppPreferencesProvider>);
+    render(<AppPreferencesProvider><AppPreferencesControls /><Probe /></AppPreferencesProvider>);
 
-    await waitFor(() => expect(screen.getByTestId("preferences")).toHaveTextContent("en:dark:dark:Soniox"));
+    await waitFor(() => expect(screen.getByTestId("preferences")).toHaveTextContent("en:dark:dark:Vision"));
     expect(document.documentElement).toHaveAttribute("lang", "en");
     expect(document.documentElement).toHaveAttribute("data-theme", "dark");
     expect(screen.getByTestId("locale-select")).toHaveValue("en");
     expect(screen.getByTestId("theme-select")).toHaveValue("dark");
-    expect(screen.getByText("Soniox AI Notes")).toBeInTheDocument();
-    expect(document.title).toBe("Soniox AI Notes");
+    // The product name is the locale-invariant Vision brand, even under a non-ko locale.
+    expect(document.title).toBe("Vision AI 미팅 에이전트");
     document.title = "AI NOTE";
-    await waitFor(() => expect(document.title).toBe("Soniox AI Notes"));
+    await waitFor(() => expect(document.title).toBe("Vision AI 미팅 에이전트"));
   });
 
   it("localizes registered fixed DOM copy while preserving marked user content", async () => {
@@ -98,7 +97,7 @@ describe("AppPreferencesProvider", () => {
     dark = true;
     act(() => listener?.({ matches: true } as MediaQueryListEvent));
     await waitFor(() => expect(document.documentElement).toHaveAttribute("data-theme", "dark"));
-    expect(screen.getByTestId("preferences")).toHaveTextContent("ja:system:dark:Hejhome");
+    expect(screen.getByTestId("preferences")).toHaveTextContent("ja:system:dark:Vision");
   });
 
   it("restores and changes the global font-size one step at a time", async () => {
@@ -133,13 +132,13 @@ describe("AppPreferencesProvider", () => {
     });
 
     render(<AppPreferencesProvider><AppPreferencesControls /><Probe /></AppPreferencesProvider>);
-    await waitFor(() => expect(screen.getByTestId("preferences")).toHaveTextContent("en:system:light:Soniox"));
+    await waitFor(() => expect(screen.getByTestId("preferences")).toHaveTextContent("en:system:light:Vision"));
 
     expect(() => {
       fireEvent.change(screen.getByTestId("locale-select"), { target: { value: "ja" } });
       fireEvent.change(screen.getByTestId("theme-select"), { target: { value: "dark" } });
     }).not.toThrow();
-    await waitFor(() => expect(screen.getByTestId("preferences")).toHaveTextContent("ja:dark:dark:Hejhome"));
+    await waitFor(() => expect(screen.getByTestId("preferences")).toHaveTextContent("ja:dark:dark:Vision"));
     expect(document.documentElement).toHaveAttribute("lang", "ja");
     expect(document.documentElement).toHaveAttribute("data-theme", "dark");
   });
@@ -147,14 +146,14 @@ describe("AppPreferencesProvider", () => {
   it("uses the browser locale when a stored locale is corrupt", async () => {
     window.localStorage.setItem("ai-note-locale", "fr");
     render(<AppPreferencesProvider><Probe /></AppPreferencesProvider>);
-    await waitFor(() => expect(screen.getByTestId("preferences")).toHaveTextContent("en:system:light:Soniox"));
+    await waitFor(() => expect(screen.getByTestId("preferences")).toHaveTextContent("en:system:light:Vision"));
   });
 
   it("keeps locale and theme usable when matchMedia is unavailable", async () => {
     vi.stubGlobal("matchMedia", vi.fn(() => { throw new TypeError("blocked"); }));
     render(<AppPreferencesProvider><Probe /></AppPreferencesProvider>);
 
-    await waitFor(() => expect(screen.getByTestId("preferences")).toHaveTextContent("en:system:light:Soniox"));
+    await waitFor(() => expect(screen.getByTestId("preferences")).toHaveTextContent("en:system:light:Vision"));
     expect(document.documentElement).toHaveAttribute("lang", "en");
     expect(document.documentElement).toHaveAttribute("data-theme", "light");
   });

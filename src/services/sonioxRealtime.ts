@@ -1,3 +1,8 @@
+import {
+  sonioxConnectionStore,
+  type SonioxSessionPublisher,
+} from "@/services/sonioxConnectionStore";
+
 export type SonioxTranslationOptions =
   | { mode: "none" }
   | { mode: "one_way"; targetLanguage: string }
@@ -226,6 +231,11 @@ export interface ConnectSonioxRealtimeOptions {
   onError?: (message: string) => void;
   onFinished?: () => void;
   signal?: AbortSignal;
+  /**
+   * Authoritative connection publisher for this attempt. Defaults to a fresh
+   * session on the app-wide singleton store. Injectable for deterministic tests.
+   */
+  connection?: SonioxSessionPublisher;
 }
 
 const SONIOX_WEBSOCKET_URL = "wss://stt-rt.soniox.com/transcribe-websocket";
@@ -233,6 +243,22 @@ const CONNECT_TIMEOUT_MS = 10_000;
 
 export async function connectSonioxRealtime(
   options: ConnectSonioxRealtimeOptions,
+): Promise<SonioxRealtimeSession> {
+  // Publish authoritative lifecycle to the connection store. beginSession()
+  // already emits an optimistic "connecting"; any failure before we return a
+  // live session must land on "disconnected" so no stale "connected" survives.
+  const connection = options.connection ?? sonioxConnectionStore.beginSession();
+  try {
+    return await establishSonioxRealtime(options, connection);
+  } catch (error) {
+    connection.disconnected();
+    throw error;
+  }
+}
+
+async function establishSonioxRealtime(
+  options: ConnectSonioxRealtimeOptions,
+  connection: SonioxSessionPublisher,
 ): Promise<SonioxRealtimeSession> {
   const fetchController = new AbortController();
   const abortFetch = () => fetchController.abort();
@@ -273,11 +299,27 @@ export async function connectSonioxRealtime(
     socket.onerror = null;
     socket.onclose = null;
   };
+  // Clean teardown for the live phase (explicit close or a post-connect abort):
+  // no onError, just disconnect + close. Shared by close() and runtimeAbort().
+  const closeRuntime = () => {
+    if (closing) return;
+    closing = true;
+    clearFinishTimeout();
+    detachRuntimeHandlers();
+    options.signal?.removeEventListener("abort", runtimeAbort);
+    connection.disconnected();
+    socket.close();
+  };
+  const runtimeAbort = () => closeRuntime();
   const failRuntimeSession = (message: string, closeSocket = true) => {
     if (closing) return;
     closing = true;
     clearFinishTimeout();
     detachRuntimeHandlers();
+    options.signal?.removeEventListener("abort", runtimeAbort);
+    // Publish disconnected BEFORE closing the socket / notifying the caller, so a
+    // detached onclose handler can never leave the store on a stale "connected".
+    connection.disconnected();
     if (closeSocket) socket.close();
     options.onError?.(message);
   };
@@ -297,12 +339,21 @@ export async function connectSonioxRealtime(
     socket.onopen = () => {
       clearTimeout(timeout);
       options.signal?.removeEventListener("abort", abortSocket);
-      socket.send(JSON.stringify(buildSonioxConfig(
-        keyPayload.apiKey as string,
-        options.translation,
-        options.languageHints,
-        options.context,
-      )));
+      try {
+        socket.send(JSON.stringify(buildSonioxConfig(
+          keyPayload.apiKey as string,
+          options.translation,
+          options.languageHints,
+          options.context,
+        )));
+      } catch {
+        // The socket opened but rejected the config frame — never reach a stale
+        // "connected"; fail the connect so the outer catch marks disconnected.
+        fail("soniox_websocket_unavailable");
+        return;
+      }
+      // Authoritative "connected": WebSocket open AND config sent.
+      connection.connected();
       resolve();
     };
     socket.onerror = () => fail("soniox_websocket_unavailable");
@@ -323,7 +374,10 @@ export async function connectSonioxRealtime(
       transcript = applySonioxResult(transcript, result);
       options.onTranscript(transcript);
       if (result.finished) {
+        // Provider terminal response is the authoritative disconnect boundary
+        // for finish(): end-of-input alone did not disconnect us.
         clearFinishTimeout();
+        connection.disconnected();
         options.onFinished?.();
       }
     } catch {
@@ -334,6 +388,12 @@ export async function connectSonioxRealtime(
   socket.onclose = () => {
     failRuntimeSession("실시간 전사 연결이 종료되었습니다.", false);
   };
+
+  // After the session is live, an abort must still tear down the real socket and
+  // drop the store to disconnected — the connect-phase abort listener was already
+  // removed on open, so without this a post-connect abort would leave it stale.
+  options.signal?.addEventListener("abort", runtimeAbort, { once: true });
+  if (options.signal?.aborted) runtimeAbort();
 
   return {
     sendAudio(chunk) {
@@ -351,11 +411,9 @@ export async function connectSonioxRealtime(
       }, CONNECT_TIMEOUT_MS);
     },
     close() {
-      if (closing) return;
-      clearFinishTimeout();
-      closing = true;
-      detachRuntimeHandlers();
-      socket.close();
+      // Emit disconnected before detaching from the socket so the store is
+      // updated even though our onclose handler is now removed.
+      closeRuntime();
     },
   };
 }

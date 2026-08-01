@@ -25,7 +25,7 @@ test("synthetic library shell is usable without external traffic", async ({ page
   });
   expect(await whisperResponse.json(), "synthetic Whisper state").toMatchObject({ connected: false });
   expect(await llmResponse.json(), "synthetic LLM state").toEqual({ configured: false });
-  await expect(page).toHaveTitle("헤이홈 AI 기록도구");
+  await expect(page).toHaveTitle("Vision AI 미팅 에이전트");
   await expect(page.locator("main#main")).toBeVisible();
   await expect(page.getByRole("heading", { level: 1, name: "최근 작업한 문서" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "바로 시작" })).toBeVisible();

@@ -59,6 +59,32 @@ describe("UI translations", () => {
     }
   });
 
+  it("localizes the split summary-model and realtime system rows in every non-Korean locale", () => {
+    // Source of truth: healthStatus.ts formatSummaryModelStatus/formatRealtimeStatus
+    // shortLabels + titles rendered by the sidebar SystemRows. A missing catalog
+    // entry leaves Korean on screen in en/ja/zh, which the theme-i18n regression rejects.
+    const rowStrings = [
+      // short labels newly introduced by the row split
+      "미설정", "실패", "연결됨", "대기",
+      // summary-model titles
+      "설정에서 요약 모델을 지정해야 회의록 요약을 만들 수 있습니다.",
+      "요약 모델을 사용할 수 없습니다. 설정에서 상태를 확인해 주세요.",
+      "요약 모델이 준비되었습니다.",
+      // realtime titles
+      "실시간 전사·번역에 연결되었습니다.",
+      "실시간 전사·번역에 연결하고 있습니다.",
+      "실시간 전사·번역 설정 여부를 확인하고 있습니다.",
+      "로컬 설정 확인 요청에 실패해 실시간 전사·번역 설정 여부를 판단할 수 없습니다.",
+      "실시간 전사·번역 키가 설정되지 않았습니다.",
+      "실시간 전사·번역을 사용할 수 있습니다. 미팅을 시작하면 연결됩니다.",
+    ];
+    for (const source of rowStrings) {
+      for (const locale of ["en", "zh", "ja"] as const) {
+        expect(translateUi(locale, source), `${locale}: ${source}`).not.toMatch(/[가-힣]/);
+      }
+    }
+  });
+
   it("localizes every Translator input-language option, including auto-detect, in non-Korean locales", () => {
     // Source of truth: src/components/TestProductMeetingPanel.tsx INPUT_LANGUAGES option
     // labels. These strings are rendered verbatim as <option> text on /live?tool=translator

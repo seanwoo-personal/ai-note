@@ -36,7 +36,7 @@ type AppPreferencesValue = {
   theme: ThemePreference;
   resolvedTheme: ResolvedTheme;
   fontSize: FontSizePreference;
-  brandName: "헤이홈" | "Soniox" | "Hejhome";
+  brandName: "Vision";
   setLocale: (locale: AppLocale) => void;
   setTheme: (theme: ThemePreference) => void;
   setFontSize: (fontSize: FontSizePreference) => void;
@@ -119,7 +119,8 @@ export function AppPreferencesProvider({ children }: { children: ReactNode }) {
   }, [fontSize, fontSizeLoaded]);
 
   useEffect(() => {
-    const title = translateUi(locale, "헤이홈 AI 기록도구");
+    // Product name is a locale-invariant Vision brand string.
+    const title = "Vision AI 미팅 에이전트";
     const description = translateUi(locale, "회의 녹음, 실시간 전사·번역, 회의록 요약");
     const maintainLocalizedMetadata = () => {
       if (document.title !== title) document.title = title;

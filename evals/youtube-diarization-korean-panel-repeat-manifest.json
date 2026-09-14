@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "description": "한국어 남성 4인 토론의 비동기 화자 구분 반복 안정성을 확인하는 세트",
+  "silenceMs": 2000,
+  "sources": [
+    {
+      "id": "cycle-1-korean-four-speakers",
+      "url": "https://www.youtube.com/watch?v=j3QbNOOPeSw",
+      "title": "패널 4인이 보는 언론 표현 토론",
+      "file": "02-korean-four-speakers.m4a",
+      "language": "ko",
+      "start": "00:30",
+      "end": "04:30",
+      "expectedMinSpeakers": 4,
+      "expectedMaxSpeakers": 4,
+      "expectedMinSupportedSpeakers": 4,
+      "expectedMaxSupportedSpeakers": 4
+    },
+    {
+      "id": "cycle-2-korean-four-speakers",
+      "url": "https://www.youtube.com/watch?v=j3QbNOOPeSw",
+      "title": "패널 4인이 보는 언론 표현 토론",
+      "file": "02-korean-four-speakers.m4a",
+      "language": "ko",
+      "start": "00:30",
+      "end": "04:30",
+      "expectedMinSpeakers": 4,
+      "expectedMaxSpeakers": 4,
+      "expectedMinSupportedSpeakers": 4,
+      "expectedMaxSupportedSpeakers": 4
+    },
+    {
+      "id": "cycle-3-korean-four-speakers",
+      "url": "https://www.youtube.com/watch?v=j3QbNOOPeSw",
+      "title": "패널 4인이 보는 언론 표현 토론",
+      "file": "02-korean-four-speakers.m4a",
+      "language": "ko",
+      "start": "00:30",
+      "end": "04:30",
+      "expectedMinSpeakers": 4,
+      "expectedMaxSpeakers": 4,
+      "expectedMinSupportedSpeakers": 4,
+      "expectedMaxSupportedSpeakers": 4
+    }
+  ]
+}

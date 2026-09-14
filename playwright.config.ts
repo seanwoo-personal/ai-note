@@ -1,4 +1,5 @@
 import { defineConfig } from "@playwright/test";
+import { join } from "node:path";
 
 const port = Number(process.env.AI_NOTE_E2E_PORT);
 if (!Number.isInteger(port) || port < 1024 || port > 65_535) {
@@ -9,6 +10,8 @@ if (!Number.isInteger(port) || port < 1024 || port > 65_535) {
 // URLs with the localhost authority, so the browser uses that equivalent loopback
 // name to preserve the app's exact Host/URL security boundary.
 const baseURL = `http://localhost:${port}`;
+const snapshotRoot = process.env.AI_NOTE_E2E_SNAPSHOT_ROOT;
+if (!snapshotRoot) throw new Error("AI_NOTE_E2E_SNAPSHOT_ROOT is required");
 
 export default defineConfig({
   testDir: "./e2e",
@@ -25,6 +28,7 @@ export default defineConfig({
   ],
   use: {
     baseURL,
+    storageState: join(snapshotRoot, ".e2e-customer-storage.json"),
     trace: "retain-on-failure",
     screenshot: "off",
     video: "off",

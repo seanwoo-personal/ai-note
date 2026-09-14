@@ -1787,7 +1787,7 @@ function StatusCard({
         <div className="min-w-0">
           <p className="break-words text-[14px] text-ink">
             <span className="font-semibold text-error">전사 실패</span>
-            {" — "}로컬 전사를 완료하지 못했습니다. 녹음 원본은 보존되어 있습니다.
+            {" — "}전체 스크립트 작성을 완료하지 못했습니다. 녹음 원본은 보존되어 있습니다.
           </p>
           <p
             role="status"
@@ -1873,10 +1873,9 @@ function StatusCard({
         }`}>
           <p className="text-[14px] text-ink">
             {unavailable
-              ? "요약 모델을 확인하세요. 설정한 모델이 지금 사용할 수 없습니다."
-              : "요약하려면 모델을 설정하세요."}
+              ? "AI 회의록 기능을 지금 사용할 수 없습니다. 잠시 후 다시 시도하거나 운영자에게 문의해 주세요."
+              : "AI 회의록 기능을 준비하고 있습니다. 전사 결과는 그대로 확인할 수 있습니다."}
           </p>
-          <Link href="/settings" className={ACTION_CONTROL_CLASS}>설정</Link>
         </div>
       );
     }
@@ -1884,7 +1883,7 @@ function StatusCard({
       return (
         <div className="flex flex-wrap items-center gap-3 rounded-[12px] border border-line bg-panel px-4 py-4 sm:px-5">
           <Spinner />
-          <p className="text-[14px] text-ink">요약 모델 확인 중…</p>
+          <p className="text-[14px] text-ink">AI 회의록 준비 상태 확인 중…</p>
         </div>
       );
     }

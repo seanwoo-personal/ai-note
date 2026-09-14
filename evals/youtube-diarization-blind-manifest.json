@@ -1,0 +1,62 @@
+{
+  "description": "기존 조정에 사용하지 않은 공식 유튜브 대화의 블라인드 및 탐색 화자 구분 검증",
+  "silenceMs": 2000,
+  "sources": [
+    {
+      "id": "japanese-two-men-outdoor-talk",
+      "url": "https://www.youtube.com/watch?v=24yN5te53yY",
+      "title": "水曜どうでしょう4人だけのスペシャル裏トーク",
+      "file": "japanese-four-person-talk.mp4",
+      "language": "ja",
+      "start": "00:00",
+      "end": "03:00",
+      "originalSourceStart": "05:00",
+      "originalSourceEnd": "08:00",
+      "expectedMinSpeakers": 2,
+      "expectedMaxSpeakers": 5,
+      "expectedMinSupportedSpeakers": 2,
+      "expectedMaxSupportedSpeakers": 5,
+      "verification": "3분 전체 화면에는 남성 두 명만 보이지만 프로그램 참여자 네 명 중 화면 밖 발화 여부를 확정하지 못해 정확한 화자 수 판정에서는 제외"
+    },
+    {
+      "id": "japanese-three-actor-panel",
+      "url": "https://www.youtube.com/watch?v=1PO3XhCXfxI",
+      "title": "笑うマトリョーシカ 緊急座談会",
+      "file": "japanese-three-actor-panel-200-265.mp4",
+      "language": "ja",
+      "start": "00:00",
+      "end": "01:05",
+      "originalSourceStart": "03:20",
+      "originalSourceEnd": "04:25",
+      "expectedMinSpeakers": 3,
+      "expectedMaxSpeakers": 3,
+      "expectedMinSupportedSpeakers": 2,
+      "expectedMaxSupportedSpeakers": 3,
+      "verification": "드라마 삽입 장면이 없는 고정 좌담회 화면에서 남성 두 명과 여성 한 명의 발화를 확인"
+    },
+    {
+      "id": "japanese-four-consultants",
+      "url": "https://www.youtube.com/watch?v=WhvmzyIz7Og",
+      "title": "戦略コン新卒4人が本音トーク",
+      "file": "japanese-four-consultants-120-300.mp4",
+      "language": "ja",
+      "start": "00:00",
+      "end": "03:00",
+      "originalSourceStart": "02:00",
+      "originalSourceEnd": "05:00",
+      "expectedMinSpeakers": 4,
+      "expectedMaxSpeakers": 4,
+      "expectedMinSupportedSpeakers": 4,
+      "expectedMaxSupportedSpeakers": 4,
+      "referenceSpeakerAnchors": [
+        { "speaker": "베이지 재킷 남성", "startMs": 1000, "endMs": 9000 },
+        { "speaker": "안경 쓴 남성", "startMs": 15000, "endMs": 28000 },
+        { "speaker": "검은 상의 여성", "startMs": 61000, "endMs": 84000 },
+        { "speaker": "오른쪽 여성", "startMs": 122000, "endMs": 150000 }
+      ],
+      "minimumAnchorAgreement": 0.75,
+      "minimumSpeakerAnchorAgreement": 0.6,
+      "verification": "모델 실행 전에 1초 간격 화면과 자막을 확인해 고정 좌담회 참가자 네 명이 모두 발화하는 구간과 각 화자의 명확한 발화 시간대를 확정"
+    }
+  ]
+}

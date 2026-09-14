@@ -6,6 +6,7 @@ import {
   type UserProfile,
 } from "@/domain/userProfile";
 import { atomicWriteFile } from "@/lib/atomicWrite";
+import { dataRoot } from "@/lib/paths";
 
 export interface UserProfileDefaults {
   timezone: string;
@@ -24,7 +25,7 @@ export interface UserProfileWriteResult {
 }
 
 export function userProfilePath(): string {
-  return join(process.cwd(), "data", "user-profile.json");
+  return join(dataRoot(), "user-profile.json");
 }
 
 function isMissingFile(error: unknown): boolean {

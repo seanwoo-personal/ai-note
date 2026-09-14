@@ -3,10 +3,9 @@ import { existsSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
-// audio.webm → play.webm remux (`ffmpeg -c copy`, no re-encode). mlx-whisper also
-// shells out to ffmpeg, so we preflight it here too. Env is read lazily inside
+// audio.webm → play.webm remux (`ffmpeg -c copy`, no re-encode). Env is read lazily inside
 // functions (build-green). FAKE_FFMPEG=1 skips the binary and just copies bytes —
-// mirrors FAKE_WHISPER so route tests stay hermetic (no ffmpeg install needed).
+// so route tests stay hermetic (no ffmpeg install needed).
 
 const execFileAsync = promisify(execFile);
 

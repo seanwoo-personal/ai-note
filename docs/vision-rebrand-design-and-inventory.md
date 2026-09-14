@@ -12,14 +12,14 @@
 
 ## 1. 로고 사용 / fallback
 
-- **워드마크:** 텍스트 `Vision`(그래픽 자산 없음). 컴포넌트 `BrandWordmark`(`src/components/LibraryNavigation.tsx`).
+- **워드마크:** 고객사 공식 로고 `public/brand/vision-logo.svg`(원본 그대로, 리컬러·왜곡·트레이싱 금지). 컴포넌트 `BrandWordmark`(`src/components/BrandWordmark.tsx`).
 - **2행 lockup(헤더):**
-  - 1행: `Vision` — `font-extrabold tracking-tight text-ink`, 16px(데스크톱 rail) / 15px(compact: 모바일 top-bar·drawer·fallback).
-  - 2행(정확히): `AI 미팅 에이전트(AI Meeting Agent)` — `text-[11px] font-semibold text-inkSoft`, `truncate`.
+  - 1행: 로고 이미지 — 높이 30px(데스크톱 rail) / 26px(compact: 모바일 top-bar·drawer·fallback), `w-auto self-start`로 좌측 정렬 및 비율 보존. `alt`은 `Vision`.
+  - 2행(정확히): `AI Meeting Agent` — `text-[11px] font-semibold tracking-[0.06em] text-inkSoft`, `truncate`.
 - **제품명(정확히):** `Vision AI 미팅 에이전트` — `<title>`/metadata/문서 제목/홈 링크 접근성명 base.
 - **홈 링크 접근성명:** `Vision AI 미팅 에이전트 홈`.
 - **locale 불변:** 브랜드 블록은 `data-i18n-user-content`(텍스트)·`data-i18n-user-attributes`(aria-label)로 i18n MutationObserver에서 제외 → 모든 locale에서 동일 표기.
-- **금지:** 공식 로고 PNG/SVG 삽입, 로고 트레이싱/모작, 지구+Wi-Fi 심볼 재현, TSE Prime 로고 사용.
+- **금지:** 로고 리컬러·비율 왜곡·트레이싱/모작, 지구+Wi-Fi 심볼 재현, TSE Prime 로고 사용. (공식 로고 **삽입 자체는 2026-08-02 소유자 지시로 허용**됨 — ADR 0025 및 identity 문서 §4 참조.)
 
 ## 2. 컬러 (기존 토큰 유지 — 변경 없음)
 

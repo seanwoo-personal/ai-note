@@ -127,16 +127,18 @@ function App({
   blockerLabel,
   onContentDiscard,
   strict = false,
+  recorderMode = "async",
 }: {
   full?: boolean;
   blockerPhase?: NavigationBlockerPhase | null;
   blockerLabel?: NavigationBlockerDescriptor["label"];
   onContentDiscard?: () => void;
   strict?: boolean;
+  recorderMode?: "async" | "soniox";
 }) {
   const tree = (
     <RecorderSessionProvider>
-      {full && <Recorder />}
+      {full && <Recorder defaultTranscriptionMode={recorderMode} />}
       {blockerPhase && (
         <ContentNavigationBlocker
           phase={blockerPhase}
@@ -216,6 +218,36 @@ describe("RecorderSessionProvider", () => {
     expect(screen.getByRole("button", { name: "기록 중지" })).toBeInTheDocument();
   });
 
+  it("retries a transient Chromium audio-source start failure once", async () => {
+    const stream = { getTracks: () => [{ stop: vi.fn() }] } as unknown as MediaStream;
+    const startFailure = new DOMException("Could not start audio source", "NotReadableError");
+    const getUserMedia = vi.mocked(navigator.mediaDevices.getUserMedia)
+      .mockRejectedValueOnce(startFailure)
+      .mockResolvedValueOnce(stream);
+
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /녹음 시작$/ }));
+
+    await waitFor(() => expect(screen.getByTestId("session")).toHaveTextContent(/^recording:/));
+    expect(getUserMedia).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText("Could not start audio source")).not.toBeInTheDocument();
+  });
+
+  it("replaces Chromium's raw audio-source error with an actionable Korean message", async () => {
+    const startFailure = new DOMException("Could not start audio source", "NotReadableError");
+    const getUserMedia = vi.mocked(navigator.mediaDevices.getUserMedia)
+      .mockRejectedValue(startFailure);
+
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /녹음 시작$/ }));
+
+    expect((await screen.findAllByText(
+      "마이크를 시작하지 못했습니다. 통화·녹음 앱을 종료하고 마이크 권한을 확인한 뒤 다시 시도해 주세요.",
+    )).length).toBeGreaterThan(0);
+    expect(getUserMedia).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText("Could not start audio source")).not.toBeInTheDocument();
+  });
+
   it("detaches recorder callbacks and does not upload when the provider unmounts", async () => {
     const fetchMock = vi.fn<(
       input: string | URL | Request,
@@ -266,13 +298,13 @@ describe("RecorderSessionProvider", () => {
     vi.stubGlobal("MediaRecorder", FailingMediaRecorder);
     render(<App />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Whisper 전사용 녹음 시작" }));
+    fireEvent.click(screen.getByRole("button", { name: "회의 녹음 시작" }));
     await waitFor(() => expect(screen.getByTestId("session")).toHaveTextContent(/^failed:/));
     expect(screen.getAllByText("recorder start failed")).toHaveLength(2);
     expect(stopTrack).toHaveBeenCalledOnce();
   });
 
-  it("separates Whisper and Soniox as explicit transcription modes", async () => {
+  it("uses final transcription by default without exposing technical provider controls", async () => {
     vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
       if (String(input) === "/api/realtime/temporary-key") {
         return new Response(JSON.stringify({ configured: true }), { status: 200 });
@@ -281,30 +313,14 @@ describe("RecorderSessionProvider", () => {
     }));
     render(<App />);
 
-    const modes = screen.getByRole("radiogroup", { name: "전사 방식" });
-    const whisper = within(modes).getByRole("radio", { name: /로컬 전사 \(Whisper\)/ });
-    const soniox = within(modes).getByRole("radio", { name: /실시간 전사/ });
-    expect(whisper).toBeChecked();
-    expect(soniox).not.toBeChecked();
-    expect(screen.getByRole("button", { name: "Whisper 전사용 녹음 시작" })).toBeInTheDocument();
+    expect(screen.queryByRole("radiogroup", { name: "전사 방식" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "회의 녹음 시작" })).toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: "번역 방식" })).not.toBeInTheDocument();
-
-    await waitFor(() => expect(soniox).toBeEnabled());
-    fireEvent.click(soniox);
-    expect(screen.getByRole("button", { name: "실시간 전사로 녹음 시작" })).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "번역 방식" })).toBeEnabled();
-    expect(screen.getByText(/마이크 오디오를 외부 전사 서버로 전송/)).toBeInTheDocument();
-    expect(screen.getByText(/종료 후에는 로컬 Whisper가 최종 스크립트/)).toBeInTheDocument();
-
-    fireEvent.change(screen.getByRole("combobox", { name: "번역 방식" }), {
-      target: { value: "none" },
-    });
-    expect(screen.getByText("실시간 원문을 보려면 녹음을 시작하세요. 마이크 권한이 필요합니다."))
-      .toBeInTheDocument();
-    expect(screen.queryByText(/실시간 원문과 번역을 보려면/)).not.toBeInTheDocument();
+    expect(screen.getByText(/다국어 인식과 화자 구분을 포함한 전체 스크립트/)).toBeInTheDocument();
+    expect(screen.queryByText(/Soniox|OpenRouter|Ollama|Claude CLI/)).not.toBeInTheDocument();
   });
 
-  it("keeps unconfigured Soniox unavailable and starts the default Whisper path without streaming", async () => {
+  it("warns when Soniox is unconfigured while preserving the recording path", async () => {
     const fetchMock = vi.fn(async (input: string | URL | Request) => {
       if (String(input) === "/api/realtime/temporary-key") {
         return new Response(JSON.stringify({ configured: false }), { status: 200 });
@@ -315,13 +331,12 @@ describe("RecorderSessionProvider", () => {
 
     render(<App />);
 
-    const soniox = screen.getByRole("radio", { name: /실시간 전사/ });
-    await waitFor(() => expect(soniox).toBeDisabled());
-    expect(screen.getByText("SONIOX_API_KEY를 설정해야 사용할 수 있습니다.")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/실시간 자막과 번역 기능을 준비하고 있습니다/)).toBeInTheDocument());
+    expect(screen.queryByText(/SONIOX_API_KEY|Soniox/)).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Whisper 전사용 녹음 시작" }));
+    fireEvent.click(screen.getByRole("button", { name: "회의 녹음 시작" }));
 
-    await waitFor(() => expect(screen.getByText("녹음 중 · 종료 후 Whisper 전사")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("녹음 중 · 종료 후 전사")).toBeInTheDocument());
     expect(FakeMediaRecorder.latest?.timeslice).toBeUndefined();
     expect(fetchMock).not.toHaveBeenCalledWith(
       "/api/realtime/temporary-key",
@@ -365,10 +380,8 @@ describe("RecorderSessionProvider", () => {
       return new Promise<Response>(() => {});
     }));
 
-    render(<App />);
-    const sonioxMode = screen.getByRole("radio", { name: /실시간 전사/ });
-    await waitFor(() => expect(sonioxMode).toBeEnabled());
-    fireEvent.click(sonioxMode);
+    render(<App recorderMode="soniox" />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "실시간 전사로 녹음 시작" })).toBeEnabled());
     fireEvent.change(screen.getByRole("combobox", { name: "번역 방식" }), {
       target: { value: "one_way:en" },
     });
@@ -406,7 +419,7 @@ describe("RecorderSessionProvider", () => {
     // The provider's raw error text (which can carry the vendor name) is never
     // rendered — only a generic local message with the numeric code.
     expect(screen.getByText("실시간 전사 연결에 오류가 발생했습니다. (코드 429)")).toBeInTheDocument();
-    expect(screen.queryByText(/Soniox/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/usage limit reached/i)).not.toBeInTheDocument();
     expect(socket.readyState).toBe(3);
 
     act(() => FakeMediaRecorder.latest?.emitChunk(new Blob(["late"], { type: "audio/webm" })));

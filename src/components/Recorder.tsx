@@ -6,6 +6,7 @@ import { useRecorder } from "@/components/useRecorder";
 import type { RecorderRequestedLocation } from "@/components/RecorderSessionProvider";
 import { RecorderFinalizeResultView } from "@/components/RecorderFinalizeResultView";
 import { formatDuration, recorderPhaseAnnouncement } from "@/lib/recorder";
+import type { RecorderAudioSource } from "@/lib/recordingCapture";
 import type { SonioxTranslationOptions } from "@/services/sonioxRealtime";
 
 // Human labels for the server-derived lifecycle polled after upload.
@@ -35,10 +36,10 @@ function liveTranslation(value: string): SonioxTranslationOptions {
 
 export function Recorder({
   requestedLocation,
-  defaultTranscriptionMode = "whisper",
+  defaultTranscriptionMode = "async",
 }: {
   requestedLocation?: RecorderRequestedLocation;
-  defaultTranscriptionMode?: "whisper" | "soniox";
+  defaultTranscriptionMode?: "async" | "soniox";
 } = {}) {
   const {
     phase,
@@ -60,8 +61,9 @@ export function Recorder({
   } = useRecorder();
   const [sonioxConfigStatus, setSonioxConfigStatus] = useState<"checking" | "configured" | "unconfigured">("checking");
   const sonioxConfigured = sonioxConfigStatus === "configured";
-  const [transcriptionMode, setTranscriptionMode] = useState<"whisper" | "soniox">(defaultTranscriptionMode);
+  const transcriptionMode = defaultTranscriptionMode;
   const [translationValue, setTranslationValue] = useState("one_way:en");
+  const [audioSource, setAudioSource] = useState<RecorderAudioSource>("microphone");
 
   useEffect(() => {
     let active = true;
@@ -78,6 +80,7 @@ export function Recorder({
 
   const beginRecording = () => void start({
     requestedLocation,
+    audioSource,
     ...(transcriptionMode === "soniox" && sonioxConfigured
       ? { soniox: { translation: liveTranslation(translationValue) } }
       : {}),
@@ -101,10 +104,11 @@ export function Recorder({
       : sonioxConfigured
         ? "실시간 전사로 녹음 시작"
         : "실시간 전사 설정 필요"
-    : "Whisper 전사용 녹음 시작";
+    : "회의 녹음 시작";
 
   return (
     <section
+      data-android-recorder=""
       id="recorder"
       className="w-full min-w-0 rounded-[16px] border border-line bg-panel p-4 shadow-[0_1px_2px_rgba(42,36,32,.04),0_8px_28px_-12px_rgba(42,36,32,.18)] sm:p-6"
     >
@@ -112,10 +116,11 @@ export function Recorder({
         <div className="min-w-0">
           <h2 className="text-[18px] font-bold text-ink">새 회의 녹음</h2>
           <p className="mt-1 text-[14px] leading-relaxed text-inkSoft">
-            전사 방식을 고른 뒤 녹음을 시작하세요. 어떤 방식을 선택해도 원본 오디오는 이 Mac에 저장됩니다.
+            원본 오디오는 안전하게 저장하고, 녹음이 끝나면 다국어 인식과 화자 구분을 포함한 전체 스크립트를 만듭니다.
           </p>
         </div>
         <button
+          data-android-recorder-action=""
           id="meeting-recorder-start"
           type="button"
           onClick={recording
@@ -146,63 +151,53 @@ export function Recorder({
 
       {(phase === "idle" || phase === "saved") && (
         <div className="mt-5 space-y-3">
-          <fieldset role="radiogroup" aria-labelledby="transcription-mode-label">
-            <legend id="transcription-mode-label" className="mb-2 text-[13px] font-semibold text-ink">
-              전사 방식
-            </legend>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className={`flex cursor-pointer gap-3 rounded-xl border p-4 transition-colors ${
-                transcriptionMode === "whisper"
-                  ? "border-accent bg-accent/5"
-                  : "border-line bg-soft/30 hover:bg-soft/60"
-              }`}>
+          {sonioxConfigStatus === "checking" && (
+            <p className="rounded-xl border border-line bg-soft/30 p-4 text-[13px] text-inkSoft">
+              실시간 전사 기능을 확인하고 있습니다.
+            </p>
+          )}
+          {sonioxConfigStatus === "unconfigured" && (
+            <p className="rounded-xl border border-error/30 bg-error/5 p-4 text-[13px] text-error">
+              {transcriptionMode === "soniox"
+                ? "실시간 전사 기능을 준비하고 있습니다. 잠시 후 다시 시도하거나 운영자에게 문의해 주세요."
+                : "실시간 자막과 번역 기능을 준비하고 있습니다. 기본 회의 녹음은 계속 사용할 수 있습니다."}
+            </p>
+          )}
+
+          <fieldset data-system-audio-option="" className="rounded-xl border border-line bg-soft/30 p-4">
+            <legend className="px-1 text-[13px] font-semibold text-ink">녹음할 소리</legend>
+            <div className="mt-1 grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="녹음할 소리">
+              <label className="flex min-h-11 min-w-0 items-start gap-3 rounded-lg border border-line bg-panel px-3 py-3 text-[13px] text-ink">
                 <input
                   type="radio"
-                  name="transcription-mode"
-                  value="whisper"
-                  checked={transcriptionMode === "whisper"}
-                  onChange={() => setTranscriptionMode("whisper")}
-                  className="mt-1 h-4 w-4 shrink-0 accent-accent"
+                  name="recorder-audio-source"
+                  value="microphone"
+                  checked={audioSource === "microphone"}
+                  onChange={() => setAudioSource("microphone")}
+                  className="mt-0.5"
                 />
-                <span className="min-w-0">
-                  <span className="block text-[14px] font-semibold text-ink">로컬 전사 (Whisper)</span>
-                  <span className="mt-1 block text-[12px] leading-relaxed text-inkSoft">
-                    녹음을 마친 뒤 이 Mac에서 전사합니다. 오디오를 외부 전사 서비스로 보내지 않습니다. 처음 쓰는 모델은 준비에 시간이 걸릴 수 있습니다.
-                  </span>
-                </span>
+                <span className="min-w-0 font-semibold">마이크만</span>
               </label>
-              <label className={`flex gap-3 rounded-xl border p-4 transition-colors ${
-                transcriptionMode === "soniox"
-                  ? "border-accent bg-accent/5"
-                  : "border-line bg-soft/30"
-              } ${sonioxConfigured ? "cursor-pointer hover:bg-soft/60" : "cursor-not-allowed opacity-60"}`}>
+              <label className="flex min-h-11 min-w-0 items-start gap-3 rounded-lg border border-line bg-panel px-3 py-3 text-[13px] text-ink">
                 <input
                   type="radio"
-                  name="transcription-mode"
-                  value="soniox"
-                  checked={transcriptionMode === "soniox"}
-                  disabled={!sonioxConfigured}
-                  onChange={() => setTranscriptionMode("soniox")}
-                  className="mt-1 h-4 w-4 shrink-0 accent-accent"
+                  name="recorder-audio-source"
+                  value="microphone-and-system"
+                  checked={audioSource === "microphone-and-system"}
+                  onChange={() => setAudioSource("microphone-and-system")}
+                  className="mt-0.5"
                 />
                 <span className="min-w-0">
-                  <span className="block text-[14px] font-semibold text-ink">실시간 전사</span>
-                  <span className="mt-1 block text-[12px] leading-relaxed text-inkSoft">
-                    녹음 중 원문을 바로 보고, 필요한 경우 번역도 함께 표시합니다.
-                  </span>
-                  {sonioxConfigStatus === "checking" && (
-                    <span className="mt-1 block text-[12px] font-medium text-inkSoft">
-                      실시간 전사 설정을 확인하고 있습니다.
-                    </span>
-                  )}
-                  {sonioxConfigStatus === "unconfigured" && (
-                    <span className="mt-1 block text-[12px] font-medium text-error">
-                      SONIOX_API_KEY를 설정해야 사용할 수 있습니다.
-                    </span>
-                  )}
+                  <span className="block font-semibold">마이크와 회의 소리</span>
+                  <span className="mt-0.5 block text-[12px] leading-relaxed text-inkSoft">Zoom·Google Meet</span>
                 </span>
               </label>
             </div>
+            {audioSource === "microphone-and-system" && (
+              <p className="mt-3 break-words text-[12px] leading-relaxed text-inkSoft">
+                녹음을 시작하면 공유 창이 열립니다. 데스크톱 Chrome에서 회의 탭을 고르고 오디오 공유를 켜세요. Zoom 앱의 소리는 운영체제와 브라우저 지원 여부에 따라 제한될 수 있습니다.
+              </p>
+            )}
           </fieldset>
 
           {transcriptionMode === "soniox" && sonioxConfigured && (
@@ -224,10 +219,10 @@ export function Recorder({
                 </select>
               </label>
               <p className="mt-3 text-[12px] leading-relaxed text-inkSoft">
-                녹음하는 동안 마이크 오디오를 외부 전사 서버로 전송합니다. 사용량에 따라 비용이 발생할 수 있습니다.
+                녹음하는 동안 선택한 오디오를 안전하게 처리합니다.
               </p>
               <p className="mt-1 text-[12px] leading-relaxed text-inkSoft">
-                원본 녹음은 로컬에 저장합니다. 종료 후에는 로컬 Whisper가 최종 스크립트를 만들어 회의 파일에 저장합니다.
+                원본 녹음도 서버에 보존하며, 종료 후 확인된 전체 스크립트를 회의 파일에 저장합니다.
               </p>
             </div>
           )}
@@ -250,7 +245,7 @@ export function Recorder({
               />
               {transcriptionMode === "soniox"
                 ? "녹음 중 · 실시간 전사"
-                : "녹음 중 · 종료 후 Whisper 전사"}
+                : "녹음 중 · 종료 후 전사"}
             </span>
             <span className="font-mono text-[15px] tabular-nums text-ink">
               {formatDuration(elapsedMs)}
@@ -304,11 +299,7 @@ export function Recorder({
                 ? translationValue === "none"
                   ? "실시간 원문을 보려면 녹음을 시작하세요. 마이크 권한이 필요합니다."
                   : "실시간 원문과 번역을 보려면 녹음을 시작하세요. 마이크 권한이 필요합니다."
-                : <>
-                    <span>녹음이 끝나면 이 Mac에서 Whisper 전사를 시작합니다. 마이크 권한이 필요합니다. </span>
-                    <span>선택한 Whisper 모델을 처음 사용하면 먼저 내려받아 시간이 더 걸릴 수 있습니다. </span>
-                    <span>다운로드가 끝나기 전에는 진행률을 표시하지 않습니다.</span>
-                  </>}
+                : "녹음이 끝나면 전체 스크립트 작성을 시작합니다. 마이크 권한과 인터넷 연결이 필요합니다."}
           </p>
         )}
 
@@ -318,7 +309,9 @@ export function Recorder({
           || phase === "uploading") && (
           <p className="text-[14px] text-inkSoft">
             {phase === "requesting_permission"
-              ? "마이크 권한을 확인하는 중…"
+              ? audioSource === "microphone-and-system"
+                ? "마이크와 공유할 회의 소리를 확인하는 중…"
+                : "마이크 권한을 확인하는 중…"
               : phase === "uploading"
                 ? "녹음을 저장하는 중…"
                 : "녹음을 안전하게 정리하는 중…"}

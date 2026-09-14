@@ -7,7 +7,7 @@ import { folderCreateDestination, LibraryNavigation } from "@/components/Library
 import { MeetingDetailView } from "@/components/MeetingDetailView";
 import { RecorderSessionProvider } from "@/components/RecorderSessionProvider";
 import type { LibraryProviderValue } from "@/components/LibraryProvider";
-import type { LlmHealthState, WhisperHealthState } from "@/components/healthStatus";
+import type { LlmHealthState } from "@/components/healthStatus";
 import type { StatusJson } from "@/domain/meeting";
 
 const navigation = vi.hoisted(() => ({
@@ -21,7 +21,6 @@ const navigation = vi.hoisted(() => ({
 
 let libraryState: LibraryProviderValue;
 const healthState = vi.hoisted(() => ({
-  whisper: { connected: true, ready: true, model: "base" } as WhisperHealthState,
   soniox: { kind: "configured" as const },
   llm: {
     configured: true,
@@ -56,7 +55,6 @@ vi.mock("@/components/LibraryProvider", async (importOriginal) => {
 
 vi.mock("@/components/useHealth", () => ({
   useHealth: () => ({
-    whisper: healthState.whisper,
     llm: healthState.llm,
     soniox: healthState.soniox,
   }),
@@ -223,7 +221,6 @@ describe("activated library navigation", () => {
     navigation.push.mockReset();
     navigation.replace.mockReset();
     navigation.refresh.mockReset();
-    healthState.whisper = { connected: true, ready: true, model: "base" };
     healthState.llm = {
       configured: true,
       provider: "claude-cli",
@@ -249,8 +246,12 @@ describe("activated library navigation", () => {
     expect(within(nav).getAllByRole("link", { name: "Vision AI 미팅 에이전트 홈" })).toHaveLength(2);
     expect(within(nav).getAllByRole("link", { name: "Vision AI 미팅 에이전트 홈" }).every((link) => link.getAttribute("href") === "/")).toBe(true);
     // Exact Vision header treatment: "Vision" wordmark + exact second line. No legacy names.
-    expect(within(nav).getAllByText("Vision").length).toBeGreaterThan(0);
-    expect(within(nav).getAllByText("AI 미팅 에이전트(AI Meeting Agent)").length).toBeGreaterThan(0);
+    // The customer's own logo, not a typographic stand-in. It is a local asset so
+    // the shell never reaches the network, and its alt carries the brand name.
+    const marks = within(nav).getAllByRole("img", { name: "Vision" });
+    expect(marks.length).toBeGreaterThan(0);
+    expect(marks.every((mark) => mark.getAttribute("src") === "/brand/vision-logo.svg")).toBe(true);
+    expect(within(nav).getAllByText("AI Meeting Agent").length).toBeGreaterThan(0);
     expect(within(nav).queryByText("헤이홈 AI 기록도구")).not.toBeInTheDocument();
     expect(within(nav).queryByLabelText("제품 전환")).not.toBeInTheDocument();
     expect(within(nav).queryByRole("link", { name: "AI NOTE" })).not.toBeInTheDocument();
@@ -272,7 +273,7 @@ describe("activated library navigation", () => {
     expect(within(nav).queryByRole("link", { name: "Global Meeting" })).not.toBeInTheDocument();
     // Version-agnostic: assert the row exists without pinning the release number.
     expect(within(nav).getByText(/^제품 버전 \d+\.\d+(\.\d+)?$/)).toBeInTheDocument();
-    expect(within(nav).getByRole("link", { name: "릴리즈 노트" })).toHaveAttribute("href", "/settings/releases");
+    expect(within(nav).queryByRole("link", { name: "릴리즈 노트" })).not.toBeInTheDocument();
     expect(within(nav).getByRole("link", { name: /프로젝트/ })).toHaveAttribute(
       "href",
       `/live?workspace=${DEFAULT_WORKSPACE}&folder=${FOLDER}&tool=test-product`,
@@ -404,7 +405,7 @@ describe("activated library navigation", () => {
 
   it("updates polite system rows only when the visible health label actually changes", () => {
     const view = renderShell();
-    const initialLabel = screen.getAllByText("준비 완료")[0];
+    const initialLabel = screen.getAllByText("대기")[0];
     const liveRow = initialLabel.closest("[aria-live]");
     expect(liveRow).toHaveAttribute("aria-live", "polite");
     const observer = new MutationObserver(() => {});
@@ -420,7 +421,7 @@ describe("activated library navigation", () => {
     );
     expect(observer.takeRecords()).toHaveLength(0);
 
-    healthState.whisper = { connected: false, ready: false, model: "base" };
+    healthState.soniox = { kind: "unconfigured" as never };
     view.rerender(
       <RecorderSessionProvider>
         <div id="app-content">
@@ -429,23 +430,22 @@ describe("activated library navigation", () => {
         </div>
       </RecorderSessionProvider>,
     );
-    expect(screen.getAllByText("연결 안 됨").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("미설정").length).toBeGreaterThan(0);
     expect(observer.takeRecords().length).toBeGreaterThan(0);
+    healthState.soniox = { kind: "configured" as never };
     observer.disconnect();
   });
 
-  it("shows a distinct realtime row (로컬/요약/실시간) instead of one combined 외부 모델 row", () => {
+  it("shows distinct summary and realtime rows instead of a removed local engine row", () => {
     renderShell();
     const nav = screen.getByRole("navigation", { name: "라이브러리" });
 
-    // Three separate rows now — the realtime connection is no longer folded
-    // into a single LLM+realtime "외부 모델" row.
-    expect(within(nav).getByText("로컬")).toBeInTheDocument();
+    // Cloud transcription and realtime share Soniox, so no local engine row remains.
+    expect(within(nav).queryByText("로컬")).not.toBeInTheDocument();
     expect(within(nav).getByText("요약")).toBeInTheDocument();
     expect(within(nav).getByText("실시간")).toBeInTheDocument();
     expect(within(nav).queryByText("외부 모델")).not.toBeInTheDocument();
 
-    expect(within(nav).getByText("준비 완료")).toBeInTheDocument(); // local transcription
     expect(within(nav).getByText("준비됨")).toBeInTheDocument(); // summary model
     // No live session yet, but the key is configured → standby (not "connected").
     expect(within(nav).getByText("대기")).toBeInTheDocument();
@@ -571,11 +571,37 @@ describe("activated library navigation", () => {
 
     expect(screen.getByRole("heading", { level: 1, name: "최근 작업한 문서" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /제품 회의/ })).toHaveAttribute("href", "/meetings/meeting-1");
-    expect(screen.getByRole("button", { name: "Whisper 전사용 녹음 시작" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "회의 녹음 시작" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "미팅노트 열기" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "글로벌 미팅 번역 열기" })).toHaveAttribute("href", expect.stringContaining("tool=test-product"));
     expect(screen.getByRole("link", { name: "음성 입력 열기" })).toBeInTheDocument();
     expect(navigation.replace).not.toHaveBeenCalled();
+  });
+
+  it("provides compact navigation and an unfolded navigation rail for the Android app", () => {
+    navigation.search = "";
+    const base = readyState();
+    libraryState = readyState({
+      scope: { kind: "global" },
+      pages: { ...base.pages, scopeKey: "global" },
+    });
+
+    renderShell();
+
+    const compact = screen.getByTestId("android-compact-navigation");
+    const expanded = screen.getByTestId("android-expanded-navigation");
+    for (const navigationSuite of [compact, expanded]) {
+      expect(within(navigationSuite).getByRole("link", { name: "홈", hidden: true }))
+        .toHaveAttribute("href", "/");
+      expect(within(navigationSuite).getByRole("link", { name: "미팅노트", hidden: true }))
+        .toHaveAttribute("href", expect.stringContaining("tool=transcription"));
+      expect(within(navigationSuite).getByRole("link", { name: "번역", hidden: true }))
+        .toHaveAttribute("href", expect.stringContaining("tool=test-product"));
+      expect(within(navigationSuite).getByRole("link", { name: "음성 입력", hidden: true }))
+        .toHaveAttribute("href", expect.stringContaining("tool=voice-typing"));
+      expect(within(navigationSuite).getByRole("button", { name: "더보기", hidden: true }))
+        .toHaveAttribute("aria-expanded", "false");
+    }
   });
 
   it("uses global summary work, source-safe row links, pending provisional rows, and default-All recorder", () => {
@@ -592,7 +618,7 @@ describe("activated library navigation", () => {
     const pendingRow = screen.getByRole("link", { name: /위치 대기 회의/ });
     expect(pendingRow).toHaveClass("flex-col", "sm:flex-row");
     expect(screen.getByText("위치 대기 회의")).toHaveClass("min-w-0", "break-words");
-    expect(screen.getByRole("button", { name: "Whisper 전사용 녹음 시작" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "회의 녹음 시작" })).toBeInTheDocument();
     expect(screen.getByText(/이 워크스페이스의 미분류에 저장/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "위치 선택" })).toBeInTheDocument();
 
@@ -682,7 +708,7 @@ describe("activated library navigation", () => {
   it.each([
     [
       { configured: false } as LlmHealthState,
-      "회의록 요약을 준비하세요",
+      "AI 회의록을 준비하고 있습니다",
     ],
     [
       {
@@ -692,23 +718,21 @@ describe("activated library navigation", () => {
         ok: false,
         detail: "unavailable",
       } as LlmHealthState,
-      "요약 모델을 확인하세요",
+      "AI 회의록을 준비하지 못했습니다",
     ],
   ])("shows a non-blocking readiness card before the recorder for %j", (llm, heading) => {
     healthState.llm = llm;
     renderShell();
 
     const cardHeading = screen.getByRole("heading", { name: heading });
-    const settings = screen.getByRole("link", { name: "AI 요약 설정" });
-    const continueRecording = screen.getByRole("button", { name: "요약 없이 회의 녹음" });
-    const start = screen.getByRole("button", { name: "Whisper 전사용 녹음 시작" });
+    const continueRecording = screen.getByRole("button", { name: "회의 녹음 계속" });
+    const start = screen.getByRole("button", { name: "회의 녹음 시작" });
 
-    expect(settings).toHaveAttribute("href", "/settings");
-    expect(settings).toHaveClass("min-h-11");
+    expect(screen.queryByRole("link", { name: "AI 요약 설정" })).not.toBeInTheDocument();
     expect(continueRecording).toHaveClass("min-h-11");
     expect(cardHeading.closest("section")!.compareDocumentPosition(start.closest("section")!)
       & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.getByText(/로컬 전사 또는 실시간 자막과 번역을 선택할 수 있습니다/))
+    expect(screen.getByText(/회의 녹음과 실시간 자막·번역을 사용할 수 있습니다/))
       .toBeInTheDocument();
 
     fireEvent.click(continueRecording);
@@ -718,9 +742,9 @@ describe("activated library navigation", () => {
   it("does not show a readiness warning while summary health is loading", () => {
     healthState.llm = null;
     renderShell();
-    expect(screen.queryByRole("heading", { name: /회의록 요약을 준비하세요|요약 모델을 확인하세요/ }))
+    expect(screen.queryByRole("heading", { name: /AI 회의록을 준비하고 있습니다|AI 회의록을 준비하지 못했습니다/ }))
       .not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Whisper 전사용 녹음 시작" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "회의 녹음 시작" })).toBeInTheDocument();
   });
 
   it("opens the shared same-workspace folder move picker", () => {
@@ -835,7 +859,7 @@ describe("activated library navigation", () => {
     navigation.search = `workspace=${OTHER_WORKSPACE}`;
     libraryState = readyState({ scope: { kind: "workspace", workspaceId: OTHER_WORKSPACE } });
     renderShell();
-    expect(screen.getByRole("button", { name: "Whisper 전사용 녹음 시작" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "회의 녹음 시작" })).toBeInTheDocument();
     expect(screen.getByText(/이 워크스페이스의 미분류에 저장/)).toBeInTheDocument();
   });
 
@@ -852,7 +876,7 @@ describe("activated library navigation", () => {
     expect(screen.getByRole("button", { name: "다시 시도" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "데이터 폴더 열기" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "조직 정보 재구축" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Whisper 전사용 녹음 시작" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "회의 녹음 시작" })).toBeInTheDocument();
     expect(screen.getByText(/마지막으로 확인된 위치를 요청/)).toBeInTheDocument();
   });
 

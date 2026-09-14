@@ -1,5 +1,4 @@
 // @vitest-environment node
-import { type ChildProcess, spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -24,7 +23,6 @@ import { POST as llmModelsPOST } from "@/app/api/settings/llm/models/route";
 import { POST as llmSettingsPOST } from "@/app/api/settings/llm/route";
 import { POST as transcribePOST } from "@/app/api/transcribe/route";
 import { POST as globalSummarizePOST } from "@/app/api/summarize/route";
-import { GET as whisperHealth } from "@/app/api/whisper/health/route";
 import { meetingPaths } from "@/lib/paths";
 import { acquireArtifactWriteLease } from "@/lib/artifactLease";
 import { acquireMeetingOperation } from "@/lib/meetingLifecycle";
@@ -33,12 +31,10 @@ import { initialStatus, writeStatus } from "@/lib/status";
 import { isSummarizeInflight } from "@/lib/summarize";
 import { FakeAdapter } from "@/services/llm/fake";
 
-// Integration test for the app-api route handlers. Boots the whisper service with
-// FAKE_WHISPER=1 (pure stdlib, no venv/model/network) and FAKE_FFMPEG=1 (byte copy,
-// no ffmpeg install needed), then chdirs into a temp dir so data/meetings is isolated.
+// Integration test for the app-api route handlers. FAKE_SONIOX and FAKE_FFMPEG
+// keep the run hermetic, then a temporary cwd isolates data/meetings.
 // Route handlers are plain functions — called directly with a Request + params.
 
-const SERVER = join(process.cwd(), "whisper", "server.py");
 const ctx = (id: string) => ({ params: Promise.resolve({ id }) });
 const APP_ORIGIN = "http://127.0.0.1:3000";
 
@@ -59,30 +55,8 @@ function appRequest(input: string, init: RequestInit = {}): Request {
   return new Request(url, { ...init, headers });
 }
 
-let proc: ChildProcess;
 let workDir: string;
 let originalCwd: string;
-
-function waitForListening(child: ChildProcess, timeoutMs: number): Promise<number> {
-  return new Promise((resolve, reject) => {
-    let out = "";
-    const timer = setTimeout(() => reject(new Error(`server did not start in ${timeoutMs}ms:\n${out}`)), timeoutMs);
-    const onData = (chunk: Buffer) => {
-      out += chunk.toString();
-      const match = out.match(/WHISPER_LISTENING http:\/\/[\d.]+:(\d+)/);
-      if (match) {
-        clearTimeout(timer);
-        child.stdout?.off("data", onData);
-        resolve(Number(match[1]));
-      }
-    };
-    child.stdout?.on("data", onData);
-    child.on("exit", (code) => {
-      clearTimeout(timer);
-      reject(new Error(`server exited early (code=${code})\n${out}`));
-    });
-  });
-}
 
 async function pollUntilStatus(id: string, want: string, timeoutMs: number) {
   const deadline = Date.now() + timeoutMs;
@@ -97,26 +71,15 @@ async function pollUntilStatus(id: string, want: string, timeoutMs: number) {
 
 beforeAll(async () => {
   workDir = mkdtempSync(join(tmpdir(), "app-api-"));
-  proc = spawn("python3", [SERVER], {
-    env: {
-      ...process.env,
-      AI_NOTE_DATA_ROOT: join(workDir, "data"),
-      FAKE_WHISPER: "1",
-      LOCAL_STT_HOST: "127.0.0.1",
-      LOCAL_STT_PORT: "0",
-    },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  const port = await waitForListening(proc, 15000);
-  process.env.LOCAL_STT_HOST = "127.0.0.1";
-  process.env.LOCAL_STT_PORT = String(port);
+  process.env.FAKE_SONIOX = "1";
   process.env.FAKE_FFMPEG = "1";
   originalCwd = process.cwd();
   process.chdir(workDir); // meetingsRoot() = cwd/data/meetings — isolate it
 });
 
 afterAll(() => {
-  proc?.kill("SIGKILL");
+  delete process.env.FAKE_SONIOX;
+  delete process.env.FAKE_FFMPEG;
   if (originalCwd) process.chdir(originalCwd);
   if (workDir) rmSync(workDir, { recursive: true, force: true });
 });
@@ -155,14 +118,6 @@ function modelsRequest(body: unknown, headers: Record<string, string> = {}) {
 }
 
 describe("app-api routes", () => {
-  it("GET /api/whisper/health proxies the local service (connected)", async () => {
-    const res = await whisperHealth(appRequest("/api/whisper/health"));
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.connected).toBe(true);
-    expect(body.ready).toBe(true);
-  });
-
   it("POST /api/settings/llm rejects Ollama without a model", async () => {
     const res = await llmSettingsPOST(
       appRequest("http://t/api/settings/llm", {
@@ -173,21 +128,15 @@ describe("app-api routes", () => {
     expect(res.status).toBe(400);
   });
 
-  it("GET /api/settings/llm/health returns provider and model without baseUrl", async () => {
+  it("GET /api/settings/llm/health exposes only customer-safe readiness", async () => {
     process.env.FAKE_LLM = "1";
     await writeSettings({ provider: "claude-cli", model: "sonnet", baseUrl: "http://should-not-leak" });
     try {
       const res = await llmHealthGET(appRequest("/api/settings/llm/health"));
       expect(res.status).toBe(200);
       const body = await res.json();
-      expect(body).toEqual({
-        configured: true,
-        provider: "claude-cli",
-        model: "sonnet",
-        ok: true,
-        detail: "FAKE_LLM",
-      });
-      expect(JSON.stringify(body)).not.toContain("should-not-leak");
+      expect(body).toEqual({ configured: true, ok: true });
+      expect(JSON.stringify(body)).not.toMatch(/claude|sonnet|baseUrl|should-not-leak|FAKE_LLM/i);
     } finally {
       delete process.env.FAKE_LLM;
     }
@@ -199,10 +148,31 @@ describe("app-api routes", () => {
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toMatchObject({
       configured: true,
-      provider: "ollama",
       ok: false,
-      detail: "Ollama 모델을 선택해 저장하세요.",
     });
+    expect(JSON.stringify(await llmHealthGET(appRequest("/api/settings/llm/health")).then((response) => response.json())))
+      .not.toMatch(/ollama|모델|provider/i);
+  });
+
+  it("hides technical settings endpoints from customer sessions before reading their body", async () => {
+    let bodyObserved = false;
+    const request = appRequest("/api/settings/llm", {
+      method: "POST",
+      headers: { "x-vision-account-role": "customer" },
+      body: JSON.stringify({ provider: "ollama" }),
+    });
+    const guarded = new Proxy(request, {
+      get(target, property) {
+        if (property === "body") bodyObserved = true;
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+
+    const response = await llmSettingsPOST(guarded);
+    expect(response.status).toBe(404);
+    expect(bodyObserved).toBe(false);
+    expect(JSON.stringify(await response.json())).not.toMatch(/openrouter|ollama|claude|모델|provider/i);
   });
 
   describe("POST /api/settings/llm/models", () => {
@@ -351,7 +321,7 @@ describe("app-api routes", () => {
   it("GET derives transcribed from raw.md, then summarized from summary.json", async () => {
     const id = "meeting-alpha";
 
-    // whisper (FAKE) writes raw.md + segments.json → derived transcribed
+    // The fake Soniox worker writes raw.md + segments.json → derived transcribed.
     const transcribed = await pollUntilStatus(id, "transcribed", 15000);
     expect(transcribed.whisper.progress).toBe(1);
     expect(JSON.stringify(transcribed)).not.toContain("jobId");
@@ -918,7 +888,7 @@ describe("manual re-summarize (force)", () => {
       expect(run).toHaveBeenCalledTimes(1);
       expect(run.mock.calls[0][0]).toContain("교정된 전사");
       expect(run.mock.calls[0][0]).not.toContain("[원문]");
-      expect(run.mock.calls[0][1]).toEqual({ json: true });
+      expect(run.mock.calls[0][1]).toEqual({ json: true, task: "summary" });
     } finally {
       run.mockRestore();
       delete process.env.FAKE_LLM;
@@ -1008,7 +978,7 @@ describe("manual re-summarize (force)", () => {
 
       expect(run).toHaveBeenCalledTimes(1);
       expect(run.mock.calls[0][0]).toContain("[원문]");
-      expect(run.mock.calls[0][1]).toBeUndefined();
+      expect(run.mock.calls[0][1]).toEqual({ task: "transcript" });
       expect(readFileSync(meetingPaths(id).summary, "utf8")).toBe(oldSummary);
       const changed = await (await contentGET(
         appRequest(`/api/meetings/${id}/content`),

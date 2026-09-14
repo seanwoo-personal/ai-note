@@ -81,27 +81,21 @@ function SummaryReadinessCard({ readiness }: { readiness: LlmReadiness }) {
   return (
     <section className="min-w-0 rounded-[16px] border border-warn/40 bg-warnBg p-4 sm:p-6">
       <h2 className="text-[16px] font-bold text-ink">
-        {unavailable ? "요약 모델을 확인하세요" : "회의록 요약을 준비하세요"}
+        {unavailable ? "AI 회의록을 준비하지 못했습니다" : "AI 회의록을 준비하고 있습니다"}
       </h2>
       <p className="mt-2 break-words text-[13px] leading-relaxed text-inkSoft">
         {unavailable
-          ? "저장한 요약 모델을 지금 사용할 수 없습니다. 설정에서 설치와 실행 상태를 확인하세요."
-          : "AI 요약을 사용하려면 로컬 CLI 또는 Ollama 모델을 먼저 설정하세요."}
-        {" "}요약 모델과 관계없이 로컬 전사 또는 실시간 자막과 번역을 선택할 수 있습니다.
+          ? "AI 회의록 기능을 지금 사용할 수 없습니다. 잠시 후 다시 시도하거나 운영자에게 문의해 주세요."
+          : "AI 회의록 기능을 준비하고 있습니다."}
+        {" "}회의 녹음과 실시간 자막·번역을 사용할 수 있습니다.
       </p>
       <div className="mt-4 flex min-w-0 flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-        <GuardedLink
-          href="/settings"
-          className="inline-flex min-h-11 w-full items-center justify-center rounded-full bg-ink px-5 text-[13px] font-semibold text-bg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 sm:w-auto"
-        >
-          AI 요약 설정
-        </GuardedLink>
         <button
           type="button"
           onClick={focusRecorder}
-          className="min-h-11 w-full rounded-full border border-line bg-panel px-5 text-[13px] font-semibold text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 sm:w-auto"
+          className="min-h-11 w-full rounded-full bg-ink px-5 text-[13px] font-semibold text-bg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 sm:w-auto"
         >
-          요약 없이 회의 녹음
+          회의 녹음 계속
         </button>
       </div>
     </section>
@@ -129,15 +123,15 @@ export function HomeQuickStart({ workspaceId }: { workspaceId: string }) {
   ] as const;
 
   return (
-    <section className="space-y-5" aria-labelledby="home-quick-start-title">
+    <section data-android-home-quick-start="" className="space-y-5" aria-labelledby="home-quick-start-title">
       <div>
         <h2 id="home-quick-start-title" className="text-[18px] font-bold text-ink">바로 시작</h2>
         <p className="mt-1 text-[13px] leading-6 text-inkSoft">기존 회의 녹음과 실시간 도구를 여기서 바로 사용할 수 있습니다.</p>
       </div>
       <Recorder requestedLocation={{ workspaceId, folderId: null }} />
-      <div className="grid gap-3 md:grid-cols-3">
+      <div data-android-quick-actions="" className="grid gap-3 md:grid-cols-3">
         {tools.map((tool) => (
-          <article key={tool.title} className="flex min-w-0 flex-col rounded-2xl border border-line bg-panel p-4">
+          <article data-android-quick-action="" key={tool.title} className="flex min-w-0 flex-col rounded-2xl border border-line bg-panel p-4">
             <h3 className="text-[15px] font-bold text-ink">{tool.title}</h3>
             <p className="mt-2 flex-1 text-[12px] leading-5 text-inkSoft">{tool.description}</p>
             <GuardedLink
@@ -280,8 +274,8 @@ export function HomeClient() {
 
   if (libraryState.mode === "degraded_fallback" || !libraryState.library) {
     return (
-      <main id="main" className="w-full max-w-5xl space-y-8 px-4 py-12 sm:px-6">
-        <header>
+      <main data-android-home="" id="main" className="w-full max-w-5xl space-y-8 px-4 py-12 sm:px-6">
+        <header data-android-home-header="">
           <h1 className="text-2xl font-bold tracking-tight text-ink">모든 내용</h1>
           <p className="mt-2 text-[15px] text-inkSoft">조직 위치 없이 저장하고 전체 기록을 표시합니다.</p>
         </header>
@@ -398,51 +392,55 @@ export function HomeClient() {
           </h1>
           <p className="mt-2 text-[15px] text-inkSoft">워크스페이스와 폴더에 관계없이 최근에 작업한 기록을 모았습니다.</p>
         </header>
-        <SummaryReadinessCard readiness={getLlmReadiness(llm)} />
-        <HomeQuickStart workspaceId={library.defaultWorkspaceId} />
-        {libraryState.mode !== "ready" && (
-          <LibraryRecoveryPanel
-            mode={libraryState.mode}
-            reason={libraryState.degradedReason}
-            recovery={libraryState.recovery}
-            onRetry={libraryState.refreshLibrary}
-          />
-        )}
-        {summaryWork && (
-          <PendingBanner
-            count={summaryWork.processing}
-            needsAttention={summaryWork.needsAttention}
-            attention={summaryWork.attention}
-            readiness={getLlmReadiness(llm)}
-          />
-        )}
-        {library.counts.organizationPendingCount > 0 && (
-          <GuardedLink href={`/?workspace=${library.defaultWorkspaceId}#organization-pending`} className="flex min-h-11 min-w-0 flex-col items-stretch gap-1 rounded-[14px] border border-warn/40 bg-warnBg p-4 text-[13px] font-semibold text-warn focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warn/50 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-            <span className="min-w-0 break-words">위치 저장 대기 회의 보기</span>
-            <span className="shrink-0">{library.counts.organizationPendingCount}</span>
-          </GuardedLink>
-        )}
-        {recentRows.length === 0 ? (
-          <section className="rounded-[16px] border border-line bg-panel px-4 py-10 text-center sm:px-6">
-            <h2 className="text-[16px] font-bold text-ink">최근 작업한 문서가 없습니다</h2>
-            <p className="mt-2 text-[13px] text-inkSoft">미팅노트나 모든 내용에서 첫 기록을 시작해 보세요.</p>
-          </section>
-        ) : (
-          <section aria-label="최근 작업한 문서 목록">
-            <MeetingList
-              meetings={recentRows}
-              detailHref={(meeting) => `/meetings/${meeting.id}`}
-              onRenamed={(id, title) => libraryState.updateMeetingTitle(id, title)}
-              onDeleted={(id) => libraryState.removeMeeting(id)}
+        <div data-android-home-primary="" className="space-y-8">
+          <SummaryReadinessCard readiness={getLlmReadiness(llm)} />
+          <HomeQuickStart workspaceId={library.defaultWorkspaceId} />
+        </div>
+        <div data-android-home-secondary="" className="space-y-8">
+          {libraryState.mode !== "ready" && (
+            <LibraryRecoveryPanel
+              mode={libraryState.mode}
+              reason={libraryState.degradedReason}
+              recovery={libraryState.recovery}
+              onRetry={libraryState.refreshLibrary}
             />
-            <GuardedLink
-              href={`/?workspace=${library.defaultWorkspaceId}`}
-              className="mt-4 inline-flex min-h-11 items-center justify-center rounded-full border border-line px-4 text-[13px] font-semibold text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
-            >
-              모든 내용 보기
+          )}
+          {summaryWork && (
+            <PendingBanner
+              count={summaryWork.processing}
+              needsAttention={summaryWork.needsAttention}
+              attention={summaryWork.attention}
+              readiness={getLlmReadiness(llm)}
+            />
+          )}
+          {library.counts.organizationPendingCount > 0 && (
+            <GuardedLink href={`/?workspace=${library.defaultWorkspaceId}#organization-pending`} className="flex min-h-11 min-w-0 flex-col items-stretch gap-1 rounded-[14px] border border-warn/40 bg-warnBg p-4 text-[13px] font-semibold text-warn focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warn/50 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+              <span className="min-w-0 break-words">위치 저장 대기 회의 보기</span>
+              <span className="shrink-0">{library.counts.organizationPendingCount}</span>
             </GuardedLink>
-          </section>
-        )}
+          )}
+          {recentRows.length === 0 ? (
+            <section data-android-recent-content="" className="rounded-[16px] border border-line bg-panel px-4 py-10 text-center sm:px-6">
+              <h2 className="text-[16px] font-bold text-ink">최근 작업한 문서가 없습니다</h2>
+              <p className="mt-2 text-[13px] text-inkSoft">미팅노트나 모든 내용에서 첫 기록을 시작해 보세요.</p>
+            </section>
+          ) : (
+            <section data-android-recent-content="" aria-label="최근 작업한 문서 목록">
+              <MeetingList
+                meetings={recentRows}
+                detailHref={(meeting) => `/meetings/${meeting.id}`}
+                onRenamed={(id, title) => libraryState.updateMeetingTitle(id, title)}
+                onDeleted={(id) => libraryState.removeMeeting(id)}
+              />
+              <GuardedLink
+                href={`/?workspace=${library.defaultWorkspaceId}`}
+                className="mt-4 inline-flex min-h-11 items-center justify-center rounded-full border border-line px-4 text-[13px] font-semibold text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+              >
+                모든 내용 보기
+              </GuardedLink>
+            </section>
+          )}
+        </div>
       </main>
     );
   }
@@ -454,7 +452,7 @@ export function HomeClient() {
           <ScopeTitleCopy scope={scope} library={library} />
         </h1>
         <p className="mt-2 break-words text-[15px] leading-relaxed text-inkSoft">
-          원본 오디오는 로컬에 저장합니다. 전사는 로컬 전사와 실시간 자막·번역 중에서 선택하고, 녹음이 끝나면 설정한 요약 모델로 회의록을 요약할 수 있습니다.
+          원본 오디오는 안전하게 보존하고, 녹음이 끝나면 화자를 구분한 전체 스크립트와 AI 회의록을 만들 수 있습니다.
         </p>
       </header>
       <span className="sr-only" aria-live="polite">{canonicalMessage}</span>

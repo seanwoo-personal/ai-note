@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "description": "비슷한 음역의 일본어 여성 2인 대담과 짧은 끼어들기가 있는 한국어 남성 4인 토론 검증 세트",
+  "silenceMs": 2000,
+  "sources": [
+    {
+      "id": "japanese-two-women",
+      "url": "https://www.youtube.com/watch?v=m7-a__Df2zE",
+      "title": "玄理×福間美由紀 変わりつつある映画業界の女性働き方と女性像",
+      "file": "01-japanese-two-women.m4a",
+      "language": "ja",
+      "start": "00:55",
+      "end": "03:55",
+      "expectedMinSpeakers": 2,
+      "expectedMaxSpeakers": 2,
+      "expectedMinSupportedSpeakers": 2,
+      "expectedMaxSupportedSpeakers": 2
+    },
+    {
+      "id": "korean-four-speakers",
+      "url": "https://www.youtube.com/watch?v=j3QbNOOPeSw",
+      "title": "패널 4인이 보는 언론 표현 토론",
+      "file": "02-korean-four-speakers.m4a",
+      "language": "ko",
+      "start": "00:30",
+      "end": "04:30",
+      "expectedMinSpeakers": 4,
+      "expectedMaxSpeakers": 4,
+      "expectedMinSupportedSpeakers": 4,
+      "expectedMaxSupportedSpeakers": 4
+    }
+  ]
+}

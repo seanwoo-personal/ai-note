@@ -1,190 +1,99 @@
 # AI NOTE
 
-**Local-first meeting notes.** Record on your laptop, transcribe locally with Whisper, and optionally show live captions and translation through Soniox. AI NOTE stores recordings and derived files on your machine, exposes its web/STT services only on `127.0.0.1`, and has no hosted account. Soniox is opt-in; its long-lived key stays in the gitignored local environment and the browser receives only a single-use temporary key.
+AI NOTE는 회의를 녹음하고, Soniox로 전사한 뒤, OpenRouter 모델로 스크립트 교정과 회의록 요약을 만드는 웹 앱입니다. 고객 가입 신청, 운영자 승인, 결제 상태에 따른 접근 차단, 계정별 사용량 집계가 기존 녹음·라이브·회의 보관 화면과 연결되어 있습니다.
 
-Review the transcript or summary, search meetings without AI, and copy or export the result. The meeting-assistant chatbot is currently dormant; it is not part of the active pipeline.
+## 현재 흐름
 
-> UI strings are currently Korean (v0.1). Internationalization is planned — see [Roadmap](#roadmap).
-
-## Why it's private
-
-- **Local app and storage.** Audio, transcripts, summaries, your optional profile, and derived search data stay under the local `data/` directory. The web server and transcription service bind to `127.0.0.1` only (never your LAN).
-- **Your model choice controls inference.** Ollama keeps model inference on the configured loopback service. Claude/Codex CLI runs as a local process but may send the bounded transcript and summary prompt to the provider you signed in to; that processing follows the CLI provider's terms. AI NOTE adds no hosted backend of its own.
-- **Provider credentials stay local.** Summaries run through a CLI you're already signed in to or a loopback model. Optional Soniox streaming reads `SONIOX_API_KEY` only on the local server and mints a 60-second, single-use browser credential; never place the long-lived key in client code.
-- **Soniox is an explicit off-device opt-in.** When its live toggle is enabled, microphone audio is streamed to Soniox for captions/translation under Soniox's terms; the same audio is still retained locally for the normal Whisper transcript.
-- **No AI NOTE telemetry.** There is no analytics or hosted sync surface. Recordings and generated artifacts live under `data/` (gitignored); model-provider traffic, if any, is determined only by the summarizer you select above.
-
-## How it works
-
-```
-record (browser mic) → optional Soniox live captions/translation + local audio save → local Whisper final transcript → optional summary → view / search / export
+```text
+브라우저 녹음 → 원본 오디오 저장 → Soniox 비동기 전사 → OpenRouter 교정·요약 → 열람·검색·내보내기
 ```
 
-1. Optionally enable **Soniox 실시간 전사** and choose a translation mode, then click **회의 녹음 시작 (Start meeting recording)**. Audio is still captured and saved locally.
-2. On stop, a local **Whisper** service creates the initial automatic transcript.
-3. If a summary model is configured, a background worker corrects that initial transcript and creates the structured summary — automatically, even if you close the tab.
-4. Organize meetings in local workspaces and up to three folder levels, then
-   review and **copy / download / reveal the folder**.
-5. Use **검색 (Search)** to find a meeting without AI. (Asking across meetings — the **질문/회의 도우미 (Questions/Meeting assistant)** chatbot — is currently on hold; see below.)
+- 고객은 `/signup`에서 가입을 신청합니다.
+- 운영자가 `/admin`에서 승인하고 결제 완료로 표시해야 로그인할 수 있습니다.
+- 로그인 후 기존 AI NOTE 홈(`/`)과 녹음·라이브·회의 보관 기능을 사용합니다.
+- 고객은 로그인 화면에서 가입 이메일로 30분 유효·1회용 임시 비밀번호를 받고, 로그인 직후 새 비밀번호로 반드시 변경합니다.
+- 최초 최고 운영자는 `/admin/setup`에서 한 번만 생성합니다.
+- 추가 운영자는 24시간 유효한 일회용 초대를 받고 TOTP 이중 인증 또는 복구 코드를 사용합니다.
+- 미결제·연체·차단으로 변경하면 현재 고객 세션도 무효화됩니다.
 
-If local transcription fails, the original recording remains intact and **전사 다시 시도 (Retry transcription)** stays available from the save result, meeting list, and meeting detail. You do not need to record the meeting again.
+> 현재 회의·라이브러리 저장소는 계정별로 완전히 분리되지 않았습니다. 원격 테스트 서버 하나에는 고객사 한 곳만 승인하세요. 여러 고객사를 동시에 받는 상용 서비스 전에는 계정별 저장소 분리와 결제 서비스의 서명된 웹훅 연동이 필요합니다. 자세한 근거는 [결정 기록 0026](docs/decisions/0026-local-account-gate-before-hosted-multitenancy.md)에 있습니다.
 
-## Edit a finished meeting
+## 요구 사항
 
-After the first corrected script and summary are created, each can be edited or regenerated independently from the meeting detail. A finished meeting with a usable summary opens the summary tab by default unless the script tab was explicitly requested:
+- Node.js 20 이상
+- ffmpeg
+- Soniox API 키
+- OpenRouter API 키(스크립트 교정·요약을 사용할 때)
 
-- Each selected tab starts with its own actions: script **copy / edit / rebuild from the original**, or summary **copy / JSON download / edit / rebuild from the current script**. Editing replaces the saved reading surface with one multiline textarea instead of adding a second surface below it.
-- **전체 스크립트 수정** saves the corrected script as plain text. **회의록 요약 수정** opens the whole readable summary as one freeform plain-text body; generated sections and bullets become ordinary editable text, so headings can be removed and internal line breaks are preserved exactly.
-- **원문에서 스크립트 다시 만들기** rebuilds only the full script from the initial automatic transcript. It keeps the existing summary and marks it **요약 갱신 필요** if the script changed.
-- **현재 스크립트로 요약 다시 만들기** rebuilds only the summary from the currently saved full script; it never replaces that script.
-- Saving or rebuilding the summary makes it current again. The meeting title and participant list keep their existing dedicated controls and are not changed by the summary editor.
-- **회의록 다운로드(.md)** exports the current summary and full script as one readable document; **JSON 다운로드** exports the canonical summary data.
+Python, `uv`, 로컬 Whisper 모델은 필요하지 않습니다.
 
-There is no autosave: save or cancel an open edit before leaving. Copy and download actions continue to use the last confirmed saved content while an editor is open, and the action status says so. AI NOTE also guards links, browser back, and other app navigation so an unsaved draft or unresolved save is not discarded silently.
+## 로컬 실행
 
-## Find meetings (meeting assistant dormant)
+```sh
+npm ci
+cp .env.example .env.local
+npm run dev
+```
 
-> **Note — the 질문 (Questions) chatbot is currently dormant.** The **회의 도우미 (Meeting assistant)** surface is held behind a build-time flag (`MEETING_ASSISTANT_ENABLED`, default off) and is not mounted in the app while its local-CLI agent loop is reworked. Its code, the `/api/chat` route, and the shared knowledge index are preserved, not removed. Plain **검색 (Search)** below keeps working. See [decisions/0019](docs/decisions/0019-meeting-assistant-dormant.md).
+`.env.local`에 다음 서버 전용 키를 입력합니다. 키를 브라우저 코드에 넣거나 Git에 커밋하지 마세요.
 
-Open **검색 (Search)** from the library navigation. The active search surface performs deterministic, AI-free text matching over derived local search data, supports date/workspace/folder/status/action-item filters, and links each match back to the current live meeting. It does not scan every full transcript on every request.
+```dotenv
+SONIOX_API_KEY=실제_키
+OPENROUTER_API_KEY=실제_키
+```
 
-The **질문 (Questions)** surface — currently dormant (see the note above) — reuses your configured summarizer through a bounded set of meeting-search and meeting-read tools. AI NOTE publishes a factual claim only when its cited meeting was actually read and is still live, assigns stable `[n]` numbers on the server, and lists the referenced meetings below the answer. This validates source provenance rather than automatically proving the model's interpretation, so important conclusions should still be checked against the linked meeting.
+비밀번호 복구 메일을 사용하려면 `.env.local` 또는 배포 환경에 TLS SMTP 서버와 `AI_NOTE_SMTP_*` 발신 자격증명도 설정합니다.
 
-If the dormant assistant is re-enabled, conversation context is limited to four complete turns in the current browser tab and is never written to a chat-history file; refresh clears it. The optional **내 정보 (My information)** section in Settings can add a display name, aliases, timezone, and week-start preference, but leaving it unset does not block active ordinary search. If search data is incomplete, the search surface keeps the current query/results visible and offers a synchronous **검색 데이터 업데이트 (Update search data)** action.
+기본 로컬 주소는 `http://127.0.0.1:3000`입니다. 포트가 이미 사용 중이면 `npm run dev -- --port 3100`처럼 지정할 수 있습니다.
 
-The library rail supports workspace switching, All / Unfiled / direct-folder
-views, workspace and folder creation/renaming, and semantic folder colors.
-Meeting files stay at their stable `data/meetings/{id}/` paths; organization is
-metadata only. If the registry cannot be read, the app keeps meetings visible in
-a read-only last-good or global fallback view instead of silently rewriting it.
-Only a corrupt registry offers explicit rebuild: the app requires the latest
-fingerprint, preserves the original in a private local archive, creates a new
-library generation, and places discovered live meetings in the new default
-workspace's Unfiled view. Newer-format, I/O, unsupported-durability, and
-ambiguous recovery states remain read-only and are never overwritten. Recovery
-archives may contain local metadata and are retained under `data/` until you
-remove them locally; their paths and contents are never returned to the browser.
+## AI와 전사 구성
 
-Recording is available from every library scope. The destination is captured
-when recording starts; interrupted saves keep the same meeting ID and audio in
-memory, probe the local server before retrying, and report the actual/fallback
-location separately from playback and transcription status.
+- 녹음 종료 후 Soniox `stt-async-v5`가 언어 식별과 화자 분리를 포함한 비동기 전사를 수행합니다.
+- 스크립트 교정·번역은 저비용 모델을 우선하고, 요약·채팅은 품질 우선 모델을 먼저 사용합니다.
+- OpenRouter가 지정된 후보 모델을 순서대로 대체하고, 같은 모델의 제공자는 가격순으로 선택합니다.
+- OpenRouter 요청에는 제로 데이터 보존과 데이터 수집 거부 조건을 적용합니다.
+- Soniox 원격 전사와 업로드 파일은 결과 게시 후 최선 노력으로 삭제합니다.
 
-Meetings can move to any workspace, folder, or Unfiled location without moving
-their artifact directory. Folder subtrees can be reparented within their current
-workspace; cross-workspace folder moves are intentionally not supported.
+## 로컬 검증 명령
 
-From a meeting row's management menu, a summarized meeting can be renamed and
-any meeting can be permanently deleted after confirmation. Meeting deletion is
-irreversible and removes that meeting's recording and derived artifacts.
+```sh
+npm test
+npm run lint
+npm run typecheck
+npm run build
+npm run check:links
+```
 
-Deleting a folder or workspace is an organization-only operation: a preview
-shows every affected meeting, hidden placement, child folder, and pending save
-intent. Meetings and their recordings/transcripts/summaries are rehomed and
-preserved; only the selected container metadata is removed.
+## AWS 테스트 배포
 
-## Requirements
+별도 도메인 없이 AWS Lightsail과 Cloudflare Quick Tunnel로 임시 HTTPS 테스트 주소를 만들 수 있습니다. Docker 구성, AWS 계정 생성, 키 설정, 운영자 생성, 고객 승인 절차는 [AWS 고객 테스트 배포 안내](docs/AWS_DEPLOYMENT.md)를 따르세요.
 
-| | |
+```sh
+cp .env.production.example .env.production
+docker compose up -d --build
+docker compose logs tunnel
+```
+
+터널 로그의 `https://...trycloudflare.com` 주소를 고객에게 전달합니다. Quick Tunnel 주소는 테스트 전용이며 다시 만들면 바뀔 수 있습니다.
+
+## 주요 경로
+
+| 경로 | 역할 |
 |---|---|
-| **Node.js** | ≥ 20 |
-| **Python** | 3.11 or 3.12, via [`uv`](https://docs.astral.sh/uv/) (for the Whisper service) |
-| **ffmpeg** | on your `PATH` (or set `FFMPEG_PATH`) |
-| **A summarizer (optional)** | needed only for correction/summary: **Claude CLI**, **Codex CLI**, or **[Ollama](https://ollama.com)** running locally. Recording and local transcription work without one. |
+| `src/app/` | Next.js 화면과 API |
+| `src/components/` | 녹음·회의·인증·운영자 UI |
+| `src/services/sonioxAsync.ts` | Soniox 비동기 전사 |
+| `src/services/llm/openRouter.ts` | OpenRouter 모델 라우팅 |
+| `data/` | 회의·계정·설정 데이터(커밋 제외) |
+| `docs/` | 제품·구조·배포 문서 |
 
-### Platform support
+## 배포 보안
 
-| Platform | Transcription |
-|---|---|
-| **Apple Silicon (M-series)** | fast — uses `mlx-whisper` |
-| **Linux / Windows / Intel Mac** | works — CPU fallback via `faster-whisper` (slower, no GPU path) |
+- Docker 앱 포트는 서버의 `127.0.0.1`에만 바인딩하고 HTTPS 터널만 외부에 노출합니다.
+- 변경 요청은 같은 출처인지 검증하며, 안정된 도메인을 붙이면 `APP_ORIGIN`으로 정확한 HTTPS 원본을 고정합니다.
+- 루트 운영자 비밀번호와 TOTP 복구 코드는 안전한 비밀번호 관리자에 보관합니다.
+- API 키와 `data/` 볼륨을 백업하되 로그나 고객 응답에 노출하지 않습니다.
 
-The first transcription may take longer while the selected Whisper model is downloaded. The UI does not invent progress before that download finishes. The default (`large-v3`) is multi-GB; set `LOCAL_STT_MODEL=base` (or `small`) before launch for a faster first use.
-
-## Quick start
-
-```bash
-node scripts/bootstrap.mjs --launch
-```
-
-Run this from a fresh clone with Node.js ≥ 20. It checks `uv` and `ffmpeg`, then runs `HUSKY=0 npm ci`, builds, starts an owned background app and Whisper service on free bounded loopback ports, waits for both health checks, and opens the exact `AI_NOTE_URL=http://localhost:<actual-port>` it prints. It never attaches to or stops an existing process on ports 3000/8123, and it does not create or overwrite `.env.local`.
-
-If the doctor reports a missing prerequisite, follow its visible OS-specific instruction and rerun the same command. Bootstrap does not silently use `sudo`, install OS packages, log in to a provider, pull an Ollama model, or download a Whisper model. A summarizer is optional for recording and local transcription; choose and verify one later in **Settings → 요약 모델**.
-
-On a clean clone, `npm ci` and the first `uv run` may download project dependencies. The selected Whisper model is downloaded only when the first transcription begins.
-
-In **Settings → 요약 모델**, Claude CLI offers its default, Sonnet, Opus, Haiku, or a custom model; Codex CLI offers its default or a custom model; and Ollama discovers locally installed models with refresh and custom-input fallback. Saving immediately checks the persisted configuration. A successful Claude/Codex check confirms that the CLI binary was detected; authentication and actual generation are confirmed by the first summary.
-
-```bash
-npm run app:status  # ownership-checked status and actual URL
-npm run app:stop    # stop only this repository's owned supervisor
-npm run app:start   # restart the already installed build
-```
-
-If the desktop opener is unavailable or the environment is headless, the servers remain running and bootstrap prints the exact URL to open manually or with an agent browser surface.
-
-### Installing with an AI agent
-
-Give the agent the repository URL and this target contract:
-
-- If you do not name a target, it must not install over the current directory. Inside another Git repository it chooses an `ai-note` sibling of that repository root; elsewhere it chooses a new `ai-note` child.
-- If that default exists, it must not reuse, overwrite, or pull it. It chooses the first free deterministic suffix (`ai-note-2`, `ai-note-3`, …). If you explicitly name a non-empty target or one with another origin, it stops and reports the exact absolute path.
-- Clone and installation may modify only the chosen target. They must not change an ancestor `.git`, `.claude`, `.harness`, global Git configuration, another `package.json`, or a running project.
-- A path collision needs no approval; a safe suffix resolves it. The agent asks before a new privileged OS-package action or provider login.
-- After reading this public contract, it runs the canonical bootstrap command and reports the absolute install path, branch or revision, and printed app URL. This repository cannot guarantee host-agent behavior that happened before its public contract was read.
-
-The same contract is in [AGENTS.md](AGENTS.md); Claude Code can use `/setup`.
-
-Contributor setup, foreground `npm run dev`, quality gates, and isolated browser regression live in [CONTRIBUTING.md](CONTRIBUTING.md). Playwright and Chrome/MCP are not product runtime dependencies.
-
-## Configuration
-
-Copy `.env.example` to `.env.local` and adjust as needed. Common knobs:
-
-| Env | Default | Purpose |
-|---|---|---|
-| `LOCAL_STT_MODEL` | `large-v3` | Whisper model (`base`/`small` for speed) |
-| `LOCAL_STT_LANG` | `ko` | Whisper decode language (`auto` to detect) |
-| `LOCAL_STT_VAD` | `1` | Silence/hallucination filter (VAD); `0` to disable |
-| `LOCAL_STT_HOST` / `LOCAL_STT_PORT` | `127.0.0.1` / `8123` | Whisper loopback address; owned bootstrap pins the host to `127.0.0.1` and selects a bounded child-only port without rewriting `.env.local` |
-| `FFMPEG_PATH` | (from `PATH`) | Explicit ffmpeg binary |
-| `SONIOX_API_KEY` | unset | Optional long-lived server credential for live transcription/translation; keep it only in gitignored `.env.local` |
-
-Manage domain terms and "misheard → correct" pairs in the app's **단어 관리 (Glossary)** tab. They are applied by the LLM **correction** step (not the Whisper transcriber) to fix names and numbers. Stored in `glossary.json` as `{ terms, corrections }` (see `glossary.example.json`; a legacy string array is still read as `terms`).
-
-## Project layout
-
-| Path | Role |
-|------|------|
-| `src/` | Next.js app — recorder UI, API routes, domain contracts |
-| `whisper/` | Local STT service (Python, `127.0.0.1`) |
-| `data/` | Local meetings, artifacts, library registry, and settings (gitignored) |
-| `.ai-note-runtime/` | Owned supervisor state, heartbeat, and logs (gitignored) |
-| `docs/` | PRD · ARCHITECTURE · UI_GUIDE + decision records |
-| `scripts/` | End-user bootstrap/owned runtime, prerequisite and link checks, and isolated Playwright harness |
-| `e2e/` | synthetic Chromium scenarios and command-owned evidence reporter |
-
-Module boundaries & data flow → [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Working with an AI agent? Start at [AGENTS.md](AGENTS.md).
-
-## Roadmap
-
-- Internationalized UI (English + others)
-- Packaged desktop distribution
-- More summarizer backends
-
-## License
+## 라이선스
 
 [MIT](LICENSE) © 2026 Dylan
-
-## Acknowledgements
-
-AI NOTE stands on excellent open-source work:
-
-- [OpenAI Whisper](https://github.com/openai/whisper) — the speech-recognition
-  model behind local transcription.
-- [mlx-whisper](https://github.com/ml-explore/mlx-examples/tree/main/whisper) —
-  fast Whisper inference on Apple Silicon.
-- [faster-whisper](https://github.com/SYSTRAN/faster-whisper) — the CPU fallback
-  for Linux / Windows / Intel Mac.
-- [ffmpeg](https://ffmpeg.org) — audio decoding and conversion.
-- [Next.js](https://nextjs.org) — the app framework.

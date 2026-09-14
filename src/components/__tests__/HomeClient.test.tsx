@@ -17,7 +17,10 @@ vi.mock("@/components/RecorderNavigation", () => ({
 
 describe("HomeQuickStart", () => {
   it("keeps the original recording entry point and all Soniox tools on the recent-document home", () => {
-    render(<HomeQuickStart workspaceId="workspace-a" />);
+    const { container } = render(<HomeQuickStart workspaceId="workspace-a" />);
+
+    expect(container.querySelector("[data-android-home-quick-start]"))
+      .toHaveAttribute("data-android-home-quick-start", "");
 
     expect(screen.getByRole("heading", { name: "새 회의 녹음" })).toBeInTheDocument();
     expect(recorder.render).toHaveBeenCalledWith(expect.objectContaining({
@@ -35,6 +38,10 @@ describe("HomeQuickStart", () => {
       "href",
       "/live?workspace=workspace-a&tool=voice-typing",
     );
+    for (const link of screen.getAllByRole("link", { name: /열기$/ })) {
+      expect(link.closest("[data-android-quick-action]"))
+        .toHaveAttribute("data-android-quick-action", "");
+    }
   });
 
   it("orders recent documents by their last update instead of meeting start time", () => {

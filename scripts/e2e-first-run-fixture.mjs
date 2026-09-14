@@ -11,6 +11,7 @@ import {
   MANUAL_EDITING_FIXTURE_ID,
   MANUAL_EDITING_PROJECTS,
   MANUAL_EDITING_WORKSPACE_ID,
+  prepareFixtureDataRoot,
 } from "./e2e-manual-editing-fixture.mjs";
 import {
   assertRealDirectory,
@@ -200,12 +201,12 @@ export function firstRunMeetingForProject(projectName) {
   return project;
 }
 
-export async function installFirstRunFixture({ env = process.env } = {}) {
+export async function installFirstRunFixture({ env = process.env, tenantAccountId } = {}) {
   const snapshotRoot = resolveE2eSnapshotRoot(env.AI_NOTE_E2E_SNAPSHOT_ROOT);
   await assertRealDirectory(snapshotRoot, "snapshot root");
-  const dataRoot = join(snapshotRoot, "data");
+  let dataRoot;
   try {
-    await assertRealDirectory(dataRoot, "first-run data directory");
+    dataRoot = await prepareFixtureDataRoot(snapshotRoot, tenantAccountId);
   } catch (error) {
     throw new Error("first-run fixture requires the runner-owned data directory", {
       cause: error,

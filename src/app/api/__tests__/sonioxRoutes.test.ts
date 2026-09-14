@@ -25,13 +25,16 @@ afterEach(() => {
 describe("/api/realtime/temporary-key", () => {
   it("runs the local guard before reading configuration", async () => {
     const deniedRequest = request("POST", "http://evil.test");
-    const env = vi.spyOn(process, "env", "get").mockImplementation(() => {
-      throw new Error("configuration must not be read");
-    });
+    const env = vi.spyOn(process, "env", "get").mockReturnValue(new Proxy({}, {
+      get(_target, property) {
+        if (property === "AI_NOTE_DEPLOYMENT_MODE") return undefined;
+        throw new Error("service configuration must not be read");
+      },
+    }) as NodeJS.ProcessEnv);
     try {
       const response = await POST(deniedRequest);
       expect(response.status).toBe(403);
-      expect(env).not.toHaveBeenCalled();
+      expect(env).toHaveBeenCalled();
     } finally {
       env.mockRestore();
     }

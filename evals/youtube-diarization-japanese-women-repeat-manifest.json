@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "description": "일본어 여성 2인 대담의 실시간·비동기 반복 안정성을 확인하는 세트",
+  "silenceMs": 2000,
+  "sources": [
+    {
+      "id": "cycle-1-japanese-two-women",
+      "url": "https://www.youtube.com/watch?v=m7-a__Df2zE",
+      "title": "玄理×福間美由紀 変わりつつある映画業界の女性働き方と女性像",
+      "file": "01-japanese-two-women.m4a",
+      "language": "ja",
+      "start": "00:55",
+      "end": "03:55",
+      "expectedMinSpeakers": 2,
+      "expectedMaxSpeakers": 2,
+      "expectedMinSupportedSpeakers": 2,
+      "expectedMaxSupportedSpeakers": 2
+    },
+    {
+      "id": "cycle-2-japanese-two-women",
+      "url": "https://www.youtube.com/watch?v=m7-a__Df2zE",
+      "title": "玄理×福間美由紀 変わりつつある映画業界の女性働き方と女性像",
+      "file": "01-japanese-two-women.m4a",
+      "language": "ja",
+      "start": "00:55",
+      "end": "03:55",
+      "expectedMinSpeakers": 2,
+      "expectedMaxSpeakers": 2,
+      "expectedMinSupportedSpeakers": 2,
+      "expectedMaxSupportedSpeakers": 2
+    },
+    {
+      "id": "cycle-3-japanese-two-women",
+      "url": "https://www.youtube.com/watch?v=m7-a__Df2zE",
+      "title": "玄理×福間美由紀 変わりつつある映画業界の女性働き方と女性像",
+      "file": "01-japanese-two-women.m4a",
+      "language": "ja",
+      "start": "00:55",
+      "end": "03:55",
+      "expectedMinSpeakers": 2,
+      "expectedMaxSpeakers": 2,
+      "expectedMinSupportedSpeakers": 2,
+      "expectedMaxSupportedSpeakers": 2
+    }
+  ]
+}

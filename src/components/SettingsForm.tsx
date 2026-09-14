@@ -15,8 +15,8 @@ import { LLM_PROVIDERS, type LlmProvider } from "@/services/llm/types";
 // persisted snapshot; Ollama discovery is a separate read-only draft operation.
 
 const PROVIDERS: { value: LlmProvider; label: string; hint: string }[] = [
-  { value: "claude-cli", label: "Claude CLI", hint: "구독 CLI 사용 · 권장" },
-  { value: "codex-cli", label: "외부 모델", hint: "제공된 API 키 사용 · CLI 폴백 지원" },
+  { value: "openrouter", label: "OpenRouter", hint: "작업별 저비용 모델 자동 선택 · 권장" },
+  { value: "claude-cli", label: "Claude CLI", hint: "로컬 개발용 구독 CLI" },
   { value: "ollama", label: "Ollama", hint: "로컬에 설치된 모델 사용" },
 ];
 
@@ -112,7 +112,9 @@ function modelSelection(
     if (!model) return "";
     return CLAUDE_MODELS.has(model) ? model : CUSTOM_MODEL;
   }
-  if (provider === "codex-cli") return model ? CUSTOM_MODEL : "";
+  if (provider === "openrouter" || provider === "codex-cli") {
+    return model ? CUSTOM_MODEL : "";
+  }
   return model && ollamaModels.includes(model) ? model : CUSTOM_MODEL;
 }
 
@@ -131,6 +133,7 @@ function providerDraft(
 
 function providerDrafts(snapshot: SettingsSnapshot | null): ProviderDrafts {
   const drafts: ProviderDrafts = {
+    openrouter: providerDraft("openrouter"),
     "claude-cli": providerDraft("claude-cli"),
     "codex-cli": providerDraft("codex-cli"),
     ollama: providerDraft("ollama"),
@@ -196,14 +199,16 @@ function failedHealth(snapshot: SettingsSnapshot): LlmHealthState {
     ok: false,
     detail: snapshot.provider === "ollama"
       ? "연결 테스트 요청에 실패했습니다. Ollama 설정과 실행 상태를 확인한 뒤 다시 검사하세요."
-      : `연결 테스트 요청에 실패했습니다. ${provider} 설치와 PATH를 확인한 뒤 다시 검사하세요.`,
+      : snapshot.provider === "openrouter"
+        ? "OpenRouter 연결에 실패했습니다. 서버의 API 키와 네트워크를 확인하세요."
+        : `연결 테스트 요청에 실패했습니다. ${provider} 설치와 PATH를 확인한 뒤 다시 검사하세요.`,
   };
 }
 
 export function SettingsForm({ embedded = false }: { embedded?: boolean } = {}) {
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [savedSnapshot, setSavedSnapshot] = useState<SettingsSnapshot | null>(null);
-  const [provider, setProvider] = useState<LlmProvider>("claude-cli");
+  const [provider, setProvider] = useState<LlmProvider>("openrouter");
   const [drafts, setDrafts] = useState<ProviderDrafts>(() => providerDrafts(null));
   const [ollamaModels, setOllamaModels] = useState<string[]>([]);
   const [discoveryState, setDiscoveryState] = useState<DiscoveryState>("idle");
@@ -254,7 +259,7 @@ export function SettingsForm({ embedded = false }: { embedded?: boolean } = {}) 
 
   const applyLoadedSnapshot = useCallback((snapshot: SettingsSnapshot | null) => {
     setSavedSnapshot(snapshot);
-    setProvider(snapshot?.provider ?? "claude-cli");
+    setProvider(snapshot?.provider ?? "openrouter");
     setDrafts(providerDrafts(snapshot));
     setOllamaModels([]);
     setDiscoveryState("idle");
@@ -576,9 +581,9 @@ export function SettingsForm({ embedded = false }: { embedded?: boolean } = {}) 
                     <option value={CUSTOM_MODEL}>직접 입력</option>
                   </>
                 )}
-                {provider === "codex-cli" && (
+                {(provider === "openrouter" || provider === "codex-cli") && (
                   <>
-                    <option value="">기본 모델 (권장)</option>
+                    <option value="">작업별 자동 선택 (권장)</option>
                     <option value={CUSTOM_MODEL}>직접 입력</option>
                   </>
                 )}
@@ -727,7 +732,7 @@ export function SettingsForm({ embedded = false }: { embedded?: boolean } = {}) 
           )}
 
           <p className="border-t border-line pt-4 text-[13px] leading-relaxed text-inkSoft">
-            API 키는 저장되지 않습니다. 구독 CLI 또는 로컬 Ollama만 사용하며, CLI 인증과 실제 요약 가능 여부는 첫 요약에서 확인합니다.
+            API 키는 앱 데이터에 저장되지 않습니다. OpenRouter 키는 서버 환경 변수로만 읽으며, 개인정보 보호 라우팅과 작업별 모델 폴백을 적용합니다.
           </p>
         </form>
       )}

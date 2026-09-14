@@ -66,10 +66,10 @@ describe("useHealth — in-flight dedup", () => {
     expect(llmCalls).toBe(1);
   });
 
-  it("does not notify subscribers when a poll returns an identical snapshot", async () => {
+  it("does not notify subscribers when Soniox polling returns an identical snapshot", async () => {
     vi.stubGlobal("fetch", vi.fn((url: string) => {
-      if (url === "/api/whisper/health") {
-        return Promise.resolve(new Response(JSON.stringify({ connected: true }), {
+      if (url === "/api/realtime/temporary-key") {
+        return Promise.resolve(new Response(JSON.stringify({ configured: true }), {
           status: 200,
           headers: { "content-type": "application/json" },
         }));
@@ -86,13 +86,13 @@ describe("useHealth — in-flight dedup", () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
-    expect(result.current.whisper).toEqual({ connected: true });
+    expect(result.current.soniox).toEqual({ kind: "configured" });
     const settled = renders;
 
-    // Three more identical whisper polls: subscribers must not re-render, so
+    // Another identical Soniox poll: subscribers must not re-render, so
     // sibling intervals (e.g. the 30s home-list refresh) are never starved.
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(15_000);
+      await vi.advanceTimersByTimeAsync(30_000);
     });
     expect(renders).toBe(settled);
   });

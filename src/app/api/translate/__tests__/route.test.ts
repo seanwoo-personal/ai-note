@@ -27,8 +27,14 @@ describe("POST /api/translate", () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ translation: "こんにちは。よろしくお願いします。" });
-    expect(llm.run).toHaveBeenCalledWith(expect.stringContaining("안녕하세요. 잘 부탁드립니다."));
-    expect(llm.run).toHaveBeenCalledWith(expect.stringContaining("Japanese"));
+    expect(llm.run).toHaveBeenCalledWith(
+      expect.stringContaining("안녕하세요. 잘 부탁드립니다."),
+      { task: "translation" },
+    );
+    expect(llm.run).toHaveBeenCalledWith(
+      expect.stringContaining("Japanese"),
+      { task: "translation" },
+    );
   });
 
   it("instructs the model to preserve words that are already in the target language", async () => {
@@ -38,7 +44,10 @@ describe("POST /api/translate", () => {
       body: JSON.stringify({ text: "회의를 시작합니다 okay", targetLanguage: "en" }),
     }));
 
-    expect(llm.run).toHaveBeenCalledWith(expect.stringMatching(/already written in the target language/i));
+    expect(llm.run).toHaveBeenCalledWith(
+      expect.stringMatching(/already written in the target language/i),
+      { task: "translation" },
+    );
   });
 
   it("rejects unsupported targets and oversized utterances without invoking a model", async () => {

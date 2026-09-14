@@ -13,6 +13,42 @@ describe("UI translations", () => {
     expect(translateUi("ja", "헤이홈 AI 기록도구")).toBe("Hejhome AI記録ツール");
   });
 
+  it("localizes the complete customer login screen in English and Japanese", () => {
+    const loginSources = [
+      "회의의 시작부터 기록까지, 원래 쓰던 AI 노트에서 이어가세요.",
+      "로그인하면 새 대시보드가 아니라 기존 Vision AI 미팅 에이전트의 홈 화면이 바로 열립니다.",
+      "회의 녹음과 실시간 전사를 한 화면에서 사용해요.",
+      "글로벌 미팅 번역과 음성 입력 기능을 그대로 제공해요.",
+      "승인과 결제가 확인된 고객만 업무 공간에 들어갈 수 있어요.",
+      "고객 데이터 보호를 위해 계정 상태를 로그인할 때마다 확인합니다.",
+      "Vision AI 미팅 에이전트 로그인",
+      "고객 로그인",
+      "AI 노트를 시작하세요",
+      "승인과 결제가 확인된 고객 계정으로 로그인해 주세요.",
+      "이메일",
+      "비밀번호",
+      "AI 노트로 들어가기",
+      "확인하는 중…",
+      "비밀번호를 잊으셨나요?",
+      "아직 계정이 없으신가요?",
+      "회원가입 신청",
+      "운영자 화면으로 이동",
+      "사용방법 보기",
+      "요청을 처리하지 못했습니다. 잠시 뒤 다시 시도해 주세요.",
+      "로그인 서버에 연결하지 못했습니다. 네트워크를 확인해 주세요.",
+    ];
+
+    expect(translateUi("en", "AI 노트를 시작하세요")).toBe("Start using AI Note");
+    expect(translateUi("ja", "AI 노트를 시작하세요")).toBe("AIノートを始めましょう");
+    expect(translateUi("en", "이메일")).toBe("Email");
+    expect(translateUi("ja", "이메일")).toBe("メールアドレス");
+    for (const source of loginSources) {
+      for (const locale of ["en", "zh", "ja"] as const) {
+        expect(translateUi(locale, source), `${locale}: ${source}`).not.toMatch(/[가-힣]/u);
+      }
+    }
+  });
+
   it("interpolates named values after translation and preserves unknown copy", () => {
     expect(translateUi("en", "{name} 이름 수정", { name: "Research" })).toBe("Rename Research");
     expect(translateUi("zh", "회의 {count}개", { count: 3 })).toBe("3 个会议");
@@ -116,12 +152,20 @@ describe("UI translations", () => {
   it("localizes every global-meeting dynamic control and discard string in non-Korean locales", () => {
     const dynamicSources = [
       "내 언어",
+      "입력 소스",
+      "마이크",
+      "브라우저 탭 오디오",
+      "유튜브·Google Meet·브라우저 Zoom은 탭 오디오를 직접 공유하면 화자 구분이 더 안정적입니다.",
       "입력",
       "번역",
       "대화 기록",
       "참석자 등록 없이 세션 화자를 자동 구분하고, 발화 언어를 발화마다 자동으로 인식해 선택한 상대방 언어로 계속 실시간 양방향 번역합니다.",
       "‘내 언어’는 대화록에서 내 쪽으로 표시하고 번역할 선호 언어입니다. 실제 말하는 언어는 발화마다 자동으로 인식되어 한 회의에서 언어를 섞어 말해도 그대로 처리됩니다.",
       "최신 내용 보기",
+      "새 영상·음원",
+      "서로 다른 영상이나 음원으로 바꿀 때 누르세요. 기존 대화는 유지하고 새 화자를 다시 구분합니다.",
+      "현재 발화를 확정하는 중…",
+      "새 영상의 화자 인식을 준비하는 중…",
       "회의록 저장",
       "폐기하기",
       "이 회의를 폐기할까요?",
@@ -130,6 +174,26 @@ describe("UI translations", () => {
       "폐기 확정",
     ];
     for (const source of dynamicSources) {
+      for (const locale of ["en", "zh", "ja"] as const) {
+        expect(translateUi(locale, source), `${locale}: ${source}`).not.toMatch(/[가-힣]/);
+      }
+    }
+  });
+
+  it("localizes every customer recorder and system-audio control in non-Korean locales", () => {
+    const recorderSources = [
+      "AI 회의록을 준비하고 있습니다",
+      "AI 회의록 기능을 준비하고 있습니다.",
+      "회의 녹음 계속",
+      "녹음할 소리",
+      "마이크만",
+      "마이크와 회의 소리",
+      "Zoom·Google Meet",
+      "녹음을 시작하면 공유 창이 열립니다. 데스크톱 Chrome에서 회의 탭을 고르고 오디오 공유를 켜세요. Zoom 앱의 소리는 운영체제와 브라우저 지원 여부에 따라 제한될 수 있습니다.",
+      "회의 녹음 시작",
+      "녹음이 끝나면 전체 스크립트 작성을 시작합니다. 마이크 권한과 인터넷 연결이 필요합니다.",
+    ];
+    for (const source of recorderSources) {
       for (const locale of ["en", "zh", "ja"] as const) {
         expect(translateUi(locale, source), `${locale}: ${source}`).not.toMatch(/[가-힣]/);
       }

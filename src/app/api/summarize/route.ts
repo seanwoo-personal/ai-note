@@ -10,6 +10,7 @@ import { meetingFenceResponse } from "@/lib/meetingFence";
 import { jsonNoStore, publicErrorResponse } from "@/lib/publicApi";
 import { acceptSummarize } from "@/lib/summarize";
 import { resolveLatestSummarizable } from "@/lib/summarizeWorker";
+import { recordRequestUsage } from "@/lib/accountUsage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -47,6 +48,7 @@ export async function POST(request: Request) {
   if (fenced) return fenced;
   const accepted = await acceptSummarize(id, { force: parsed.data.resummarize === true });
   if (accepted.accepted) {
+    await recordRequestUsage(request, "summary");
     return jsonNoStore({ ok: true, durability: accepted.durability }, 202);
   }
   if (accepted.reason === "not_found") return publicErrorResponse("meeting_not_found", 404);

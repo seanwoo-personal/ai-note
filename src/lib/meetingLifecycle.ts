@@ -12,6 +12,7 @@ export type MeetingOperation =
   | "transcript_regenerate"
   | "summary_regenerate"
   | "transcribe_dispatch"
+  | "transcribe_publish"
   | "move"
   | "delete"
   | "cleanup";
@@ -69,6 +70,13 @@ function operationGroup(operation: MeetingOperation): string {
 function compatible(a: MeetingOperation, b: MeetingOperation): boolean {
   const groupA = operationGroup(a);
   const groupB = operationGroup(b);
+  // A finalized audio receipt is immutable. Cloud transcript publication writes
+  // different artifacts and status updates are serialized separately, so an
+  // idempotent finalize probe remains available while publication finishes.
+  if (
+    (groupA === "finalize" && groupB === "transcribe_publish")
+    || (groupB === "finalize" && groupA === "transcribe_publish")
+  ) return true;
   if (["finalize", "delete", "cleanup"].includes(groupA)) return false;
   if (["finalize", "delete", "cleanup"].includes(groupB)) return false;
   if (groupA === groupB) return false;

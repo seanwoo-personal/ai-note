@@ -9,11 +9,12 @@
 // never routed through translateUi() and every surface that renders it opts out
 // of the i18n MutationObserver with data-i18n-user-content.
 //
-// The wordmark is TYPOGRAPHY ONLY. No official Vision or GLOBAL WiFi logo asset
-// is embedded — first-party evidence grants no logo-use rights and the customer
-// reserves all IP (see docs/vision-rebrand-identity.md §4).
+// The header renders the customer's own logo from `public/brand/`, unmodified,
+// at the repository owner's direction. The rights analysis is unchanged — the
+// customer reserves all IP and the repo holds no written licence — so the mark
+// is never recolored, stretched, or traced (docs/vision-rebrand-identity.md §4).
 
 export const BRAND_NAME = "Vision";
 export const BRAND_PRODUCT_NAME = "Vision AI 미팅 에이전트";
-export const BRAND_TAGLINE = "AI 미팅 에이전트(AI Meeting Agent)";
+export const BRAND_TAGLINE = "AI Meeting Agent";
 export const BRAND_HOME_LABEL = `${BRAND_PRODUCT_NAME} 홈`;

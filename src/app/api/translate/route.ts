@@ -6,6 +6,7 @@ import {
   requestBodyErrorResponse,
 } from "@/lib/localRequestGuard";
 import { jsonNoStore } from "@/lib/publicApi";
+import { recordRequestUsage } from "@/lib/accountUsage";
 import { getConfiguredAdapter } from "@/services/llm";
 
 export const runtime = "nodejs";
@@ -61,8 +62,9 @@ export async function POST(request: Request) {
   ].join("\n");
 
   try {
-    const translation = cleanTranslation(await adapter.run(prompt));
+    const translation = cleanTranslation(await adapter.run(prompt, { task: "translation" }));
     if (!translation) return jsonNoStore({ error: { code: "translation_failed" } }, 502);
+    await recordRequestUsage(request, "translation");
     return jsonNoStore({ translation });
   } catch {
     return jsonNoStore({ error: { code: "translation_failed" } }, 502);

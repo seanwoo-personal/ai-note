@@ -151,12 +151,31 @@ export function manualEditingMeetingForProject(projectName) {
   return project;
 }
 
-export async function installManualEditingFixture({ env = process.env } = {}) {
+export async function prepareFixtureDataRoot(snapshotRoot, tenantAccountId) {
+  const sharedDataRoot = join(snapshotRoot, "data");
+  await assertRealDirectory(sharedDataRoot, "manual editing data directory");
+  if (tenantAccountId === undefined) return sharedDataRoot;
+  if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(tenantAccountId)) {
+    throw new Error("manual editing fixture tenant account id is invalid");
+  }
+  const tenantsRoot = join(sharedDataRoot, "tenants");
+  await mkdir(tenantsRoot, { recursive: true, mode: 0o700 });
+  await assertRealDirectory(tenantsRoot, "manual editing tenant directory");
+  const tenantRoot = join(
+    tenantsRoot,
+    createHash("sha256").update(tenantAccountId).digest("hex"),
+  );
+  await mkdir(tenantRoot, { recursive: true, mode: 0o700 });
+  await assertRealDirectory(tenantRoot, "manual editing account tenant directory");
+  return tenantRoot;
+}
+
+export async function installManualEditingFixture({ env = process.env, tenantAccountId } = {}) {
   const snapshotRoot = resolveE2eSnapshotRoot(env.AI_NOTE_E2E_SNAPSHOT_ROOT);
   await assertRealDirectory(snapshotRoot, "snapshot root");
-  const dataRoot = join(snapshotRoot, "data");
+  let dataRoot;
   try {
-    await assertRealDirectory(dataRoot, "manual editing data directory");
+    dataRoot = await prepareFixtureDataRoot(snapshotRoot, tenantAccountId);
   } catch (error) {
     throw new Error("manual editing fixture requires the runner-owned data directory", {
       cause: error,

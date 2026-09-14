@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
+  isAudioTrackStartFailure,
+  requestMicrophoneStream,
+} from "@/lib/microphoneCapture";
+import {
   connectSonioxRealtime,
   emptySonioxTranscript,
   type SonioxContext,
@@ -30,6 +34,12 @@ export interface SonioxCaptureStartOptions {
 
 const LANGUAGE_HINTS = ["ko", "en", "ja", "zh"];
 
+const PROCESSED_MICROPHONE_CONSTRAINTS: MediaTrackConstraints = {
+  echoCancellation: true,
+  noiseSuppression: true,
+  autoGainControl: true,
+};
+
 async function requestCaptureStream(inputSource: SonioxInputSource): Promise<MediaStream> {
   if (inputSource === "browser-tab") {
     const stream = await navigator.mediaDevices.getDisplayMedia({
@@ -42,9 +52,7 @@ async function requestCaptureStream(inputSource: SonioxInputSource): Promise<Med
     }
     return stream;
   }
-  return navigator.mediaDevices.getUserMedia({
-    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-  });
+  return requestMicrophoneStream(PROCESSED_MICROPHONE_CONSTRAINTS);
 }
 
 export function useSonioxLiveCapture() {
@@ -216,6 +224,8 @@ export function useSonioxLiveCapture() {
       if (!mountedRef.current || generation !== generationRef.current) return;
       const message = caught instanceof DOMException && caught.name === "NotAllowedError"
         ? "마이크 또는 화면 공유 권한이 필요합니다. 권한을 허용한 뒤 미팅 시작을 다시 눌러 주세요."
+        : isAudioTrackStartFailure(caught)
+          ? "마이크를 시작하지 못했습니다. 통화·녹음 앱을 종료하고 마이크 권한을 확인한 뒤 다시 시도해 주세요."
         : caught instanceof Error && [
             "soniox_temporary_key_unavailable",
             "soniox_temporary_key_invalid",
@@ -223,7 +233,7 @@ export function useSonioxLiveCapture() {
             "soniox_websocket_closed",
             "soniox_websocket_timeout",
           ].includes(caught.message)
-          ? "실시간 번역을 시작하지 못했습니다. 네트워크 연결과 Soniox 설정을 확인한 뒤 미팅 시작을 다시 눌러 주세요."
+          ? "실시간 번역을 시작하지 못했습니다. 네트워크 연결을 확인한 뒤 미팅 시작을 다시 눌러 주세요. 계속되면 운영자에게 문의해 주세요."
           : caught instanceof Error
             ? caught.message
             : "실시간 세션을 시작할 수 없습니다. 잠시 후 미팅 시작을 다시 눌러 주세요.";

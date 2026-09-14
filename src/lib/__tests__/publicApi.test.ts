@@ -64,7 +64,7 @@ describe("public meeting DTO allowlist", () => {
       updatedAt: "2026-07-10T01:00:00.000Z",
       error: {
         code: "summary_failed",
-        message: "요약을 완료하지 못했습니다. 설정을 확인한 뒤 다시 시도해 주세요",
+        message: "요약을 완료하지 못했습니다. 잠시 후 다시 시도하거나 운영자에게 문의해 주세요",
         action: "retry_summary",
       },
       contentOperation: null,
@@ -136,9 +136,22 @@ describe("public meeting DTO allowlist", () => {
     });
     expect(dto.error).toEqual({
       code: "transcript_generation_failed",
-      message: "전체 스크립트를 다시 만들지 못했습니다. 설정을 확인한 뒤 다시 시도해 주세요",
+      message: "전체 스크립트를 다시 만들지 못했습니다. 잠시 후 다시 시도하거나 운영자에게 문의해 주세요",
       action: "retry_transcript_generation",
     });
+  });
+
+  it.each([
+    "summary_tool_missing",
+    "summary_auth_required",
+    "summary_provider_failed",
+    "summary_failed",
+    "transcript_generation_failed",
+    "local_service_unavailable",
+  ] as const)("keeps customer error %s free of implementation details", async (code) => {
+    const response = publicErrorResponse(code, 503);
+    const serialized = JSON.stringify(await response.json());
+    expect(serialized).not.toMatch(/도구|로그인|설정|로컬 서비스|OpenRouter|Soniox|Ollama|API 키/i);
   });
 });
 

@@ -1,0 +1,17 @@
+.git
+.github
+.next
+.ai-note-runtime
+node_modules
+data
+artifacts
+test-results
+playwright-report
+.env*
+!.env.example
+*.webm
+*.mp4
+*.ogg
+*.wav
+*.m4a
+whisper

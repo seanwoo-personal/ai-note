@@ -399,7 +399,7 @@ describe("ChatClient", () => {
     expect(composer()).toHaveValue("실패할 질문");
   });
 
-  it("shows personalization only when requested and provides actionable model and search-data recovery", async () => {
+  it("shows personalization only when requested and provides customer-safe AI and search-data recovery", async () => {
     const first = renderChat();
     stubFetch(() => response(chatPayload()));
     await ask("일반 질문");
@@ -418,8 +418,8 @@ describe("ChatClient", () => {
     const modelError = renderChat();
     fireEvent.change(composer(), { target: { value: "보존할 모델 질문" } });
     fireEvent.click(screen.getByRole("button", { name: "질문하기" }));
-    expect(await screen.findByText(/요약 모델 설정이 필요합니다/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "요약 모델 설정" })).toHaveAttribute("href", "/settings");
+    expect(await screen.findByText(/질문 기능을 준비하고 있습니다/)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /모델|설정/ })).not.toBeInTheDocument();
     expect(composer()).toHaveValue("보존할 모델 질문");
     modelError.unmount();
 
@@ -443,7 +443,7 @@ describe("ChatClient", () => {
 
     expect(await screen.findByText(/더 깊게 확인하지 못했습니다/)).toBeInTheDocument();
     expect(screen.getByText(/9월 출시/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "요약 모델 확인" })).toHaveAttribute("href", "/settings");
+    expect(screen.queryByRole("link", { name: /모델|설정/ })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "더 깊게 찾기" })).toBeEnabled();
   });
 

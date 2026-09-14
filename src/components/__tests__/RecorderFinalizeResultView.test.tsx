@@ -83,7 +83,8 @@ describe("RecorderFinalizeResultView", () => {
     />);
     expect(screen.getByText(/안정화하는 중/)).toBeInTheDocument();
     expect(screen.getByText(/브라우저 재생 파일/)).toBeInTheDocument();
-    expect(screen.getByText(/로컬 전사 요청/)).toBeInTheDocument();
+    expect(screen.getByText(/전사 요청을 완료하지 못했습니다/)).toBeInTheDocument();
+    expect(screen.queryByText(/Soniox/)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "위치 저장 다시 확인" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "저장 상태 새로고침" }));
     expect(onRefresh).toHaveBeenCalledTimes(1);

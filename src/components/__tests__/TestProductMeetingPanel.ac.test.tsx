@@ -116,12 +116,12 @@ describe("TestProductMeetingPanel — AC1/AC2 truthful language labels", () => {
     expect(screen.getAllByText(/발화마다 자동으로 인식/).length).toBeGreaterThan(0);
   });
 
-  it("keeps 내 언어 wired to Soniox two-way languageA and 상대방 언어 to languageB", () => {
+  it("keeps 내 언어 as the language everything is normalized into, distinct from 상대방 언어", () => {
     const capture = makeCapture();
     render(<TestProductMeetingPanel capture={capture} speech={makeSpeech()} location={LOCATION} />);
     const mine = screen.getByRole("combobox", { name: "내 언어" }) as HTMLSelectElement;
     const other = screen.getByRole("combobox", { name: "상대방 언어" }) as HTMLSelectElement;
-    expect(Array.from(mine.options).map((option) => option.value)).toEqual(["ko", "en", "zh", "ja"]);
+    expect(Array.from(mine.options).map((option) => option.value)).toEqual(["ja", "en", "ko", "zh", "any"]);
     fireEvent.change(mine, { target: { value: "en" } });
     expect(other.value).not.toBe("en");
     fireEvent.click(screen.getByRole("button", { name: "미팅 시작" }));
@@ -129,10 +129,25 @@ describe("TestProductMeetingPanel — AC1/AC2 truthful language labels", () => {
       inputSource: "microphone",
       translation: { mode: "two_way", languageA: "en", languageB: other.value },
     });
+    expect(other.value).not.toBe("en");
   });
 });
 
 describe("TestProductMeetingPanel — AC3/AC4 columns and visual separation", () => {
+  it("owns compact and unfolded-fold panes in one adaptive workspace", () => {
+    render(<TestProductMeetingPanel capture={makeCapture()} speech={makeSpeech()} location={LOCATION} />);
+
+    const workspace = screen.getByTestId("global-meeting-adaptive-layout");
+    const controls = workspace.querySelector("[data-android-pane='controls']");
+    const transcript = workspace.querySelector("[data-android-pane='transcript']");
+
+    expect(workspace.getAttribute("data-android-adaptive-workspace")).toBe("");
+    expect(controls).toBeTruthy();
+    expect(transcript).toBeTruthy();
+    expect(controls!.compareDocumentPosition(transcript!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(controls?.querySelector("[data-android-primary-action]" )).toBeTruthy();
+  });
+
   it("uses exactly 입력 and 번역 as the conversation column headers", () => {
     render(<TestProductMeetingPanel capture={makeCapture()} speech={makeSpeech()} location={LOCATION} />);
     const headers = screen.getAllByRole("columnheader").map((cell) => cell.textContent);

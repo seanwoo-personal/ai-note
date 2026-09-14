@@ -3,7 +3,7 @@
 // knows what happens (record → auto-transcribe → auto-summarize).
 const STEPS = [
   { n: 1, text: "위 버튼으로 회의를 녹음합니다. 종료하면 자동으로 전사됩니다." },
-  { n: 2, text: "요약 모델이 설정되어 있으면 회의록 요약이 자동으로 생성됩니다." },
+  { n: 2, text: "전사가 끝나면 AI 회의록이 자동으로 생성됩니다." },
   { n: 3, text: "완성된 회의록 요약을 상세 화면에서 확인합니다." },
 ];
 

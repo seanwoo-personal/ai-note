@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "description": "실제 Zoom 일본어 남성 3인 원격 대담에 정확한 출연자 문맥을 제공하는 비교 세트",
+  "silenceMs": 2000,
+  "sources": [
+    {
+      "id": "japanese-remote-three-speakers",
+      "url": "https://www.youtube.com/watch?v=z57Zvpitwg4",
+      "title": "カルカル リモート配信～プロデューサーZOOMトーク",
+      "file": "01-japanese-remote-three-speakers.m4a",
+      "language": "ja",
+      "start": "05:00",
+      "end": "09:00",
+      "expectedMinSpeakers": 3,
+      "expectedMaxSpeakers": 3,
+      "expectedMinSupportedSpeakers": 3,
+      "expectedMaxSupportedSpeakers": 3,
+      "context": {
+        "general": [
+          {
+            "key": "setting",
+            "value": "Japanese Zoom producer talk"
+          },
+          {
+            "key": "speakers",
+            "value": "3 male speakers: Shinsuke Yokoyama, Wataru Miyao, and Terry Ueda"
+          }
+        ]
+      }
+    }
+  ]
+}

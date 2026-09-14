@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// AI NOTE 설치 닥터 — 전제 도구(Node·uv·ffmpeg·요약기)를 점검하고 조치를 안내한다.
+// AI NOTE 설치 닥터 — 전제 도구(Node·ffmpeg)와 클라우드 키 설정을 점검한다.
 // 읽기 전용: 파일을 쓰지 않고(있으면 `cp` 명령만 안내), 바이너리를 "실행"하지 않고
 // "PATH 존재"만 확인한다(claude/codex 실행 시 인증 프롬프트 hang 회피). 외부 의존 0
 // (node: 빌트인 + 글로벌 fetch만) — 그래서 `npm install` 전에도 돈다.
@@ -18,7 +18,6 @@ const FFMPEG_NOT_FOUND =
   "ffmpeg not found. Set FFMPEG_PATH or install it — " +
   "macOS: `brew install ffmpeg` · Debian/Ubuntu: `apt install ffmpeg` · " +
   "Windows: `choco install ffmpeg` (or download from ffmpeg.org).";
-const UV_INSTALL = "install uv — see https://docs.astral.sh/uv/ (macOS: `brew install uv`)";
 const OLLAMA_BASE_URL = "http://127.0.0.1:11434";
 
 // ── 순수 함수 (주입식 의존 → 테스트 가능) ────────────────────────────
@@ -68,15 +67,14 @@ export function parseOllamaModels(data) {
 export function doctorCompletionMessage({ blocked }) {
   if (blocked) {
     return (
-      "✗ 필수 전제(Node/uv/ffmpeg) 미충족. 위 안내대로 설치한 뒤 " +
-      "`node scripts/bootstrap.mjs --launch`를 다시 실행하세요.\n" +
+      "✗ 필수 전제(Node/ffmpeg) 미충족. 위 안내대로 설치한 뒤 " +
+      "`npm run dev`를 다시 실행하세요.\n" +
       "  에이전트: AGENTS.md `## 설치` 참조 · Claude Code: `/setup`"
     );
   }
   return (
-    "✓ 필수 전제 충족. 설치·빌드·background 기동을 계속하려면 " +
-    "`node scripts/bootstrap.mjs --launch`를 실행하세요.\n" +
-    "  기여자용 foreground 개발 명령: `npm run dev`"
+    "✓ 필수 전제 충족. 로컬 실행은 `npm run dev`, 배포는 " +
+    "`docker compose up -d --build`를 사용하세요."
   );
 }
 
@@ -116,43 +114,16 @@ async function main() {
   line(node.ok ? OK : FAIL, "Node", node.detail);
   if (!node.ok) blocked = true;
 
-  // 2. uv (하드 블로커)
-  const uv = realWhich("uv");
-  line(uv ? OK : FAIL, "uv", uv || UV_INSTALL);
-  if (!uv) blocked = true;
-
-  // 3. ffmpeg (하드 블로커)
+  // 2. ffmpeg (하드 블로커)
   const ffmpeg = resolveFfmpeg({ env: process.env, existsSync, which: realWhich });
   line(ffmpeg.ok ? OK : FAIL, "ffmpeg", ffmpeg.ok ? ffmpeg.path : ffmpeg.detail);
   if (!ffmpeg.ok) blocked = true;
 
-  // 4. 요약기 (정보성 — 최소 하나 필요, 하드 블로커 아님)
-  const claude = realWhich("claude");
-  const codex = realWhich("codex");
-  const ollama = await probeOllama();
-  const summarizers = [];
-  if (claude) summarizers.push("claude");
-  if (codex) summarizers.push("codex");
-  if (ollama.running) summarizers.push("ollama");
-  if (summarizers.length > 0) {
-    const extra = ollama.running
-      ? ` (ollama models: ${ollama.models.length ? ollama.models.join(", ") : "none pulled"})`
-      : "";
-    line(OK, "요약기", `${summarizers.join(", ")} 감지됨${extra}`);
-  } else {
-    line(
-      WARN,
-      "요약기",
-      "none — 하나 준비 필요: `claude` 로그인 · `codex` · `ollama serve` + `ollama pull <model>`. " +
-        "앱 기동 후 Settings에서 선택.",
-    );
-  }
-
-  // 5. .env.local (선택)
+  // 3. .env.local (클라우드 서비스 키)
   if (existsSync(".env.local")) {
-    line(OK, ".env.local", "존재");
+    line(OK, ".env.local", "존재 — SONIOX_API_KEY와 OPENROUTER_API_KEY 값을 확인하세요");
   } else {
-    line(WARN, ".env.local", "없음(기본값으로 동작) — 조정하려면 `cp .env.example .env.local`");
+    line(WARN, ".env.local", "없음 — `cp .env.example .env.local` 후 Soniox/OpenRouter 키를 입력하세요");
   }
 
   console.log("");

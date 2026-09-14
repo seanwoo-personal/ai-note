@@ -104,6 +104,62 @@ function translateTexts(): string[] {
 }
 
 describe("TestProductMeetingPanel — push-to-talk finalization recovery", () => {
+  it("broadcasts the utterance without the speaker's hesitation sounds", async () => {
+    vi.useFakeTimers();
+    const speak = vi.fn(async () => {});
+    const speechAt = (phase: Speech["phase"] = "idle") => makeSpeech({ speak, phase });
+    const listening = (transcript: SonioxTranscript) => (
+      <TestProductMeetingPanel capture={makeCapture({ phase: "listening", transcript })} speech={speechAt()} location={LOCATION} />
+    );
+    const { rerender } = render(
+      <TestProductMeetingPanel capture={makeCapture({ phase: "listening" })} speech={speechAt()} location={LOCATION} />,
+    );
+
+    const openFin = { text: "<fin>", is_final: true, speaker: "1", translation_status: "original" as const };
+    const final = { text: "음 그래서 내일 봅시다", is_final: true, speaker: "1", language: "ko", translation_status: "original" as const };
+    act(() => { fireEvent.keyDown(window, { code: "ShiftLeft" }); fireEvent.keyUp(window, { code: "ShiftLeft" }); });
+    rerender(listening(transcriptFrom([{ tokens: [openFin] }])));
+    rerender(listening(transcriptFrom([{ tokens: [openFin, final, { ...openFin }] }])));
+    act(() => { fireEvent.keyDown(window, { code: "ShiftLeft" }); fireEvent.keyUp(window, { code: "ShiftLeft" }); });
+    await flush(10);
+
+    // "음" is thinking noise, not speech. Translating it and speaking it to the
+    // other side is exactly the artifact this strips.
+    expect(translateTexts()).toContain("그래서 내일 봅시다");
+    expect(translateTexts()).not.toContain("음 그래서 내일 봅시다");
+  });
+
+  it("only unlocks audio playback and never asks for a provider stream in advance", async () => {
+    vi.useFakeTimers();
+    const prepare = vi.fn(async () => {});
+    const speechAt = () => makeSpeech({ prepare });
+    const listening = (transcript: SonioxTranscript) => (
+      <TestProductMeetingPanel capture={makeCapture({ phase: "listening", transcript })} speech={speechAt()} location={LOCATION} />
+    );
+    const { rerender } = render(
+      <TestProductMeetingPanel capture={makeCapture({ phase: "listening" })} speech={speechAt()} location={LOCATION} />,
+    );
+
+    // Opening push-to-talk must only unlock audio playback. Someone can hold the
+    // floor for a long time before speaking, and an opened-but-unused provider
+    // stream is exactly what hits the first-stream timeout.
+    act(() => { fireEvent.keyDown(window, { code: "ShiftLeft" }); fireEvent.keyUp(window, { code: "ShiftLeft" }); });
+    expect(prepare).toHaveBeenCalled();
+    expect(prepare.mock.calls.every((call: unknown[]) => call.length === 0)).toBe(true);
+
+    const openFin = { text: "<fin>", is_final: true, speaker: "1", translation_status: "original" as const };
+    const final = { text: "안녕하세요", is_final: true, speaker: "1", language: "ko", translation_status: "original" as const };
+    rerender(listening(transcriptFrom([{ tokens: [openFin] }])));
+    rerender(listening(transcriptFrom([{ tokens: [openFin, final, { ...openFin }] }])));
+
+    // Closing must not ask for a stream either. The stream belongs to the moment
+    // the text exists, which useSonioxTts owns — the panel never preconnects.
+    act(() => { fireEvent.keyDown(window, { code: "ShiftLeft" }); fireEvent.keyUp(window, { code: "ShiftLeft" }); });
+    await flush();
+    expect(prepare.mock.calls.every((call: unknown[]) => call.length === 0)).toBe(true);
+  });
+
+
   it("H1: broadcasts a valid final endpoint that arrives after the idle deadline instead of losing it", async () => {
     vi.useFakeTimers();
     const capture = makeCapture({ phase: "listening" });

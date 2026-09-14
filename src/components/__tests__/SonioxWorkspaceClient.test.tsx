@@ -177,7 +177,7 @@ describe("SonioxWorkspaceClient", () => {
     expect(screen.queryByText(/그룹 A|그룹 B/)).not.toBeInTheDocument();
     expect(screen.queryByRole("option", { name: "스페인어" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "미팅 시작" }));
-    expect(capture.start).toHaveBeenCalledWith({ inputSource: "microphone", translation: { mode: "two_way", languageA: "ko", languageB: "en" } });
+    expect(capture.start).toHaveBeenCalledWith({ inputSource: "microphone", translation: { mode: "two_way", languageA: "ja", languageB: "en" } });
 
     capture.phase = "listening";
     capture.transcript = {
@@ -267,7 +267,7 @@ describe("SonioxWorkspaceClient", () => {
     expect(translate).not.toHaveBeenCalled();
   });
 
-  it("uses the live Soniox translation immediately at closing Left Shift without waiting for the LLM adapter", async () => {
+  it("shows the live translation immediately at closing Left Shift and broadcasts the translated turn", async () => {
     const translate = vi.fn(async (_url: string, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body)) as { targetLanguage: string };
       return new Response(JSON.stringify({ translation: body.targetLanguage === "ja" ? "こんにちは" : "안녕하세요" }), {
@@ -278,6 +278,7 @@ describe("SonioxWorkspaceClient", () => {
     vi.stubGlobal("fetch", translate);
     navigation.search = "workspace=workspace-a&tool=test-product";
     const view = render(<SonioxWorkspaceClient />);
+    fireEvent.change(screen.getByRole("combobox", { name: "내 언어" }), { target: { value: "ko" } });
     fireEvent.change(screen.getByRole("combobox", { name: "상대방 언어" }), { target: { value: "ja" } });
     fireEvent.change(screen.getByRole("combobox", { name: "번역 음성" }), { target: { value: "Daniel" } });
     fireEvent.change(screen.getByRole("combobox", { name: "음성 속도" }), { target: { value: "1.2" } });
@@ -288,7 +289,11 @@ describe("SonioxWorkspaceClient", () => {
     fireEvent.keyDown(window, { code: "ShiftLeft", key: "Shift", repeat: false });
     fireEvent.keyUp(window, { code: "ShiftLeft", key: "Shift" });
     expect(screen.getByRole("status", { name: "Push-to-Talk 상태" })).toHaveTextContent("실시간 번역 및 음성 연결 준비 중");
-    expect(speech.prepare).toHaveBeenCalledWith({ language: "ja", voice: "Daniel", speed: 1.2 });
+    // Opening only unlocks audio playback — never a provider stream. A stream
+    // configured ahead of its text sits on the provider's first-stream clock,
+    // which is what answered 408 on longer turns.
+    expect(speech.prepare).toHaveBeenCalled();
+    expect(speech.prepare.mock.calls.every((call: unknown[]) => call.length === 0)).toBe(true);
     completePttOpeningBoundary(view);
 
     capture.transcript = {
@@ -306,6 +311,10 @@ describe("SonioxWorkspaceClient", () => {
     fireEvent.keyDown(window, { code: "ShiftLeft", key: "Shift", repeat: false });
     fireEvent.keyUp(window, { code: "ShiftLeft", key: "Shift" });
 
+    // Closing does not preconnect either — the utterance itself carries the
+    // voice settings into speak() once the translation exists.
+    expect(speech.prepare.mock.calls.every((call: unknown[]) => call.length === 0)).toBe(true);
+
     const pttRow = await screen.findByRole("row", { name: "Speaker 1 Push-to-Talk 대화 행" });
     expect(pttRow).toHaveTextContent("こんにちは");
     expect(within(pttRow).getByText("안녕하세요").closest("p")).toHaveClass("font-bold");
@@ -315,6 +324,8 @@ describe("SonioxWorkspaceClient", () => {
     expect(screen.getAllByText("こんにちは")).toHaveLength(1);
     expect(pttRow).not.toHaveClass("bg-error/5");
     expect(screen.getByText("Speaker 1 · Push-to-Talk")).not.toHaveClass("text-error");
+    // A named language pair keeps the counterpart coming from the live stream,
+    // so the broadcast needs no model round trip. This is the fast path.
     expect(translate).not.toHaveBeenCalled();
     await waitFor(() => expect(speech.speak).toHaveBeenCalledWith({ text: "こんにちは", language: "ja", voice: "Daniel", speed: 1.2 }));
     expect(screen.getByRole("status", { name: "Push-to-Talk 상태" })).toHaveTextContent("음성 송출 중");
@@ -323,12 +334,16 @@ describe("SonioxWorkspaceClient", () => {
     expect(screen.getByRole("status", { name: "Push-to-Talk 상태" })).toHaveTextContent("송출 완료");
   });
 
-  it("finalizes an in-progress Soniox turn and speaks its completed live translation without an LLM round trip", async () => {
-    const translate = vi.fn();
+  it("finalizes an in-progress Soniox turn and broadcasts that speaker's own completed utterance", async () => {
+    const translate = vi.fn(async () => new Response(JSON.stringify({ translation: "こんにちは" }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
     vi.stubGlobal("fetch", translate);
     navigation.search = "workspace=workspace-a&tool=test-product";
     capture.phase = "listening";
     const view = render(<SonioxWorkspaceClient />);
+    fireEvent.change(screen.getByRole("combobox", { name: "내 언어" }), { target: { value: "ko" } });
     fireEvent.change(screen.getByRole("combobox", { name: "상대방 언어" }), { target: { value: "ja" } });
 
     fireEvent.keyDown(window, { code: "ShiftLeft", key: "Shift" });
@@ -412,6 +427,8 @@ describe("SonioxWorkspaceClient", () => {
     };
     view.rerender(<SonioxWorkspaceClient />);
 
+    // The PTT speaker's own finalized utterance is what goes out, straight from
+    // the live counterpart — no model round trip.
     await waitFor(() => expect(speech.speak).toHaveBeenCalledWith({ text: "こんにちは", language: "ja", voice: "Maya", speed: 1 }));
     expect(translate).not.toHaveBeenCalled();
     expect(speech.speak).not.toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining("Other person") }));
@@ -431,6 +448,7 @@ describe("SonioxWorkspaceClient", () => {
     navigation.search = "workspace=workspace-a&tool=test-product";
     capture.phase = "listening";
     const view = render(<SonioxWorkspaceClient />);
+    fireEvent.change(screen.getByRole("combobox", { name: "내 언어" }), { target: { value: "ko" } });
     fireEvent.change(screen.getByRole("combobox", { name: "상대방 언어" }), { target: { value: "ja" } });
 
     fireEvent.keyDown(window, { code: "ShiftLeft", key: "Shift" });

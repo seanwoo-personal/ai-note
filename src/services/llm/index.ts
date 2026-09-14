@@ -3,6 +3,7 @@ import { ClaudeCliAdapter } from "@/services/llm/claudeCli";
 import { CodexCliAdapter } from "@/services/llm/codexCli";
 import { FakeAdapter } from "@/services/llm/fake";
 import { OllamaAdapter } from "@/services/llm/ollama";
+import { OpenRouterAdapter } from "@/services/llm/openRouter";
 import type { LlmAdapter, LlmSettings } from "@/services/llm/types";
 
 // Factory: maps LlmSettings → the concrete adapter. FAKE_LLM=1 short-circuits to
@@ -11,6 +12,8 @@ import type { LlmAdapter, LlmSettings } from "@/services/llm/types";
 export function getAdapter(settings: LlmSettings): LlmAdapter {
   if (process.env.FAKE_LLM === "1") return new FakeAdapter(settings);
   switch (settings.provider) {
+    case "openrouter":
+      return new OpenRouterAdapter(settings);
     case "claude-cli":
       return new ClaudeCliAdapter(settings);
     case "codex-cli":
@@ -32,5 +35,6 @@ export type {
   LlmAdapter,
   LlmHealth,
   LlmProvider,
+  LlmRunOptions,
   LlmSettings,
 } from "@/services/llm/types";

@@ -2,8 +2,23 @@ import {
   publicErrorResponse,
   type PublicErrorCode,
 } from "@/lib/publicApi";
+import { activateAccountTenantData } from "@/lib/tenantDataContext";
 
 export const DATA_SURFACE_INVENTORY = [
+  "/api/admin/bootstrap",
+  "/api/admin/customers/[id]",
+  "/api/admin/login",
+  "/api/admin/logout",
+  "/api/admin/mfa-reset",
+  "/api/admin/operators/accept",
+  "/api/admin/operators/invite",
+  "/api/admin/overview",
+  "/api/auth/login",
+  "/api/auth/logout",
+  "/api/auth/password/change",
+  "/api/auth/password/forgot",
+  "/api/auth/register",
+  "/api/auth/session",
   "/api/chat",
   "/api/glossary",
   "/api/folders",
@@ -31,6 +46,7 @@ export const DATA_SURFACE_INVENTORY = [
   "/api/meetings/[id]/transcript/regenerate",
   "/api/organization-pending",
   "/api/realtime/temporary-key",
+  "/api/realtime/android-temporary-key",
   "/api/settings/llm",
   "/api/settings/llm/health",
   "/api/settings/llm/models",
@@ -40,7 +56,6 @@ export const DATA_SURFACE_INVENTORY = [
   "/api/summarize",
   "/api/transcribe",
   "/api/translate",
-  "/api/whisper/health",
   "/api/workspaces",
   "/api/workspaces/[id]",
   "/api/workspaces/[id]/delete-preview",
@@ -56,6 +71,42 @@ export type LocalRequestValidation =
 interface ParsedHost {
   hostname: "127.0.0.1" | "localhost";
   port: string;
+}
+
+function parseCloudHost(rawHost: string | null): string | null {
+  if (!rawHost || /[,\s@/\\?#]/u.test(rawHost)) return null;
+  const match = /^([A-Za-z0-9.-]+)(?::([0-9]{1,5}))?$/u.exec(rawHost);
+  if (!match) return null;
+  const hostname = match[1].toLowerCase();
+  if (hostname.length > 253 || hostname.split(".").some((label) =>
+    !/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/u.test(label))) return null;
+  const port = match[2] ?? "";
+  if (port) {
+    if (port.length > 1 && port.startsWith("0")) return null;
+    const numeric = Number(port);
+    if (!Number.isSafeInteger(numeric) || numeric < 1 || numeric > 65_535) return null;
+  }
+  return `${hostname}${port ? `:${port}` : ""}`;
+}
+
+function configuredCloudOrigin(): string | null | "invalid" {
+  const configured = process.env.APP_ORIGIN?.trim();
+  if (!configured) return null;
+  try {
+    const parsed = new URL(configured);
+    if (
+      parsed.protocol !== "https:"
+      || parsed.username !== ""
+      || parsed.password !== ""
+      || parsed.pathname !== "/"
+      || parsed.search !== ""
+      || parsed.hash !== ""
+      || configured !== parsed.origin
+    ) return "invalid";
+    return parsed.origin;
+  } catch {
+    return "invalid";
+  }
 }
 
 function parseRawHost(rawHost: string | null): ParsedHost | null {
@@ -84,17 +135,42 @@ export function validateLocalRequest(
   kind: LocalRequestKind,
 ): LocalRequestValidation {
   const url = new URL(request.url);
-  const rawHost = request.headers.get("host") ?? url.host;
-  const host = parseRawHost(rawHost);
-  if (
-    !host
-    || url.protocol !== "http:"
-    || url.username !== ""
-    || url.password !== ""
-    || url.hostname !== host.hostname
-    || url.port !== host.port
-  ) {
-    return reject("invalid_host");
+  const directRawHost = request.headers.get("host") ?? url.host;
+  const directLocalHost = parseRawHost(directRawHost);
+  let expectedOrigin: string;
+  if (directLocalHost) {
+    const directUrlMatches = url.protocol === "http:"
+      && url.hostname === directLocalHost.hostname
+      && url.port === directLocalHost.port;
+    const cloudLoopbackForward = process.env.AI_NOTE_DEPLOYMENT_MODE === "cloud"
+      && url.protocol === "http:"
+      && (request.headers.get("x-forwarded-proto") ?? "http") === "http";
+    if (
+      (!directUrlMatches && !cloudLoopbackForward)
+      || url.username !== ""
+      || url.password !== ""
+    ) return reject("invalid_host");
+    expectedOrigin = `http://${directRawHost}`;
+  } else {
+    // Only consult deployment configuration after an ordinary loopback request
+    // has been ruled out. Rejected ingress therefore cannot trigger secret reads.
+    const cloud = process.env.AI_NOTE_DEPLOYMENT_MODE === "cloud";
+    if (!cloud) return reject("invalid_host");
+    const rawHost = request.headers.get("x-forwarded-host")
+      ?? request.headers.get("host")
+      ?? url.host;
+    const host = parseCloudHost(rawHost);
+    const forwardedProto = request.headers.get("x-forwarded-proto") ?? url.protocol.slice(0, -1);
+    const pinnedOrigin = configuredCloudOrigin();
+    if (
+      !host
+      || forwardedProto !== "https"
+      || url.username !== ""
+      || url.password !== ""
+      || pinnedOrigin === "invalid"
+    ) return reject("invalid_host");
+    expectedOrigin = `https://${host}`;
+    if (pinnedOrigin && expectedOrigin !== pinnedOrigin) return reject("invalid_host");
   }
 
   const fetchSite = request.headers.get("sec-fetch-site");
@@ -113,7 +189,7 @@ export function validateLocalRequest(
       const origin = new URL(rawOrigin);
       if (
         rawOrigin !== origin.origin
-        || origin.origin !== url.origin
+        || origin.origin !== expectedOrigin
         || origin.username !== ""
         || origin.password !== ""
       ) {
@@ -129,7 +205,49 @@ export function validateLocalRequest(
 
 export function guardLocalApiRequest(request: Request): Response | null {
   const result = validateLocalRequest(request, "api");
-  return result.ok ? null : publicErrorResponse(result.code, result.status);
+  if (!result.ok) return publicErrorResponse(result.code, result.status);
+  const accountId = request.headers.get("x-vision-account-id");
+  if (accountId) {
+    try {
+      activateAccountTenantData(accountId);
+    } catch {
+      return publicErrorResponse("authentication_required", 401);
+    }
+  }
+  return null;
+}
+
+/**
+ * Restricts one-time administrative setup endpoints to an explicit loopback
+ * origin, even when the rest of the application is running in cloud mode.
+ * This keeps a public deployment from exposing an unclaimed super-admin slot.
+ */
+export function guardLoopbackApiRequest(request: Request): Response | null {
+  const rawHost = request.headers.get("host");
+  if (!parseRawHost(rawHost)) return publicErrorResponse("invalid_host", 403);
+
+  const fetchSite = request.headers.get("sec-fetch-site");
+  if (fetchSite !== null && fetchSite !== "same-origin") {
+    return publicErrorResponse("cross_site_request", 403);
+  }
+
+  if (!isSafeMethod(request.method.toUpperCase())) {
+    const rawOrigin = request.headers.get("origin");
+    if (rawOrigin === null) return publicErrorResponse("missing_origin", 403);
+    try {
+      const origin = new URL(rawOrigin);
+      if (
+        rawOrigin !== origin.origin
+        || origin.origin !== `http://${rawHost}`
+        || origin.username !== ""
+        || origin.password !== ""
+      ) return publicErrorResponse("invalid_origin", 403);
+    } catch {
+      return publicErrorResponse("invalid_origin", 403);
+    }
+  }
+
+  return null;
 }
 
 export function validateLocalPageHeaders(headers: Headers): LocalRequestValidation {

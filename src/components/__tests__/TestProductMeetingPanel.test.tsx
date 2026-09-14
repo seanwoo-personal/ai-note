@@ -65,11 +65,75 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
 
 describe("TestProductMeetingPanel — Global Meeting", () => {
+  it("keeps the meeting log while restarting only speaker context for a new media source", async () => {
+    const firstTranscript = transcriptFrom([{
+      tokens: [
+        { text: "첫 영상 질문", is_final: true, speaker: "1", language: "ko", translation_status: "original" },
+        { text: "First video question", is_final: true, speaker: "1", language: "en", translation_status: "translation" },
+        { text: "<end>", is_final: true, speaker: "1", translation_status: "original" },
+      ],
+    }]);
+    const capture = makeCapture({ phase: "listening", transcript: firstTranscript });
+    const speech = makeSpeech();
+    const view = render(<TestProductMeetingPanel capture={capture} speech={speech} location={LOCATION} />);
+    expect(await screen.findByRole("row", { name: "Speaker 1 대화 행" })).toHaveTextContent("첫 영상 질문");
+
+    fireEvent.click(screen.getByRole("button", { name: "새 영상·음원" }));
+    expect(capture.finalize).toHaveBeenCalledTimes(1);
+
+    const finalized = applySonioxResult(firstTranscript, {
+      tokens: [{ text: "<fin>", is_final: true, speaker: "1", translation_status: "original" }],
+    });
+    view.rerender(<TestProductMeetingPanel capture={{ ...capture, transcript: finalized }} speech={speech} location={LOCATION} />);
+    await waitFor(() => expect(capture.stop).toHaveBeenCalledTimes(1));
+
+    view.rerender(<TestProductMeetingPanel capture={{ ...capture, phase: "finished", transcript: finalized }} speech={speech} location={LOCATION} />);
+    await waitFor(() => expect(capture.reset).toHaveBeenCalledTimes(1));
+    expect(capture.start).toHaveBeenCalledWith({
+      inputSource: "microphone",
+      translation: { mode: "two_way", languageA: "ja", languageB: "en" },
+    });
+
+    const secondTranscript = transcriptFrom([{
+      tokens: [
+        { text: "두 번째 영상 화자", is_final: true, speaker: "1", language: "ko", translation_status: "original" },
+        { text: "Second video speaker", is_final: true, speaker: "1", language: "en", translation_status: "translation" },
+        { text: "<end>", is_final: true, speaker: "1", translation_status: "original" },
+      ],
+    }]);
+    view.rerender(<TestProductMeetingPanel capture={{ ...capture, phase: "listening", transcript: secondTranscript }} speech={speech} location={LOCATION} />);
+
+    expect(await screen.findByRole("row", { name: "Speaker 2 대화 행" })).toHaveTextContent("두 번째 영상 화자");
+    expect(screen.getByRole("row", { name: "Speaker 1 대화 행" })).toHaveTextContent("첫 영상 질문");
+  });
+
+  it("continues the source switch when the current speech boundary is delayed", async () => {
+    vi.useFakeTimers();
+    const capture = makeCapture({ phase: "listening" });
+    const speech = makeSpeech();
+    const view = render(<TestProductMeetingPanel capture={capture} speech={speech} location={LOCATION} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "새 영상·음원" }));
+    expect(capture.finalize).toHaveBeenCalledTimes(1);
+    expect(capture.stop).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(12_000);
+    });
+    expect(capture.stop).toHaveBeenCalledTimes(1);
+
+    view.rerender(<TestProductMeetingPanel capture={{ ...capture, phase: "finished" }} speech={speech} location={LOCATION} />);
+    await act(async () => {});
+    expect(capture.reset).toHaveBeenCalledTimes(1);
+    expect(capture.start).toHaveBeenCalledTimes(1);
+  });
+
   it("registers a discardable navigation blocker while a meeting is unsaved", () => {
     const capture = makeCapture({ phase: "listening" });
     const speech = makeSpeech();
@@ -101,45 +165,53 @@ describe("TestProductMeetingPanel — Global Meeting", () => {
     expect(values).toContain("2");
   });
 
-  it("defaults 내 언어 to Korean and starts two_way translation to the selected target", () => {
-    const capture = makeCapture();
-    render(<TestProductMeetingPanel capture={capture} speech={makeSpeech()} location={LOCATION} />);
+  it("offers 모든 언어 alongside the concrete 내 언어 choices", () => {
+    render(<TestProductMeetingPanel capture={makeCapture()} speech={makeSpeech()} location={LOCATION} />);
     const input = screen.getByRole("combobox", { name: "내 언어" }) as HTMLSelectElement;
     const target = screen.getByRole("combobox", { name: "상대방 언어" }) as HTMLSelectElement;
-    expect(Array.from(input.options).map((option) => option.value)).toEqual(["ko", "en", "zh", "ja"]);
-    expect(input.value).toBe("ko");
-    expect(target.value).toBe("en");
+    expect(Array.from(input.options).map((option) => option.value)).toEqual(["ja", "en", "ko", "zh", "any"]);
+    expect(Array.from(input.options).map((option) => option.textContent)).toContain("모든 언어");
+    // 상대방 언어 is a concrete voice target, so it never offers 모든 언어.
+    expect(Array.from(target.options).map((option) => option.value)).not.toContain("any");
+    expect(input.value).toBe("ja");
+  });
+
+  it("pairs a concrete 내 언어 with 상대방 언어 so the broadcast reuses the live translation", () => {
+    const capture = makeCapture();
+    render(<TestProductMeetingPanel capture={capture} speech={makeSpeech()} location={LOCATION} />);
     fireEvent.click(screen.getByRole("button", { name: "미팅 시작" }));
+    // A named pair keeps the provider producing the counterpart live, which is
+    // what makes push-to-talk fast — no model round trip per turn.
     expect(capture.start).toHaveBeenCalledWith({
       inputSource: "microphone",
-      translation: { mode: "two_way", languageA: "ko", languageB: "en" },
+      translation: { mode: "two_way", languageA: "ja", languageB: "en" },
     });
   });
 
-  it("sends the user's explicitly selected 상대방 언어 into the two-way request payload", () => {
+  it("captures browser meeting and video audio directly when tab audio is selected", () => {
     const capture = makeCapture();
     render(<TestProductMeetingPanel capture={capture} speech={makeSpeech()} location={LOCATION} />);
-    const target = screen.getByRole("combobox", { name: "상대방 언어" }) as HTMLSelectElement;
-    fireEvent.change(target, { target: { value: "ja" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "입력 소스" }), {
+      target: { value: "browser-tab" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "미팅 시작" }));
     expect(capture.start).toHaveBeenCalledWith({
-      inputSource: "microphone",
-      translation: { mode: "two_way", languageA: "ko", languageB: "ja" },
+      inputSource: "browser-tab",
+      translation: { mode: "two_way", languageA: "ja", languageB: "en" },
     });
   });
 
-  it("keeps a concrete 내 언어 selection on two_way and distinct from 상대방 언어", () => {
+  it("understands every spoken language when 내 언어 is 모든 언어", () => {
     const capture = makeCapture();
     render(<TestProductMeetingPanel capture={capture} speech={makeSpeech()} location={LOCATION} />);
-    const input = screen.getByRole("combobox", { name: "내 언어" }) as HTMLSelectElement;
-    const target = screen.getByRole("combobox", { name: "상대방 언어" }) as HTMLSelectElement;
-
-    fireEvent.change(input, { target: { value: "en" } });
-    expect(target.value).not.toBe("en");
+    fireEvent.change(screen.getByRole("combobox", { name: "내 언어" }), { target: { value: "any" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "상대방 언어" }), { target: { value: "ja" } });
     fireEvent.click(screen.getByRole("button", { name: "미팅 시작" }));
+    // Any spoken language is normalized into the language the operator reads —
+    // their UI locale — so a third language in the room is no longer stranded.
     expect(capture.start).toHaveBeenCalledWith({
       inputSource: "microphone",
-      translation: { mode: "two_way", languageA: "en", languageB: target.value },
+      translation: { mode: "one_way", targetLanguage: "ja" },
     });
   });
 

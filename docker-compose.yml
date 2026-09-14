@@ -1,0 +1,29 @@
+services:
+  app:
+    build:
+      context: .
+    restart: unless-stopped
+    env_file:
+      - ${AI_NOTE_ENV_FILE:-.env.production}
+    environment:
+      NODE_ENV: production
+      AI_NOTE_DEPLOYMENT_MODE: cloud
+      AI_NOTE_GLOSSARY_PATH: /app/data/glossary.json
+    volumes:
+      - ai-note-data:/app/data
+    ports:
+      - "127.0.0.1:3000:3000"
+    security_opt:
+      - no-new-privileges:true
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --url http://app:3000
+    depends_on:
+      - app
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  ai-note-data:

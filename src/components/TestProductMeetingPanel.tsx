@@ -5,7 +5,10 @@ import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { AppDialog } from "@/components/AppDialog";
 import { useOptionalAppPreferences } from "@/components/AppPreferences";
 import { useOptionalRecorderSession } from "@/components/RecorderSessionProvider";
-import { type useSonioxLiveCapture } from "@/components/useSonioxLiveCapture";
+import {
+  type SonioxInputSource,
+  type useSonioxLiveCapture,
+} from "@/components/useSonioxLiveCapture";
 import { type useSonioxTts } from "@/components/useSonioxTts";
 
 import {
@@ -14,6 +17,7 @@ import {
   buildGlobalMeetingTranscript,
   type GlobalMeetingLogEntry,
 } from "@/lib/globalMeetingTranscript";
+import { stripFillerWords } from "@/lib/fillerWords";
 import { type SonioxTranscript } from "@/services/sonioxRealtime";
 import {
   isNearBottom,
@@ -28,11 +32,18 @@ import {
 import { SONIOX_TTS_SPEED_OPTIONS } from "@/services/sonioxTts";
 
 const LANGUAGES = [
-  { value: "ko", label: "한국어" },
-  { value: "en", label: "영어" },
-  { value: "zh", label: "중국어" },
   { value: "ja", label: "일본어" },
+  { value: "en", label: "영어" },
+  { value: "ko", label: "한국어" },
+  { value: "zh", label: "중국어" },
 ] as const;
+
+// "모든 언어" accepts whatever anyone in the room speaks. It is offered for 내 언어
+// only: 상대방 언어 must stay a concrete language because it picks the broadcast
+// voice. Choosing it trades the live counterpart translation (and therefore some
+// push-to-talk speed) for understanding a third language — see ANY_INPUT below.
+const ANY_INPUT = "any";
+const INPUT_LANGUAGES = [...LANGUAGES, { value: ANY_INPUT, label: "모든 언어" }] as const;
 
 
 const TTS_VOICES = ["Maya", "Daniel", "Mina", "Kenji"] as const;
@@ -79,17 +90,21 @@ type TranslationJob = {
 
 type PushToTalkPhase = "idle" | "recording" | "finalizing" | "translating" | "speaking" | "sent";
 
+type SourceSwitchState =
+  | { stage: "finalizing"; afterEndpoint: number }
+  | { stage: "restarting" }
+  | null;
+
 type FrozenPushToTalk = {
   text: string;
+  /** Broadcast-ready counterpart from the live stream; empty when one is not usable. */
   translation: string;
   targetLanguage: string;
   closingEndpointCount: number;
   speaker: string | null;
   voice: (typeof TTS_VOICES)[number];
   speed: number;
-  // When the outbound utterance code-switched, Soniox's two-way translation is
-  // unreliable (target-language spans get re-translated back into Korean), so we
-  // discard it and re-translate the full source text through the fallback route.
+  /** Recorded for the transcript; the broadcast is translated the same way either way. */
   codeSwitched: boolean;
 };
 
@@ -134,12 +149,18 @@ export function TestProductMeetingPanel({ capture, speech, location }: {
 }) {
   const recorderSession = useOptionalRecorderSession();
   const appPreferences = useOptionalAppPreferences();
+  // Under 모든 언어 there is no chosen source language, so the language the
+  // operator reads is their UI locale — the one thing that already states it.
+  const readingLanguage = LANGUAGES.some((language) => language.value === appPreferences?.locale)
+    ? appPreferences!.locale
+    : "ja";
   const captureRef = useRef(capture);
   captureRef.current = capture;
   const speechRef = useRef(speech);
   speechRef.current = speech;
-  const [inputLanguage, setInputLanguage] = useState("ko");
+  const [inputLanguage, setInputLanguage] = useState("ja");
   const [targetLanguage, setTargetLanguage] = useState("en");
+  const [inputSource, setInputSource] = useState<SonioxInputSource>("microphone");
   const [ttsVoice, setTtsVoice] = useState<(typeof TTS_VOICES)[number]>("Maya");
   const [ttsSpeed, setTtsSpeed] = useState(1);
   const [entries, setEntries] = useState<MeetingEntry[]>([]);
@@ -159,10 +180,13 @@ export function TestProductMeetingPanel({ capture, speech, location }: {
   inputLanguageRef.current = inputLanguage;
   const targetLanguageRef = useRef(targetLanguage);
   targetLanguageRef.current = targetLanguage;
+  const inputSourceRef = useRef(inputSource);
+  inputSourceRef.current = inputSource;
   const [translationQueue, setTranslationQueue] = useState<TranslationJob[]>([]);
   const [passiveTranslationQueue, setPassiveTranslationQueue] = useState<TranslationJob[]>([]);
   const [speechQueue, setSpeechQueue] = useState<Array<{ id: number; text: string; language: string; voice: (typeof TTS_VOICES)[number]; speed: number }>>([]);
   const [pushToTalkPhase, setPushToTalkPhase] = useState<PushToTalkPhase>("idle");
+  const [sourceSwitch, setSourceSwitch] = useState<SourceSwitchState>(null);
   const [error, setError] = useState<string | null>(null);
   const [saveDialogStage, setSaveDialogStage] = useState<"save" | "confirm-discard">("save");
   const [followState, setFollowState] = useState<ScrollFollowState>("follow");
@@ -175,8 +199,12 @@ export function TestProductMeetingPanel({ capture, speech, location }: {
   const primaryRef = useRef<HTMLButtonElement>(null);
   const [primaryVisible, setPrimaryVisible] = useState(true);
   const lastEndpointRef = useRef(0);
+  const endpointIdOffsetRef = useRef(0);
   const originalLengthsRef = useRef<Record<string, number>>({});
   const translationLengthsRef = useRef<Record<string, number>>({});
+  const speakerEpochRef = useRef(0);
+  const speakerAliasesRef = useRef(new Map<string, string>());
+  const nextSpeakerNumberRef = useRef(1);
   const processingRef = useRef(false);
   const passiveProcessingRef = useRef(false);
   const speechProcessingRef = useRef(false);
@@ -200,6 +228,28 @@ export function TestProductMeetingPanel({ capture, speech, location }: {
   speechStopRef.current = speech.stop;
   const active = ["requesting", "connecting", "listening", "paused", "finishing"].includes(capture.phase);
   const paused = capture.phase === "paused";
+
+  const displaySpeakerLabel = useCallback((speaker: string | null): string => {
+    if (!speaker) return "Speaker";
+    const existing = speakerAliasesRef.current.get(speaker);
+    if (existing) return `Speaker ${existing}`;
+    if (speakerEpochRef.current === 0) {
+      speakerAliasesRef.current.set(speaker, speaker);
+      const numeric = Number(speaker);
+      if (Number.isSafeInteger(numeric) && numeric >= nextSpeakerNumberRef.current) {
+        nextSpeakerNumberRef.current = numeric + 1;
+      }
+      return speakerLabel(speaker);
+    }
+    const alias = String(nextSpeakerNumberRef.current);
+    nextSpeakerNumberRef.current += 1;
+    speakerAliasesRef.current.set(speaker, alias);
+    return `Speaker ${alias}`;
+  }, []);
+
+  const sessionEntryId = useCallback((endpointId: number): number => (
+    endpointIdOffsetRef.current + endpointId
+  ), []);
 
   const scrollTranscriptToBottom = useCallback(() => {
     const el = scrollRef.current;
@@ -263,14 +313,58 @@ export function TestProductMeetingPanel({ capture, speech, location }: {
       // Column semantics are content-based, never language-direction based: every
       // recognized source utterance stays in 입력 and its generated counterpart
       // stays in 번역, regardless of which supported language was spoken.
-      nextEntries.push({ id: endpoint.id, speaker: speakerLabel(endpoint.speaker), original: translation, sourceLanguage, korean: original, direction: "incoming" });
+      const entryId = sessionEntryId(endpoint.id);
+      nextEntries.push({ id: entryId, speaker: displaySpeakerLabel(endpoint.speaker), original: translation, sourceLanguage, korean: original, direction: "incoming" });
       if (!translation && !["recording", "finalizing"].includes(pushToTalkPhase)) {
-        nextJobs.push({ id: endpoint.id, text: original, targetLanguage: targetLanguageRef.current, kind: "incoming-counterpart" });
+        nextJobs.push({ id: entryId, text: original, targetLanguage: targetLanguageRef.current, kind: "incoming-counterpart" });
       }
     }
     if (nextEntries.length) setEntries((current) => [...current, ...nextEntries]);
     if (nextJobs.length) setPassiveTranslationQueue((current) => [...current, ...nextJobs]);
-  }, [capture.transcript.endpointCount, capture.transcript.endpoints, pushToTalkPhase, targetLanguage]);
+  }, [capture.transcript.endpointCount, capture.transcript.endpoints, displaySpeakerLabel, pushToTalkPhase, sessionEntryId, targetLanguage]);
+
+  useEffect(() => {
+    if (sourceSwitch?.stage !== "finalizing") return;
+    const finalized = (capture.transcript.endpoints ?? []).some((endpoint) => (
+      endpoint.id > sourceSwitch.afterEndpoint && endpoint.kind === "fin"
+    ));
+    if (!finalized) return;
+    setSourceSwitch({ stage: "restarting" });
+    capture.stop();
+  }, [capture.stop, capture.transcript.endpoints, sourceSwitch]);
+
+  useEffect(() => {
+    if (sourceSwitch?.stage !== "finalizing") return;
+    const timeout = window.setTimeout(() => {
+      setSourceSwitch({ stage: "restarting" });
+      captureRef.current.stop();
+    }, 12_000);
+    return () => window.clearTimeout(timeout);
+  }, [sourceSwitch]);
+
+  useEffect(() => {
+    if (sourceSwitch?.stage !== "restarting" || !["idle", "finished", "error"].includes(capture.phase)) return;
+    endpointIdOffsetRef.current += lastEndpointRef.current;
+    lastEndpointRef.current = 0;
+    originalLengthsRef.current = {};
+    translationLengthsRef.current = {};
+    pushToTalkEndpointRef.current = 0;
+    pushToTalkLengthsRef.current = {};
+    pushToTalkTranslationLengthsRef.current = {};
+    frozenPushToTalkRef.current = null;
+    openingBoundaryRef.current = null;
+    userSpeakerRef.current = null;
+    speakerEpochRef.current += 1;
+    speakerAliasesRef.current.clear();
+    capture.reset();
+    void capture.start({
+      inputSource: inputSourceRef.current,
+      translation: inputLanguageRef.current === ANY_INPUT
+        ? { mode: "one_way", targetLanguage: readingLanguage }
+        : { mode: "two_way", languageA: inputLanguageRef.current, languageB: targetLanguageRef.current },
+    });
+    setSourceSwitch(null);
+  }, [capture.phase, capture.reset, capture.start, readingLanguage, sourceSwitch]);
 
   useEffect(() => {
     if (processingRef.current || translationQueue.length === 0) return;
@@ -443,8 +537,17 @@ export function TestProductMeetingPanel({ capture, speech, location }: {
     }
 
     return {
-      text: parts.join(" ").trim(),
-      translation: codeSwitched ? "" : translationParts.join(" ").trim(),
+      // Hesitation sounds are stripped from BOTH sides of the broadcast: from the
+      // source so the translator never sees them, and from the live translation
+      // because the provider already rendered them in the target language. What
+      // the row shows and what the TTS voice says then agree.
+      text: stripFillerWords(parts.join(" ").trim()),
+      // Under 모든 언어 the live translation is in the operator's reading
+      // language, not 상대방 언어, so it cannot stand in for the broadcast and
+      // every turn is translated by /api/translate instead.
+      translation: (codeSwitched || inputLanguage === ANY_INPUT)
+        ? ""
+        : stripFillerWords(translationParts.join(" ").trim()),
       targetLanguage,
       closingEndpointCount: closingEndpointId,
       speaker: inferredSpeaker,
@@ -468,13 +571,13 @@ export function TestProductMeetingPanel({ capture, speech, location }: {
     setEntries((current) => [
       ...current.filter((entry) => !(
         entry.direction === "incoming"
-        && entry.id > pushToTalkEndpointRef.current
-        && entry.id <= frozen.closingEndpointCount
-        && entry.speaker === speakerLabel(frozen.speaker)
+        && entry.id > sessionEntryId(pushToTalkEndpointRef.current)
+        && entry.id <= sessionEntryId(frozen.closingEndpointCount)
+        && entry.speaker === displaySpeakerLabel(frozen.speaker)
       )),
       {
         id,
-        speaker: `${speakerLabel(frozen.speaker)} · Push-to-Talk`,
+        speaker: `${displaySpeakerLabel(frozen.speaker)} · Push-to-Talk`,
         original: translation,
         sourceLanguage: frozenTargetLanguage,
         korean: text,
@@ -485,6 +588,8 @@ export function TestProductMeetingPanel({ capture, speech, location }: {
     // suppressed; re-enqueue their translations once this PTT settles.
     strandedSweepRef.current = true;
     if (translation) {
+      // The live stream already produced the counterpart — broadcast it without
+      // a model round trip. This is the fast path a named language pair buys.
       setSpeechQueue((current) => [...current, { id, text: translation, language: frozenTargetLanguage, voice: frozen.voice, speed: frozen.speed }]);
       setPushToTalkPhase("speaking");
     } else {
@@ -517,7 +622,9 @@ export function TestProductMeetingPanel({ capture, speech, location }: {
       capture.finalize();
       setPushToTalkPhase("recording");
       setError(null);
-      void speech.prepare({ language: targetLanguage, voice: ttsVoice, speed: ttsSpeed });
+      // Unlock audio playback inside this user gesture. The provider stream is
+      // opened only when there is text to speak (see useSonioxTts).
+      void speech.prepare();
       return;
     }
     const frozen = freezePushToTalk();
@@ -781,8 +888,12 @@ export function TestProductMeetingPanel({ capture, speech, location }: {
     processingRef.current = false;
     passiveProcessingRef.current = false;
     lastEndpointRef.current = 0;
+    endpointIdOffsetRef.current = 0;
     originalLengthsRef.current = {};
     translationLengthsRef.current = {};
+    speakerEpochRef.current = 0;
+    speakerAliasesRef.current.clear();
+    nextSpeakerNumberRef.current = 1;
     frozenPushToTalkRef.current = null;
     openingBoundaryRef.current = null;
     userSpeakerRef.current = null;
@@ -795,6 +906,7 @@ export function TestProductMeetingPanel({ capture, speech, location }: {
     setPassiveTranslationQueue([]);
     setSpeechQueue([]);
     setPushToTalkPhase("idle");
+    setSourceSwitch(null);
     setError(null);
     setSaveState("idle");
     setSavedMeetingId(null);
@@ -805,8 +917,15 @@ export function TestProductMeetingPanel({ capture, speech, location }: {
     speech.stop();
     capture.reset();
     void capture.start({
-      inputSource: "microphone",
-      translation: { mode: "two_way", languageA: inputLanguage, languageB: targetLanguage },
+      inputSource: inputSourceRef.current,
+      // A named pair keeps the provider producing both directions live, which is
+      // what makes push-to-talk fast. 모든 언어 instead normalizes whatever is
+      // spoken into the language the operator reads — their UI locale — so a
+      // third language in the room is no longer stranded. The other party never
+      // reads this screen; they hear the broadcast, translated separately.
+      translation: inputLanguage === ANY_INPUT
+        ? { mode: "one_way", targetLanguage: readingLanguage }
+        : { mode: "two_way", languageA: inputLanguage, languageB: targetLanguage },
     });
   };
 
@@ -819,6 +938,13 @@ export function TestProductMeetingPanel({ capture, speech, location }: {
     capture.resume();
   };
 
+  const switchMediaSource = () => {
+    if (capture.phase !== "listening" || sourceSwitch || pushToTalkPhase !== "idle") return;
+    setError(null);
+    setSourceSwitch({ stage: "finalizing", afterEndpoint: capture.transcript.endpointCount });
+    capture.finalize();
+  };
+
   const logEntries = (): GlobalMeetingLogEntry[] => entries.map((entry) => ({
     speaker: entry.speaker,
     korean: entry.korean,
@@ -826,7 +952,7 @@ export function TestProductMeetingPanel({ capture, speech, location }: {
     direction: entry.direction,
   }));
 
-  const languageLabel = (value: string): string => LANGUAGES.find((language) => language.value === value)?.label ?? value;
+  const languageLabel = (value: string): string => INPUT_LANGUAGES.find((language) => language.value === value)?.label ?? value;
 
   const prepareMeetingSave = () => {
     const preparedEntries = logEntries();
@@ -888,8 +1014,12 @@ export function TestProductMeetingPanel({ capture, speech, location }: {
     // endpoint effect cannot re-materialize discarded rows before capture.reset()
     // clears the transcript.
     lastEndpointRef.current = captureRef.current.transcript.endpointCount;
+    endpointIdOffsetRef.current = 0;
     originalLengthsRef.current = {};
     translationLengthsRef.current = {};
+    speakerEpochRef.current = 0;
+    speakerAliasesRef.current.clear();
+    nextSpeakerNumberRef.current = 1;
     frozenPushToTalkRef.current = null;
     openingBoundaryRef.current = null;
     userSpeakerRef.current = null;
@@ -902,6 +1032,7 @@ export function TestProductMeetingPanel({ capture, speech, location }: {
     setPassiveTranslationQueue([]);
     setSpeechQueue([]);
     setPushToTalkPhase("idle");
+    setSourceSwitch(null);
     setError(null);
     setSaveState("idle");
     setSavedMeetingId(null);
@@ -1094,21 +1225,39 @@ export function TestProductMeetingPanel({ capture, speech, location }: {
   }[pushToTalkPhase]);
 
   return (
-    <div className="space-y-5">
+    <div
+      data-testid="global-meeting-adaptive-layout"
+      data-android-adaptive-workspace=""
+      className="space-y-5"
+    >
       {/* Idle controls remain in flow so the floating start mirror appears only
           after the original leaves view. During an active meeting, controls stay
           pinned and bounded so pause/end/PTT remain reachable above history. */}
       <section
         data-testid="global-meeting-controls"
         data-surface="settings"
+        data-android-pane="controls"
         className={`${active ? "sticky top-0 z-20 " : ""}max-h-[50dvh] overflow-y-auto rounded-2xl border border-line bg-panel p-5 shadow-[0_8px_24px_-18px_rgba(42,36,32,.45)] sm:p-6 lg:max-h-none lg:overflow-visible`}
       >
         <div className="flex flex-col gap-4">
           <div>
             <h2 className="text-[20px] font-bold text-ink">자유 참여 글로벌 미팅</h2>
-            <p className="mt-1 text-[13px] leading-6 text-inkSoft">참석자 등록 없이 세션 화자를 자동 구분하고, 발화 언어를 발화마다 자동으로 인식해 선택한 상대방 언어로 계속 실시간 양방향 번역합니다.</p>
+            <p data-android-secondary-copy="" className="mt-1 text-[13px] leading-6 text-inkSoft">참석자 등록 없이 세션 화자를 자동 구분하고, 어떤 언어로 말하든 자동으로 인식해 내 언어로 보여 줍니다. 상대방 언어는 Push-to-Talk 송출에만 사용합니다.</p>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+            <label className="flex min-w-0 flex-col gap-2 text-[13px] font-semibold text-ink">
+              <span>입력 소스</span>
+              <select
+                aria-label="입력 소스"
+                value={inputSource}
+                disabled={active}
+                onChange={(event) => setInputSource(event.target.value as SonioxInputSource)}
+                className="min-h-11 rounded-xl border border-line bg-bg px-3 text-[14px] text-ink disabled:opacity-50"
+              >
+                <option value="microphone">마이크</option>
+                <option value="browser-tab">브라우저 탭 오디오</option>
+              </select>
+            </label>
             <label className="flex min-w-0 flex-col gap-2 text-[13px] font-semibold text-ink">
               <span>내 언어</span>
               <select
@@ -1118,13 +1267,15 @@ export function TestProductMeetingPanel({ capture, speech, location }: {
                 onChange={(event) => {
                   const next = event.target.value;
                   setInputLanguage(next);
-                  if (targetLanguage === next) {
+                  // 모든 언어 pairs with any counterpart, so only a concrete
+                  // selection has to stay distinct from 상대방 언어.
+                  if (next !== ANY_INPUT && targetLanguage === next) {
                     setTargetLanguage(LANGUAGES.find((language) => language.value !== next)?.value ?? "ko");
                   }
                 }}
                 className="min-h-11 rounded-xl border border-line bg-bg px-3 text-[14px] text-ink disabled:opacity-50"
               >
-                {LANGUAGES.map((language) => <option key={language.value} value={language.value}>{language.label}</option>)}
+                {INPUT_LANGUAGES.map((language) => <option key={language.value} value={language.value}>{language.label}</option>)}
               </select>
             </label>
             <label className="flex min-w-0 flex-col gap-2 text-[13px] font-semibold text-ink">
@@ -1147,22 +1298,28 @@ export function TestProductMeetingPanel({ capture, speech, location }: {
               <span className="text-[11px] font-normal leading-5 text-inkSoft">1.5×·2.0×는 외부 음성 최대 1.3×로 생성한 뒤 이 기기에서 추가 가속합니다.</span>
             </label>
           </div>
-          <p className="text-[12px] leading-5 text-inkSoft">‘내 언어’는 대화록에서 내 쪽으로 표시하고 번역할 선호 언어입니다. 실제 말하는 언어는 발화마다 자동으로 인식되어 한 회의에서 언어를 섞어 말해도 그대로 처리됩니다.</p>
+          {inputSource === "browser-tab" && (
+            <p data-android-secondary-copy="" className="text-[12px] leading-5 text-inkSoft">
+              유튜브·Google Meet·브라우저 Zoom은 탭 오디오를 직접 공유하면 화자 구분이 더 안정적입니다.
+            </p>
+          )}
+          <p data-android-secondary-copy="" className="text-[12px] leading-5 text-inkSoft">‘내 언어’는 대화록에서 내 쪽으로 표시하고 번역할 선호 언어입니다. 실제 말하는 언어는 발화마다 자동으로 인식되어 한 회의에서 언어를 섞어 말해도 그대로 처리됩니다.</p>
         </div>
         <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
           {!active ? (
             entries.length > 0 && saveState !== "saved" ? (
-              <button ref={primaryKind === "reopen" ? primaryRef : undefined} type="button" onClick={(event) => { event.currentTarget.blur(); reopenMeetingSave(); }} className="min-h-11 rounded-full ld-action-primary px-5 text-[14px] font-semibold text-bg">
+              <button data-android-primary-action="" ref={primaryKind === "reopen" ? primaryRef : undefined} type="button" onClick={(event) => { event.currentTarget.blur(); reopenMeetingSave(); }} className="min-h-11 rounded-full ld-action-primary px-5 text-[14px] font-semibold text-bg">
                 회의록 저장 계속
               </button>
             ) : (
-              <button ref={primaryKind === "start" ? primaryRef : undefined} type="button" onClick={(event) => { event.currentTarget.blur(); startMeeting(); }} className="min-h-11 rounded-full ld-action-primary px-5 text-[14px] font-semibold text-bg">
+              <button data-android-primary-action="" ref={primaryKind === "start" ? primaryRef : undefined} type="button" onClick={(event) => { event.currentTarget.blur(); startMeeting(); }} className="min-h-11 rounded-full ld-action-primary px-5 text-[14px] font-semibold text-bg">
                 미팅 시작
               </button>
             )
           ) : (
             <>
               <button
+                data-android-primary-action=""
                 type="button"
                 onClick={(event) => { event.currentTarget.blur(); if (paused) resumeMeeting(); else pauseMeeting(); }}
                 disabled={!paused && capture.phase !== "listening"}
@@ -1178,9 +1335,17 @@ export function TestProductMeetingPanel({ capture, speech, location }: {
               >
                 미팅 종료
               </button>
+              <button
+                type="button"
+                onClick={(event) => { event.currentTarget.blur(); switchMediaSource(); }}
+                disabled={capture.phase !== "listening" || sourceSwitch !== null || pushToTalkPhase !== "idle" || ["connecting", "playing"].includes(speech.phase)}
+                className="min-h-11 rounded-full border border-line px-5 text-[14px] font-semibold text-accent disabled:opacity-40"
+              >
+                새 영상·음원
+              </button>
             </>
           )}
-          <button ref={primaryKind === "ptt-start" || primaryKind === "ptt-confirm" ? primaryRef : undefined} type="button" disabled={capture.phase !== "listening" || ["finalizing", "translating", "speaking"].includes(pushToTalkPhase) || ["connecting", "playing"].includes(speech.phase)} onClick={togglePushToTalk} className={`min-h-11 rounded-full border px-5 text-[14px] font-semibold disabled:opacity-40 ${pushToTalkPhase === "recording" ? "border-error bg-error/10 text-error" : "border-line text-accent"}`}>
+          <button data-android-secondary-action="" ref={primaryKind === "ptt-start" || primaryKind === "ptt-confirm" ? primaryRef : undefined} type="button" disabled={capture.phase !== "listening" || ["finalizing", "translating", "speaking"].includes(pushToTalkPhase) || ["connecting", "playing"].includes(speech.phase)} onClick={togglePushToTalk} className={`min-h-11 rounded-full border px-5 text-[14px] font-semibold disabled:opacity-40 ${pushToTalkPhase === "recording" ? "border-error bg-error/10 text-error" : "border-line text-accent"}`}>
             {pushToTalkPhase === "recording" ? "송출 구간 확정" : "송출 구간 시작"}
           </button>
         </div>
@@ -1197,10 +1362,18 @@ export function TestProductMeetingPanel({ capture, speech, location }: {
         {paused && (
           <p role="status" className="mt-2 text-[13px] font-medium text-inkSoft">일시정지됨 · 음성 처리가 멈췄습니다. “이어서 진행”을 누르면 같은 세션으로 계속합니다.</p>
         )}
+        {sourceSwitch && (
+          <p role="status" className="mt-2 text-[13px] font-medium text-inkSoft">
+            {sourceSwitch.stage === "finalizing" ? "현재 발화를 확정하는 중…" : "새 영상의 화자 인식을 준비하는 중…"}
+          </p>
+        )}
+        {active && !sourceSwitch && (
+          <p className="mt-2 text-[12px] leading-5 text-inkSoft">서로 다른 영상이나 음원으로 바꿀 때 누르세요. 기존 대화는 유지하고 새 화자를 다시 구분합니다.</p>
+        )}
         <div className="mt-4 rounded-xl border border-line bg-soft/40 p-4">
           <p className="text-[12px] font-bold text-ink">Push-to-Talk · Left Shift</p>
           <p role="status" aria-label="Push-to-Talk 상태" className="mt-1 text-[13px] leading-6 text-inkSoft">{pushToTalkLabel}</p>
-          <p className="mt-1 text-[12px] leading-5 text-inkSoft">발화 중 실시간 번역과 TTS 연결을 미리 준비하고, 두 번째 Left Shift에서 경계를 확정해 즉시 음성 송출을 시작합니다. 첫 Push-to-Talk 구간에서 감지된 활성 화자를 이 세션의 내 화자로 자동 고정하므로 첫 구간에서는 다른 참석자가 동시에 말하지 않도록 해 주세요.</p>
+          <p data-android-secondary-copy="" className="mt-1 text-[12px] leading-5 text-inkSoft">발화 중 실시간 번역과 번역 음성을 미리 준비하고, 두 번째 Left Shift에서 경계를 확정해 즉시 음성 송출을 시작합니다. 첫 Push-to-Talk 구간에서 감지된 활성 화자를 이 세션의 내 화자로 자동 고정하므로 첫 구간에서는 다른 참석자가 동시에 말하지 않도록 해 주세요.</p>
         </div>
       </section>
 
@@ -1215,6 +1388,7 @@ export function TestProductMeetingPanel({ capture, speech, location }: {
         ref={scrollRef}
         data-testid="global-meeting-transcript-scroll"
         data-surface="transcript"
+        data-android-pane="transcript"
         aria-label="대화 기록"
         onPointerDown={noteUserScrollGesture}
         onWheel={noteUserScrollGesture}
@@ -1272,14 +1446,14 @@ export function TestProductMeetingPanel({ capture, speech, location }: {
             {liveOriginal && (
               <Fragment>
                 <tr className="bg-soft/30">
-                  <td colSpan={2} className="border-b border-line/70 px-4 pt-3 text-left text-[12px] font-semibold text-inkSoft sm:px-5">{speakerLabel(liveSpeaker)} <span>· 실시간</span></td>
+                  <td colSpan={2} className="border-b border-line/70 px-4 pt-3 text-left text-[12px] font-semibold text-inkSoft sm:px-5">{displaySpeakerLabel(liveSpeaker)} <span>· 실시간</span></td>
                 </tr>
                 <tr
                   aria-label={appPreferences
                     ? appPreferences.t("{speaker} 실시간 대화 행", {
-                        speaker: speakerLabel(liveSpeaker),
+                        speaker: displaySpeakerLabel(liveSpeaker),
                       })
-                    : `${speakerLabel(liveSpeaker)} 실시간 대화 행`}
+                    : `${displaySpeakerLabel(liveSpeaker)} 실시간 대화 행`}
                   className="bg-soft/30"
                 >
                   <td className="min-w-0 border-r border-line px-4 pb-4 pt-2 align-top sm:px-5">
@@ -1326,8 +1500,8 @@ export function TestProductMeetingPanel({ capture, speech, location }: {
           </button>
         </div>
       )}
-      {(error || capture.error || speech.error) && <p role="alert" className="text-[13px] font-medium text-error">{error || capture.error || speech.error}</p>}
-      <p className="text-[12px] leading-5 text-inkSoft">회의 오디오는 외부 서버로 전송됩니다. 실시간 번역 결과가 없거나 언어 혼용이 감지된 경우 전사 텍스트가 설정된 번역 모델로 전송됩니다. 번역 음성 생성을 위해 번역된 텍스트도 외부 서버로 전송됩니다. 외부 제공자를 사용하면 해당 제공자의 정책과 사용량 기반 비용이 적용될 수 있습니다. “미팅 종료”를 누르면 저장 팝업에서 회의록 이름을 확인한 뒤 선택한 폴더에 저장할 수 있으며 오디오 파일은 보존하지 않습니다. 번역 음성은 이 기기의 스피커에서 재생되며 다른 통화 앱으로 자동 전송되지는 않습니다.</p>
+      {(error || capture.error || speech.error) && <p data-android-full-span="" role="alert" className="text-[13px] font-medium text-error">{error || capture.error || speech.error}</p>}
+      <p data-android-full-span="" data-android-secondary-copy="" className="text-[12px] leading-5 text-inkSoft">회의 오디오와 번역에 필요한 텍스트는 기능 제공을 위해 안전하게 처리됩니다. “미팅 종료”를 누르면 저장 팝업에서 회의록 이름을 확인한 뒤 선택한 폴더에 저장할 수 있으며 오디오 파일은 보존하지 않습니다. 번역 음성은 이 기기의 스피커에서 재생되며 다른 통화 앱으로 자동 전송되지는 않습니다.</p>
       <AppDialog
         open={saveDialogOpen}
         title={appPreferences ? appPreferences.t("회의록 저장") : "회의록 저장"}

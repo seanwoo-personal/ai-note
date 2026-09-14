@@ -63,25 +63,19 @@ beforeEach(() => {
   workDir = mkdtempSync(join(tmpdir(), "finalize-atomic-"));
   process.chdir(workDir);
   process.env.FAKE_FFMPEG = "1";
-  process.env.LOCAL_STT_HOST = "127.0.0.1";
-  process.env.LOCAL_STT_PORT = "8123";
+  process.env.FAKE_SONIOX = "1";
   resetArtifactLeaseStateForTests();
   resetLibraryRepositoryStateForTests();
   resetMeetingCleanupStateForTests();
   resetMeetingLifecycleForTests();
   resetMeetingTombstoneStateForTests();
   resetStatusUpdaterStateForTests();
-  vi.stubGlobal("fetch", vi.fn(async (_url: string, init?: RequestInit) => {
-    const body = JSON.parse(String(init?.body)) as { dispatchId: string };
-    return { status: 202, json: async () => ({ dispatchId: body.dispatchId, status: "accepted" }) };
-  }));
 });
 
 afterEach(() => {
   process.chdir(originalCwd);
   delete process.env.FAKE_FFMPEG;
-  delete process.env.LOCAL_STT_HOST;
-  delete process.env.LOCAL_STT_PORT;
+  delete process.env.FAKE_SONIOX;
   resetArtifactLeaseStateForTests();
   resetLibraryRepositoryStateForTests();
   resetMeetingCleanupStateForTests();

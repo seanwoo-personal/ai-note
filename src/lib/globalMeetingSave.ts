@@ -24,7 +24,7 @@ import {
 
 // Persists a client-produced Global Meeting session (streamed to Soniox with no
 // retained audio blob) as a canonical library meeting. It never touches the
-// immutable whisper-owned originals (audio.webm/raw.md/segments.json) and never
+// immutable recording/transcription originals (audio.webm/raw.md/segments.json) and never
 // enqueues transcription: the transcript + minutes are published through the
 // sanctioned pair publisher as a fresh `initial` attempt, and the meeting is
 // placed into the caller's selected workspace/folder via the library repository.

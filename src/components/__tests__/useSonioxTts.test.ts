@@ -113,52 +113,23 @@ describe("useSonioxTts", () => {
     expect(FakeAudioContext.instance!.sources[0].playbackRate.value).toBeCloseTo(2 / 1.3);
   });
 
-  it("preconnects the matching Soniox stream so speak skips the network handshake", async () => {
-    const { result } = renderHook(() => useSonioxTts());
-    const options = { language: "ja", voice: "Maya", speed: 1 };
-
-    await act(async () => { await result.current.prepare(options); });
-
-    expect(soniox.connect).toHaveBeenCalledTimes(1);
-    expect(soniox.speak).not.toHaveBeenCalled();
-
-    await act(async () => { await result.current.speak({ ...options, text: "こんにちは" }); });
-
-    expect(soniox.connect).toHaveBeenCalledTimes(1);
-    expect(soniox.speak).toHaveBeenCalledWith("こんにちは");
-  });
-
-  it("refreshes an unused warm session before Soniox's first-stream timeout", async () => {
+  it("never opens a provider stream in advance — only when there is text to speak", async () => {
     vi.useFakeTimers();
     const { result } = renderHook(() => useSonioxTts());
-    const options = { language: "ja", voice: "Maya", speed: 1 };
 
-    await act(async () => { await result.current.prepare(options); });
-    await act(async () => { await vi.advanceTimersByTimeAsync(6_000); });
-    await act(async () => { await vi.advanceTimersByTimeAsync(6_000); });
+    // prepare() unlocks audio playback inside a user gesture and nothing else.
+    // A stream opened ahead of the text sits on the provider's first-stream
+    // clock, and the wait before the text arrives grows with the utterance —
+    // that is the 408 this design removes.
+    await act(async () => { await result.current.prepare(); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    expect(soniox.connect).not.toHaveBeenCalled();
 
-    expect(soniox.connect).toHaveBeenCalledTimes(3);
-    expect(soniox.close).toHaveBeenCalledTimes(2);
-    await act(async () => { await result.current.speak({ ...options, text: "こんにちは" }); });
-    expect(soniox.connect).toHaveBeenCalledTimes(3);
+    await act(async () => {
+      await result.current.speak({ text: "こんにちは", language: "ja", voice: "Maya", speed: 1 });
+    });
+    expect(soniox.connect).toHaveBeenCalledTimes(1);
     expect(soniox.speak).toHaveBeenCalledWith("こんにちは");
-  });
-
-  it("silently aborts an in-flight warm refresh when speech starts", async () => {
-    vi.useFakeTimers();
-    const { result } = renderHook(() => useSonioxTts());
-    const options = { language: "ja", voice: "Maya", speed: 1 };
-    await act(async () => { await result.current.prepare(options); });
-    soniox.connect.mockImplementationOnce(({ signal }: { signal: AbortSignal }) => new Promise((_resolve, reject) => {
-      signal.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true });
-    }));
-
-    await act(async () => { await vi.advanceTimersByTimeAsync(6_000); });
-    await act(async () => { await result.current.speak({ ...options, text: "こんにちは" }); });
-
-    expect(soniox.connect).toHaveBeenCalledTimes(2);
-    expect(soniox.speak).toHaveBeenCalledWith("こんにちは");
-    expect(result.current.error).toBeNull();
   });
 
   it("does not resurrect prepare after stop while AudioContext resume is pending", async () => {
@@ -174,7 +145,7 @@ describe("useSonioxTts", () => {
     const { result } = renderHook(() => useSonioxTts());
     let pending!: Promise<void>;
 
-    act(() => { pending = result.current.prepare({ language: "ja", voice: "Maya", speed: 1 }); });
+    act(() => { pending = result.current.prepare(); });
     await waitFor(() => expect(SuspendedAudioContext.instance?.resume).toHaveBeenCalledTimes(1));
     act(() => result.current.stop());
     resumeContext();
@@ -240,6 +211,49 @@ describe("useSonioxTts", () => {
 
     expect(result.current.phase).toBe("error");
     expect(result.current.error).toBe("이 브라우저에서는 음성 재생을 지원하지 않습니다.");
+  });
+
+  it("resends the utterance on a fresh stream when it fails before any audio is heard", async () => {
+    const { result } = renderHook(() => useSonioxTts());
+    const options = { language: "ja", voice: "Maya", speed: 1 };
+    await act(async () => { await result.current.speak({ ...options, text: "こんにちは" }); });
+    expect(soniox.connect).toHaveBeenCalledTimes(1);
+
+    // The stream died without producing a single sample, so the other side heard
+    // nothing. Re-send instead of showing a failure the user cannot act on.
+    await act(async () => { soniox.callbacks?.onError("request timeout"); });
+    await waitFor(() => expect(soniox.connect).toHaveBeenCalledTimes(2));
+    expect(soniox.speak).toHaveBeenCalledTimes(2);
+    expect(soniox.speak).toHaveBeenLastCalledWith("こんにちは");
+    expect(result.current.error).toBeNull();
+    expect(result.current.phase).not.toBe("error");
+  });
+
+  it("does not resend once audio has already been heard", async () => {
+    const { result } = renderHook(() => useSonioxTts());
+    const options = { language: "ja", voice: "Maya", speed: 1 };
+    await act(async () => { await result.current.speak({ ...options, text: "こんにちは" }); });
+    act(() => soniox.callbacks?.onAudio(new Uint8Array([0, 0, 255, 127])));
+
+    // Half the sentence was already spoken aloud — resending would repeat it.
+    await act(async () => { soniox.callbacks?.onError("stream failed"); });
+    expect(soniox.connect).toHaveBeenCalledTimes(1);
+    expect(result.current.phase).toBe("error");
+    expect(result.current.error).toBe("stream failed");
+  });
+
+  it("surfaces the failure after a single resend instead of looping", async () => {
+    const { result } = renderHook(() => useSonioxTts());
+    const options = { language: "ja", voice: "Maya", speed: 1 };
+    await act(async () => { await result.current.speak({ ...options, text: "こんにちは" }); });
+
+    await act(async () => { soniox.callbacks?.onError("request timeout"); });
+    await waitFor(() => expect(soniox.connect).toHaveBeenCalledTimes(2));
+    await act(async () => { soniox.callbacks?.onError("request timeout"); });
+
+    expect(soniox.connect).toHaveBeenCalledTimes(2);
+    expect(result.current.phase).toBe("error");
+    expect(result.current.error).toBe("request timeout");
   });
 
   it("cancels the adopted session when speak throws synchronously", async () => {

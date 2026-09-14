@@ -9,6 +9,7 @@ import type {
 import type { LlmProvider } from "@/services/llm/types";
 
 export type PublicErrorCode =
+  | "authentication_required"
   | "invalid_host"
   | "cross_site_request"
   | "missing_origin"
@@ -18,6 +19,7 @@ export type PublicErrorCode =
   | "invalid_content_length"
   | "invalid_json"
   | "invalid_request"
+  | "resource_not_found"
   | "meeting_not_found"
   | "meeting_deleted"
   | "delete_state_ambiguous"
@@ -47,9 +49,11 @@ export type PublicErrorCode =
   | "transcript_generation_failed"
   | "transcription_failed"
   | "local_service_unavailable"
+  | "cloud_service_unavailable"
   | "internal_error";
 
 const PUBLIC_ERROR_MESSAGES: Record<PublicErrorCode, string> = {
+  authentication_required: "로그인이 필요합니다",
   invalid_host: "로컬 앱 요청만 허용됩니다",
   cross_site_request: "다른 사이트에서 보낸 요청은 허용되지 않습니다",
   missing_origin: "요청 출처를 확인할 수 없습니다",
@@ -59,6 +63,7 @@ const PUBLIC_ERROR_MESSAGES: Record<PublicErrorCode, string> = {
   invalid_content_length: "요청 크기 정보가 올바르지 않습니다",
   invalid_json: "JSON 요청을 확인해 주세요",
   invalid_request: "요청 내용을 확인해 주세요",
+  resource_not_found: "요청한 기능을 찾을 수 없습니다",
   meeting_not_found: "회의를 찾을 수 없습니다",
   meeting_deleted: "삭제된 회의입니다",
   delete_state_ambiguous: "삭제 상태를 안전하게 확인할 수 없습니다",
@@ -76,18 +81,19 @@ const PUBLIC_ERROR_MESSAGES: Record<PublicErrorCode, string> = {
   content_source_conflict: "저장된 회의 내용의 출처 정보를 안전하게 확인할 수 없습니다",
   content_state_ambiguous: "회의 내용 저장 상태를 안전하게 확인할 수 없습니다",
   content_save_unavailable: "회의 내용을 로컬 저장소에 안전하게 저장하거나 확인할 수 없습니다",
-  chat_llm_unconfigured: "질문 기능을 사용하려면 요약 모델을 먼저 설정해 주세요",
-  chat_llm_unavailable: "설정한 로컬 요약 모델을 사용할 수 없습니다. 설정과 로그인을 확인해 주세요",
+  chat_llm_unconfigured: "질문 기능을 준비하고 있습니다. 잠시 후 다시 시도해 주세요",
+  chat_llm_unavailable: "질문 기능을 지금 사용할 수 없습니다. 잠시 후 다시 시도하거나 운영자에게 문의해 주세요",
   chat_timeout: "답변 준비 시간이 초과되었습니다. 다시 시도하거나 확인 범위를 줄여 주세요",
   chat_index_unavailable: "회의 검색 데이터를 사용할 수 없습니다. 검색 데이터를 다시 만들어 주세요",
-  summary_tool_missing: "선택한 요약 도구를 찾을 수 없습니다. 설정을 확인해 주세요",
+  summary_tool_missing: "AI 회의록 기능을 준비하고 있습니다. 잠시 후 다시 시도해 주세요",
   summary_timeout: "요약 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요",
-  summary_auth_required: "요약 도구 로그인이 필요합니다. 로그인한 뒤 다시 시도해 주세요",
-  summary_provider_failed: "요약 도구가 작업을 완료하지 못했습니다. 설정을 확인해 주세요",
-  summary_failed: "요약을 완료하지 못했습니다. 설정을 확인한 뒤 다시 시도해 주세요",
-  transcript_generation_failed: "전체 스크립트를 다시 만들지 못했습니다. 설정을 확인한 뒤 다시 시도해 주세요",
-  transcription_failed: "전사를 완료하지 못했습니다. 로컬 전사 서비스를 확인해 주세요",
-  local_service_unavailable: "로컬 서비스를 사용할 수 없습니다",
+  summary_auth_required: "AI 회의록 기능을 지금 사용할 수 없습니다. 잠시 후 다시 시도하거나 운영자에게 문의해 주세요",
+  summary_provider_failed: "AI 회의록 기능을 지금 사용할 수 없습니다. 잠시 후 다시 시도하거나 운영자에게 문의해 주세요",
+  summary_failed: "요약을 완료하지 못했습니다. 잠시 후 다시 시도하거나 운영자에게 문의해 주세요",
+  transcript_generation_failed: "전체 스크립트를 다시 만들지 못했습니다. 잠시 후 다시 시도하거나 운영자에게 문의해 주세요",
+  transcription_failed: "전사를 완료하지 못했습니다. 잠시 후 다시 시도하거나 운영자에게 문의해 주세요",
+  local_service_unavailable: "요청한 기능을 사용할 수 없습니다",
+  cloud_service_unavailable: "전사 기능을 사용할 수 없습니다",
   internal_error: "요청을 처리하지 못했습니다",
 };
 

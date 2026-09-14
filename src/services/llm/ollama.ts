@@ -1,5 +1,5 @@
 import { LLM_GENERATION_TIMEOUT_MS } from "@/services/llm/exec";
-import type { LlmAdapter, LlmHealth, LlmProvider, LlmSettings } from "@/services/llm/types";
+import type { LlmAdapter, LlmHealth, LlmProvider, LlmRunOptions, LlmSettings } from "@/services/llm/types";
 import { normalizeLoopbackHttpBaseUrl } from "@/lib/localEndpoint";
 
 // Ollama backend — a local model daemon on 127.0.0.1. The daemon is frequently
@@ -127,7 +127,7 @@ export class OllamaAdapter implements LlmAdapter {
     this.baseUrl = normalizeLoopbackHttpBaseUrl(settings.baseUrl || DEFAULT_BASE_URL);
   }
 
-  async run(prompt: string, opts?: { json?: boolean }): Promise<string> {
+  async run(prompt: string, opts?: LlmRunOptions): Promise<string> {
     const model = this.settings.model?.trim();
     if (!model) throw new Error("Ollama model not set");
 

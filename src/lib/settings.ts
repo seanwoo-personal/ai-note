@@ -26,7 +26,12 @@ export async function readSettings(): Promise<LlmSettings | null> {
       ...(parsed.provider === "ollama" && parsed.baseUrl ? { baseUrl: parsed.baseUrl } : {}),
     };
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      // Hosted installs become usable as soon as the server-only key is set.
+      return process.env.OPENROUTER_API_KEY?.trim()
+        ? { provider: "openrouter" }
+        : null;
+    }
     // A corrupt settings.json shouldn't 500 the (polled) health endpoint — treat
     // it as unconfigured so the UI prompts the user to set a model again.
     if (err instanceof SyntaxError) return null;

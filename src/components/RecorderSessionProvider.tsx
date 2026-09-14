@@ -15,6 +15,11 @@ import {
 import { AppDialog } from "@/components/AppDialog";
 import { useOptionalLibrary } from "@/components/LibraryProvider";
 import { formatDuration, pickAudioMime, recorderPhaseAnnouncement, rms } from "@/lib/recorder";
+import {
+  recordingCaptureErrorMessage,
+  requestRecordingCapture,
+  type RecorderAudioSource,
+} from "@/lib/recordingCapture";
 import type {
   RecorderFinalizeResultContract,
   RecorderResultLocation,
@@ -53,6 +58,7 @@ export type LiveTranscriptionStatus =
 
 export interface RecorderStartOptions {
   requestedLocation?: RecorderRequestedLocation;
+  audioSource?: RecorderAudioSource;
   soniox?: { translation: SonioxTranslationOptions };
 }
 
@@ -192,6 +198,7 @@ export function RecorderSessionProvider({ children }: { children: ReactNode }) {
   const phaseRef = useRef<RecorderSessionPhase>("idle");
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const captureReleaseRef = useRef<(() => void) | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -233,7 +240,10 @@ export function RecorderSessionProvider({ children }: { children: ReactNode }) {
       timerRef.current = null;
     }
     analyserRef.current = null;
-    streamRef.current?.getTracks().forEach((track) => track.stop());
+    const releaseCapture = captureReleaseRef.current;
+    captureReleaseRef.current = null;
+    if (releaseCapture) releaseCapture();
+    else streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     if (audioContextRef.current) {
       void audioContextRef.current.close();
@@ -463,12 +473,15 @@ export function RecorderSessionProvider({ children }: { children: ReactNode }) {
     const id = crypto.randomUUID();
     setMeetingId(id);
     setPhase("requesting_permission");
+    const audioSource = options.audioSource ?? "microphone";
     let stream: MediaStream;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const capture = await requestRecordingCapture(audioSource);
+      stream = capture.stream;
+      captureReleaseRef.current = capture.release;
     } catch (permissionError) {
       if (generation !== sessionGenerationRef.current || !mountedRef.current) return;
-      setError(permissionError instanceof Error ? permissionError.message : "마이크 접근이 거부되었습니다.");
+      setError(recordingCaptureErrorMessage(audioSource, permissionError));
       if (options.soniox) {
         setLiveError("마이크 권한이 없어 실시간 전사를 시작하지 못했습니다.");
         setLiveStatus("error");
@@ -482,7 +495,7 @@ export function RecorderSessionProvider({ children }: { children: ReactNode }) {
       || phaseRef.current !== "requesting_permission"
       || !mountedRef.current
     ) {
-      stream.getTracks().forEach((track) => track.stop());
+      teardownCapture();
       return;
     }
     streamRef.current = stream;

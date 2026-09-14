@@ -32,9 +32,9 @@ import { translateUi } from "@/lib/i18n";
 import type { SonioxTranslationOptions } from "@/services/sonioxRealtime";
 
 const LANGUAGES = [
-  { value: "ko", label: "한국어" },
-  { value: "en", label: "영어" },
   { value: "ja", label: "일본어" },
+  { value: "en", label: "영어" },
+  { value: "ko", label: "한국어" },
   { value: "zh", label: "중국어" },
 ] as const;
 

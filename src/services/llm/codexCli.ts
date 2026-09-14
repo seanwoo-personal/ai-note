@@ -3,32 +3,18 @@ import { tmpdir } from "node:os";
 import { LLM_GENERATION_TIMEOUT_MS, runProcess } from "@/services/llm/exec";
 import type { LlmAdapter, LlmHealth, LlmProvider, LlmSettings } from "@/services/llm/types";
 
-// Codex backend — two modes, decided per call so a key added later wins without
-// a restart:
-//
-// 1. API mode (customer machines): when CODEX_API_KEY/OPENAI_API_KEY is present
-//    in the environment (.env.local, never stored in app data), run the prompt
-//    through the provider's HTTPS completion API directly — no CLI install
-//    needed. The key is read lazily inside the handler (build-green) and never
-//    logged or echoed; errors surface as opaque codes.
-// 2. CLI mode (fallback) — BEST-EFFORT. `codex exec` is an agentic runner (not a
-//    plain completion API): it emits a JSONL event stream on stdout, from which
+// Legacy local Codex CLI backend. Hosted deployments use OpenRouter; this
+// adapter remains only for existing local settings. `codex exec` is an agentic
+// runner (not a plain completion API): it emits a JSONL event stream on stdout, from which
 //    we salvage the model's final message. Auth is only verified on the first
 //    real summary, so health() just confirms the binary exists. Run read-only in
 //    a temp cwd, and skip the git-repo check so it works outside a repo.
 //
-// The `run` opts.json hint needs no extra flag here: the salvaged/API message is
+// The `run` opts.json hint needs no extra flag here: the salvaged message is
 // handed to the caller's tolerant extractor (chatOrchestrator/summarizeCore).
 //
 // UI copy must never surface the vendor name — settings/status call this the
 // "외부 모델" backend.
-
-const API_URL = "https://api.openai.com/v1/chat/completions";
-const DEFAULT_API_MODEL = "gpt-5-mini";
-
-function configuredApiKey(): string | null {
-  return process.env.CODEX_API_KEY?.trim() || process.env.OPENAI_API_KEY?.trim() || null;
-}
 
 export class CodexCliAdapter implements LlmAdapter {
   readonly provider: LlmProvider = "codex-cli";
@@ -36,8 +22,6 @@ export class CodexCliAdapter implements LlmAdapter {
   constructor(private readonly settings: LlmSettings) {}
 
   async run(prompt: string): Promise<string> {
-    const apiKey = configuredApiKey();
-    if (apiKey) return this.runViaApi(prompt, apiKey);
     const args = [
       "exec",
       "--json",
@@ -56,39 +40,7 @@ export class CodexCliAdapter implements LlmAdapter {
     return extractFinalMessage(stdout);
   }
 
-  private async runViaApi(prompt: string, apiKey: string): Promise<string> {
-    const response = await fetch(API_URL, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${apiKey}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: this.settings.model?.trim() || DEFAULT_API_MODEL,
-        messages: [{ role: "user", content: prompt }],
-      }),
-      cache: "no-store",
-      redirect: "error",
-      signal: AbortSignal.timeout(LLM_GENERATION_TIMEOUT_MS),
-    });
-    // Opaque failure codes only — never propagate provider response bodies.
-    if (!response.ok) throw new Error(`summary_api_status_${response.status}`);
-    const payload = await response.json() as {
-      choices?: Array<{ message?: { content?: unknown } }>;
-    };
-    const content = payload.choices?.[0]?.message?.content;
-    const text = typeof content === "string" ? content.trim() : "";
-    if (!text) throw new Error("summary_api_empty_response");
-    return text;
-  }
-
   async health(): Promise<LlmHealth> {
-    if (configuredApiKey()) {
-      return {
-        ok: true,
-        detail: "외부 요약 모델 API 키가 설정되었습니다. 실제 요약 가능 여부는 첫 요약에서 확인합니다.",
-      };
-    }
     try {
       await runProcess("codex", ["--version"], { timeoutMs: 15_000 });
       return {
@@ -100,12 +52,12 @@ export class CodexCliAdapter implements LlmAdapter {
       if (e?.code === "ENOENT" || (e?.message?.includes("ENOENT") ?? false)) {
         return {
           ok: false,
-          detail: "외부 요약 모델 API 키가 없고 CLI도 찾을 수 없습니다. API 키를 설정하거나 CLI를 설치하세요.",
+          detail: "기존 로컬 요약 CLI를 찾을 수 없습니다. OpenRouter로 전환하거나 CLI를 설치하세요.",
         };
       }
       return {
         ok: false,
-        detail: "외부 요약 모델 상태를 확인할 수 없습니다. API 키 또는 CLI 설치를 확인하세요.",
+        detail: "기존 로컬 요약 CLI 상태를 확인할 수 없습니다. 설치와 PATH를 확인하세요.",
       };
     }
   }

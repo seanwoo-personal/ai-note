@@ -21,7 +21,7 @@ import { inspectTranscriptionPublication } from "@/lib/transcriptionArtifacts";
 
 // app-api is the primary writer of status.json. These helpers own reading, writing
 // (atomic), and — per the contract — deriving transcribed/summarized purely from
-// artifact-file existence (whisper/summarizer write those files, not status.json).
+// artifact-file existence (transcription/summarizer flows write those files, not status.json).
 
 const RANK: Record<MeetingStatus, number> = {
   recording: 0,
@@ -152,7 +152,7 @@ function readJson<T>(path: string): T | null {
 }
 
 // Fold artifact-file existence into a status view. Monotonic (never steps back):
-//   raw.md       → transcribed   (whisper wrote it)
+//   raw.md       → transcribed   (cloud transcription wrote it)
 //   summary.json → summarized    (rank), and — unless titleOverride is set —
 //                  promote summary.title into status.title.
 // titleOverride (app-api owned) wins over summary.title so a manual rename

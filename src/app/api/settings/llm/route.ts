@@ -14,7 +14,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const settingsSchema = z.object({
-  provider: z.enum(["claude-cli", "codex-cli", "ollama"]),
+  provider: z.enum(["openrouter", "claude-cli", "codex-cli", "ollama"]),
   model: z.string().optional(),
   baseUrl: z.string().optional(),
 }).strict();
@@ -22,6 +22,9 @@ const settingsSchema = z.object({
 export async function GET(request: Request) {
   const denied = guardLocalApiRequest(request);
   if (denied) return denied;
+  if (request.headers.get("x-vision-account-role") === "customer") {
+    return publicErrorResponse("resource_not_found", 404);
+  }
   const settings = await readSettings();
   return jsonNoStore(settings ?? { provider: null });
 }
@@ -29,6 +32,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const denied = guardLocalApiRequest(request);
   if (denied) return denied;
+  if (request.headers.get("x-vision-account-role") === "customer") {
+    return publicErrorResponse("resource_not_found", 404);
+  }
   let body: unknown;
   try {
     body = await parseBoundedJsonBody(request, 32 * 1024);

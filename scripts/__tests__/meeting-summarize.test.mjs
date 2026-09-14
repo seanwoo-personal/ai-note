@@ -100,7 +100,7 @@ describe("final artifact producer inventory", () => {
     expect(core).not.toContain("transcriptPath");
     expect(core).not.toContain("summaryPath");
     for (const consumer of [
-      "app/meetings/[id]/page.tsx",
+      "app/(product)/meetings/[id]/page.tsx",
       "app/api/meetings/[id]/export/route.ts",
     ]) {
       expect(readFileSync(join(sourceRoot, consumer), "utf8")).toContain("readArtifactPair(");

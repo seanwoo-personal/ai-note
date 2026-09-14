@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "description": "진행자 1명과 남성 패널 3명의 한국어 토론을 독립 설정으로 비교하는 세트",
+  "silenceMs": 0,
+  "sources": [
+    {
+      "id": "korean-four-speakers",
+      "url": "https://www.youtube.com/watch?v=j3QbNOOPeSw",
+      "title": "패널 4인이 보는 언론 표현 토론",
+      "file": "02-korean-four-speakers.m4a",
+      "language": "ko",
+      "start": "00:30",
+      "end": "04:30",
+      "expectedMinSpeakers": 4,
+      "expectedMaxSpeakers": 4,
+      "expectedMinSupportedSpeakers": 4,
+      "expectedMaxSupportedSpeakers": 4
+    }
+  ]
+}

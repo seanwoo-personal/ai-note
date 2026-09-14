@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "description": "고객 피드백 화면에서 식별한 영어 원본 영상 2개와 중간 다국어 대담을 같은 순서로 배치한 재현 세트",
+  "silenceMs": 2000,
+  "sources": [
+    {
+      "id": "sam-altman-founders",
+      "url": "https://www.youtube.com/watch?v=kG8AoExkX40",
+      "title": "Sam Altman on Building OpenAI & Betting on the Impossible",
+      "file": "01-sam-altman.m4a",
+      "language": "en",
+      "start": "13:20",
+      "end": "13:55",
+      "expectedMinSpeakers": 2,
+      "expectedMaxSpeakers": 2
+    },
+    {
+      "id": "korean-interview",
+      "url": "https://www.youtube.com/watch?v=AWb5q5gBkFE",
+      "title": "Showbiz Korea Run Off Interview",
+      "file": "02-korean.m4a",
+      "language": "ko",
+      "start": "01:00",
+      "end": "01:35",
+      "expectedMinSpeakers": 2,
+      "expectedMaxSpeakers": 4
+    },
+    {
+      "id": "japanese-dialogue",
+      "url": "https://www.youtube.com/watch?v=Z774GYhLuo0",
+      "title": "久保建英×内田篤人 スペシャル対談",
+      "file": "03-japanese.m4a",
+      "language": "ja",
+      "start": "00:45",
+      "end": "02:15",
+      "expectedMinSpeakers": 2,
+      "expectedMaxSpeakers": 2
+    },
+    {
+      "id": "neil-movva-token-cost",
+      "url": "https://www.youtube.com/watch?v=uyzqxIoiobU",
+      "title": "Ex-NVIDIA Engineer: Why AI Is About to Get 1000x Cheaper",
+      "file": "04-neil-movva.m4a",
+      "language": "en",
+      "start": "01:05",
+      "end": "02:20",
+      "expectedMinSpeakers": 2,
+      "expectedMaxSpeakers": 2
+    }
+  ]
+}

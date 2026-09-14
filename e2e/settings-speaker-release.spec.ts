@@ -1,6 +1,6 @@
 import { expect, test } from "./support/synthetic-test";
 
-test("v1.17.0 release, independent scrolling, and meeting products are visible", async ({ page }) => {
+test("customer settings, independent scrolling, and meeting products are visible", async ({ page }) => {
   await page.addInitScript(() => {
     if (localStorage.getItem("e2e-release-initialized") !== "true") {
       localStorage.setItem("ai-note-locale", "ko");
@@ -18,12 +18,12 @@ test("v1.17.0 release, independent scrolling, and meeting products are visible",
     : page.getByRole("navigation", { name: "라이브러리" });
 
   await expect(navigation.getByText("제품 버전 1.17.0")).toBeVisible();
-  await navigation.getByRole("link", { name: "릴리즈 노트" }).click();
-  await expect(page).toHaveURL(/\/settings\/releases$/);
-  await expect(page.getByRole("heading", { name: "릴리즈 노트" })).toBeVisible();
-  await expect(page.getByText("v1.17.0", { exact: true })).toBeVisible();
-  await expect(page.getByText("기준판 이후 23회 업데이트", { exact: true })).toBeVisible();
-  await expect(page.getByText("v1.0.0 · AI NOTE 오픈소스 기준판", { exact: true })).toBeVisible();
+  await expect(navigation.getByRole("link", { name: "릴리즈 노트" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "글자 크기" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "내 정보" })).toBeVisible();
+  expect(await page.locator("main").innerText()).not.toMatch(
+    /OpenRouter|Soniox|Ollama|API 키|요약 모델|모델 백엔드|Base URL/iu,
+  );
 
   await page.goto("/settings");
   await page.getByRole("button", { name: "글자 크기 한 단계 크게" }).click();
@@ -59,7 +59,7 @@ test("v1.17.0 release, independent scrolling, and meeting products are visible",
   // recognition-implying "입력 언어"/"번역할 언어" wording, values stay wired.
   await expect(page.getByRole("combobox", { name: "입력 언어" })).toHaveCount(0);
   await expect(page.getByRole("combobox", { name: "번역할 언어" })).toHaveCount(0);
-  await expect(page.getByRole("combobox", { name: "내 언어" })).toHaveValue("ko");
+  await expect(page.getByRole("combobox", { name: "내 언어" })).toHaveValue("ja");
   await expect(page.getByRole("combobox", { name: "상대방 언어" })).toHaveValue("en");
   await expect(page.getByRole("combobox", { name: "번역 음성" })).toHaveValue("Maya");
   await expect(page.getByRole("combobox", { name: "음성 속도" })).toHaveValue("1");

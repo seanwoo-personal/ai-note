@@ -1,6 +1,7 @@
 import { join } from "node:path";
 
 import { assertSafeId } from "@/lib/meetingId";
+import { activeTenantDataRoot, baseDataRoot } from "@/lib/tenantDataContext";
 
 // Filesystem layout for a meeting: data/meetings/{id}/<artifact>.
 // Every helper validates the id first (path-traversal defense). cwd is read lazily
@@ -36,7 +37,7 @@ export interface FinalizeStagingPaths {
 }
 
 export function dataRoot(): string {
-  return join(process.cwd(), "data");
+  return activeTenantDataRoot() ?? baseDataRoot();
 }
 
 export function libraryPath(root = dataRoot()): string {

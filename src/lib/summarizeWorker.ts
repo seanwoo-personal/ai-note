@@ -6,6 +6,11 @@ import { scanMeetingRecordObservations } from "@/lib/library";
 import { dataRoot, meetingPaths } from "@/lib/paths";
 import { readSettings } from "@/lib/settings";
 import { MAX_SUMMARIZE_ATTEMPTS, runSummarize } from "@/lib/summarize";
+import {
+  baseDataRoot,
+  listTenantDataRoots,
+  runWithTenantDataRoot,
+} from "@/lib/tenantDataContext";
 import { inspectTranscriptionPublication } from "@/lib/transcriptionArtifacts";
 
 // Background poller that summarizes transcribed meetings once an LLM is configured.
@@ -69,8 +74,14 @@ async function tick(): Promise<void> {
   if (running) return;
   running = true;
   try {
-    for (const id of await findSummarizeCandidates()) {
-      await runSummarize(id);
+    const tenantRoots = await listTenantDataRoots();
+    const roots = tenantRoots.length > 0 ? tenantRoots : [baseDataRoot()];
+    for (const root of roots) {
+      await runWithTenantDataRoot(root, async () => {
+        for (const id of await findSummarizeCandidates()) {
+          await runSummarize(id);
+        }
+      });
     }
   } catch {
     // Never let a poll error escape the interval and kill the timer.

@@ -23,6 +23,9 @@ const discoverySchema = z.object({
 export async function POST(request: Request) {
   const denied = guardLocalApiRequest(request);
   if (denied) return denied;
+  if (request.headers.get("x-vision-account-role") === "customer") {
+    return publicErrorResponse("resource_not_found", 404);
+  }
 
   let body: unknown;
   try {

@@ -4,15 +4,16 @@ test("synthetic library shell is usable without external traffic", async ({ page
   const libraryResponsePromise = page.waitForResponse((response) => (
     new URL(response.url()).pathname === "/api/library"
   ));
-  const whisperResponsePromise = page.waitForResponse((response) => (
-    new URL(response.url()).pathname === "/api/whisper/health"
+  const sonioxResponsePromise = page.waitForResponse((response) => (
+    new URL(response.url()).pathname === "/api/realtime/temporary-key"
+    && response.request().method() === "GET"
   ));
   const llmResponsePromise = page.waitForResponse((response) => (
     new URL(response.url()).pathname === "/api/settings/llm/health"
   ));
   await page.goto("/");
   const libraryResponse = await libraryResponsePromise;
-  const whisperResponse = await whisperResponsePromise;
+  const sonioxResponse = await sonioxResponsePromise;
   const llmResponse = await llmResponsePromise;
 
   expect(
@@ -23,13 +24,13 @@ test("synthetic library shell is usable without external traffic", async ({ page
     mode: "ready",
     library: { counts: { visibleMeetingCount: 8 } },
   });
-  expect(await whisperResponse.json(), "synthetic Whisper state").toMatchObject({ connected: false });
+  expect(await sonioxResponse.json(), "synthetic Soniox state").toEqual({ configured: false });
   expect(await llmResponse.json(), "synthetic LLM state").toEqual({ configured: false });
   await expect(page).toHaveTitle("Vision AI 미팅 에이전트");
   await expect(page.locator("main#main")).toBeVisible();
   await expect(page.getByRole("heading", { level: 1, name: "최근 작업한 문서" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "바로 시작" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Whisper 전사용 녹음 시작" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "회의 녹음 시작" })).toBeEnabled();
   await expect(page.getByRole("region", { name: "최근 작업한 문서 목록" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "아직 회의록이 없습니다" })).toHaveCount(0);
 });

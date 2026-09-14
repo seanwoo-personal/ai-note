@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { link, mkdir, mkdtemp, realpath, rename, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -79,8 +80,8 @@ describe("E2E harness isolation", () => {
       LANG: "ko_KR.UTF-8",
       HOME: "/tmp/synthetic-home",
       AI_NOTE_DISABLE_WORKER: "1",
-      LOCAL_STT_HOST: "127.0.0.1",
-      LOCAL_STT_PORT: "43210",
+      FAKE_PASSWORD_EMAIL: "1",
+      FAKE_SONIOX: "1",
       NEXT_TELEMETRY_DISABLED: "1",
       NODE_ENV: "development",
     });
@@ -293,6 +294,28 @@ describe("E2E owned snapshot-descendant containment", () => {
       snapshotRoot: root, ownershipToken: OWNER_TOKEN, project: "mobile-390", expectedTitleOverride: OWNER_TITLE,
     })).resolves.toMatchObject({ removed: true });
     expect(await exists(meetingRoot)).toBe(false);
+  });
+
+  it("removes the exact owned seed from an account tenant without touching the shared meetings root", async () => {
+    const root = await tempRoot();
+    await markOwned(root);
+    const tenantAccountId = "e2e-approved-customer";
+    const tenantHash = createHash("sha256").update(tenantAccountId).digest("hex");
+    const meetingRoot = join(root, "data", "tenants", tenantHash, "meetings", OWNER_ID);
+    const sharedSentinel = join(root, "data", "meetings", "shared-must-survive");
+    await mkdir(meetingRoot, { recursive: true });
+    await mkdir(sharedSentinel, { recursive: true });
+    await writeFile(join(meetingRoot, "status.json"), JSON.stringify({ id: OWNER_ID, titleOverride: OWNER_TITLE }));
+
+    await expect(removeOwnedE2eMeetingSeed({
+      snapshotRoot: root,
+      ownershipToken: OWNER_TOKEN,
+      project: "mobile-390",
+      expectedTitleOverride: OWNER_TITLE,
+      tenantAccountId,
+    })).resolves.toMatchObject({ removed: true });
+    expect(await exists(meetingRoot)).toBe(false);
+    expect(await exists(sharedSentinel)).toBe(true);
   });
 
   it("fails closed when status.json is already hard-linked outside the meeting before capture", async () => {

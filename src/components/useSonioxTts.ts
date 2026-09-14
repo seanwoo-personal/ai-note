@@ -17,20 +17,7 @@ export interface SonioxSpeakOptions {
   speed?: number;
 }
 
-export type SonioxPrepareOptions = Omit<SonioxSpeakOptions, "text">;
-
-type WarmSession = {
-  key: string;
-  generation: number;
-  promise: Promise<SonioxTtsSession>;
-};
-
 const SAMPLE_RATE = 24_000;
-const WARM_REFRESH_INTERVAL_MS = 6_000;
-
-function sessionKey(options: SonioxPrepareOptions): string {
-  return `${options.language}:${options.voice}:${options.speed ?? 1}`;
-}
 
 function createAudioContext(): AudioContext {
   const AudioContextConstructor = window.AudioContext
@@ -39,6 +26,21 @@ function createAudioContext(): AudioContext {
   return new AudioContextConstructor({ sampleRate: SAMPLE_RATE });
 }
 
+/**
+ * Realtime translation playback.
+ *
+ * The provider stream is opened ONLY when there is text to speak. An earlier
+ * design pre-opened a "warm" stream at push-to-talk time and kept it alive by
+ * reconnecting every few seconds, to save the handshake. That is what produced
+ * the provider's 408 (request timeout): a stream that is configured but has not
+ * been handed any text is on the provider's first-stream clock, and the gap
+ * before the text arrives grows with the utterance — a long turn means a long
+ * translation. The handshake costs a fraction of the translation that already
+ * had to finish, so connecting late is both simpler and reliable.
+ *
+ * `prepare()` still exists, but only to unlock audio playback inside a user
+ * gesture; it never touches the network.
+ */
 export function useSonioxTts() {
   const [phase, setPhase] = useState<SonioxTtsPhase>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -46,14 +48,16 @@ export function useSonioxTts() {
   const generationRef = useRef(0);
   const contextRef = useRef<AudioContext | null>(null);
   const sessionRef = useRef<SonioxTtsSession | null>(null);
-  const warmSessionRef = useRef<WarmSession | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const warmRefreshAbortRef = useRef<AbortController | null>(null);
-  const warmRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sourcesRef = useRef(new Set<AudioBufferSourceNode>());
   const nextStartTimeRef = useRef(0);
   const carryByteRef = useRef<number | null>(null);
   const finishTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Whether the current utterance has produced audible output yet, and the
+  // utterance itself so a stream that dies silently can be re-sent exactly once.
+  const audioStartedRef = useRef(false);
+  const pendingUtteranceRef = useRef<{ options: SonioxSpeakOptions; retried: boolean } | null>(null);
+  const speakRef = useRef<((options: SonioxSpeakOptions, isRetry: boolean) => Promise<void>) | null>(null);
 
   const clearFinishTimer = useCallback(() => {
     if (finishTimerRef.current !== null) clearTimeout(finishTimerRef.current);
@@ -64,14 +68,10 @@ export function useSonioxTts() {
     clearFinishTimer();
     abortRef.current?.abort();
     abortRef.current = null;
-    warmRefreshAbortRef.current?.abort();
-    warmRefreshAbortRef.current = null;
-    if (warmRefreshTimerRef.current !== null) clearTimeout(warmRefreshTimerRef.current);
-    warmRefreshTimerRef.current = null;
     if (cancel) sessionRef.current?.cancel();
     else sessionRef.current?.close();
     sessionRef.current = null;
-    warmSessionRef.current = null;
+    audioStartedRef.current = false;
     for (const source of sourcesRef.current) {
       try { source.stop(); } catch { /* already stopped */ }
     }
@@ -124,152 +124,109 @@ export function useSonioxTts() {
     source.onended = () => sourcesRef.current.delete(source);
     const startAt = Math.max(context.currentTime + 0.01, nextStartTimeRef.current);
     source.start(startAt);
+    // Past this point the other side has heard part of the sentence, so the
+    // utterance can no longer be re-sent without repeating speech.
+    audioStartedRef.current = true;
     nextStartTimeRef.current = startAt + (buffer.duration / playbackRate);
     setPhase("playing");
   }, []);
 
   const connectSession = useCallback((
-    options: SonioxPrepareOptions,
+    options: SonioxSpeakOptions,
     generation: number,
     controller: AbortController,
     context: AudioContext,
   ) => {
     const speedPlan = getSonioxTtsSpeedPlan(options.speed ?? 1);
     return connectSonioxTts({
-    language: options.language,
-    voice: options.voice,
-    speed: speedPlan.providerSpeed,
-    signal: controller.signal,
-    onAudio: (chunk) => scheduleAudio(generation, chunk, speedPlan.playbackRate),
-    onTerminated: () => {
-      if (!mountedRef.current || generation !== generationRef.current) return;
-      sessionRef.current = null;
-      warmSessionRef.current = null;
-      abortRef.current = null;
-      const remainingMs = Math.max(0, (nextStartTimeRef.current - context.currentTime) * 1000);
-      clearFinishTimer();
-      finishTimerRef.current = setTimeout(() => {
-        if (mountedRef.current && generation === generationRef.current) setPhase("finished");
-      }, remainingMs);
-    },
-    onError: (message) => {
-      if (!mountedRef.current || generation !== generationRef.current) return;
-      stopResources(false);
-      setError(message);
-      setPhase("error");
-    },
+      language: options.language,
+      voice: options.voice,
+      speed: speedPlan.providerSpeed,
+      signal: controller.signal,
+      onAudio: (chunk) => scheduleAudio(generation, chunk, speedPlan.playbackRate),
+      onTerminated: () => {
+        if (!mountedRef.current || generation !== generationRef.current) return;
+        sessionRef.current = null;
+        abortRef.current = null;
+        pendingUtteranceRef.current = null;
+        const remainingMs = Math.max(0, (nextStartTimeRef.current - context.currentTime) * 1000);
+        clearFinishTimer();
+        finishTimerRef.current = setTimeout(() => {
+          if (mountedRef.current && generation === generationRef.current) setPhase("finished");
+        }, remainingMs);
+      },
+      onError: (message) => {
+        if (!mountedRef.current || generation !== generationRef.current) return;
+        const pending = pendingUtteranceRef.current;
+        if (pending && !pending.retried && !audioStartedRef.current) {
+          // The stream died before a single sample played, so the other side
+          // heard nothing. Re-send once on a fresh stream rather than surfacing
+          // a failure the speaker cannot act on.
+          const retryOptions = pending.options;
+          stopResources(false);
+          void speakRef.current?.(retryOptions, true);
+          return;
+        }
+        stopResources(false);
+        setError(message);
+        setPhase("error");
+      },
     });
   }, [clearFinishTimer, scheduleAudio, stopResources]);
 
-  const prepare = useCallback(async (options?: SonioxPrepareOptions) => {
-    let generation = generationRef.current;
+  /** Unlock audio playback inside a user gesture. Never opens a provider stream. */
+  const prepare = useCallback(async () => {
+    const generation = generationRef.current;
     try {
-      const context = await ensureAudioContext();
+      await ensureAudioContext();
       if (!mountedRef.current || generation !== generationRef.current) return;
       setError(null);
-      if (!options) return;
-      const key = sessionKey(options);
-      const current = warmSessionRef.current;
-      if (current && current.key === key && current.generation === generationRef.current) {
-        generation = current.generation;
-        await current.promise;
-        return;
-      }
-
-      generationRef.current += 1;
-      generation = generationRef.current;
-      stopResources(true);
-      nextStartTimeRef.current = context.currentTime + 0.03;
-      const connectWarm = async (refresh: boolean): Promise<void> => {
-        const controller = new AbortController();
-        if (refresh) warmRefreshAbortRef.current = controller;
-        else abortRef.current = controller;
-        const promise = connectSession(options, generation, controller, context);
-        if (!refresh) warmSessionRef.current = { key, generation, promise };
-        try {
-          const session = await promise;
-          if (!mountedRef.current || generation !== generationRef.current || controller.signal.aborted) {
-            session.cancel();
-            return;
-          }
-          const previous = sessionRef.current;
-          warmSessionRef.current = { key, generation, promise: Promise.resolve(session) };
-          sessionRef.current = session;
-          abortRef.current = controller;
-          warmRefreshAbortRef.current = null;
-          if (previous && previous !== session) previous.close();
-          warmRefreshTimerRef.current = setTimeout(() => { void connectWarm(true); }, WARM_REFRESH_INTERVAL_MS);
-        } catch (caught) {
-          if (refresh && (!mountedRef.current || generation !== generationRef.current || controller.signal.aborted)) return;
-          if (refresh) {
-            warmRefreshTimerRef.current = setTimeout(() => { void connectWarm(true); }, 1_000);
-            return;
-          }
-          throw caught;
-        }
-      };
-      await connectWarm(false);
     } catch (caught) {
       if (!mountedRef.current || generation !== generationRef.current) return;
       if ((caught as { name?: string }).name === "AbortError") return;
-      warmSessionRef.current = null;
-      abortRef.current = null;
-      const message = caught instanceof Error
-        && !caught.message.startsWith("soniox_tts_")
+      const message = caught instanceof Error && !caught.message.startsWith("soniox_tts_")
         ? caught.message
         : "번역 음성을 시작할 수 없습니다.";
       setError(message);
       setPhase("error");
     }
-  }, [connectSession, ensureAudioContext, stopResources]);
+  }, [ensureAudioContext]);
 
   const stop = useCallback(() => {
     generationRef.current += 1;
     stopResources(true);
+    pendingUtteranceRef.current = null;
     setError(null);
     setPhase("idle");
   }, [stopResources]);
 
-  const speak = useCallback(async (options: SonioxSpeakOptions) => {
+  const speakInternal = useCallback(async (options: SonioxSpeakOptions, isRetry: boolean) => {
     const text = options.text.trim();
     if (!text) return;
+    // `retried` carries across the resend so a second failure is surfaced rather
+    // than starting another round.
+    pendingUtteranceRef.current = { options, retried: isRetry };
+    audioStartedRef.current = false;
     setError(null);
     setPhase("connecting");
-    const key = sessionKey(options);
-    const prepared = warmSessionRef.current;
-    if (warmRefreshTimerRef.current !== null) clearTimeout(warmRefreshTimerRef.current);
-    warmRefreshTimerRef.current = null;
-    warmRefreshAbortRef.current?.abort();
-    warmRefreshAbortRef.current = null;
-    let generation = generationRef.current;
+    generationRef.current += 1;
+    const generation = generationRef.current;
 
     try {
       const context = await ensureAudioContext();
       if (!mountedRef.current || generation !== generationRef.current) return;
-      let session: SonioxTtsSession;
-      if (prepared && prepared.key === key && prepared.generation === generationRef.current) {
-        generation = prepared.generation;
-        session = await prepared.promise;
-        if (!mountedRef.current || generation !== generationRef.current) {
-          session.cancel();
-          return;
-        }
-        warmSessionRef.current = null;
-        sessionRef.current = session;
-      } else {
-        generationRef.current += 1;
-        generation = generationRef.current;
-        stopResources(true);
-        const controller = new AbortController();
-        abortRef.current = controller;
-        nextStartTimeRef.current = context.currentTime + 0.03;
-        session = await connectSession(options, generation, controller, context);
-        if (!mountedRef.current || generation !== generationRef.current) {
-          session.cancel();
-          return;
-        }
-        sessionRef.current = session;
+      stopResources(true);
+      const controller = new AbortController();
+      abortRef.current = controller;
+      nextStartTimeRef.current = context.currentTime + 0.03;
+      const session = await connectSession(options, generation, controller, context);
+      if (!mountedRef.current || generation !== generationRef.current) {
+        session.cancel();
+        return;
       }
+      sessionRef.current = session;
+      // The text goes out immediately after the handshake, so the provider's
+      // first-stream window is never a factor.
       session.speak(text);
     } catch (caught) {
       if (!mountedRef.current || generation !== generationRef.current) return;
@@ -283,6 +240,12 @@ export function useSonioxTts() {
       setPhase("error");
     }
   }, [connectSession, ensureAudioContext, stopResources]);
+  speakRef.current = speakInternal;
+
+  const speak = useCallback(
+    (options: SonioxSpeakOptions) => speakInternal(options, false),
+    [speakInternal],
+  );
 
   useEffect(() => {
     mountedRef.current = true;

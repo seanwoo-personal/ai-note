@@ -12,17 +12,15 @@ export interface StatusDisplay {
   textClass: string;
 }
 
-export interface WhisperHealthState {
-  connected: boolean;
-  ok?: boolean;
-  ready?: boolean;
-  model?: string | null;
-  message?: string | null;
-}
-
 export type LlmHealthState =
   | { configured: false }
-  | { configured: true; provider: LlmProvider | string; ok: boolean; detail: string; model?: string | null };
+  | {
+      configured: true;
+      ok: boolean;
+      provider?: LlmProvider | string;
+      detail?: string;
+      model?: string | null;
+    };
 
 export type SonioxHealthState =
   | { kind: "checking" }
@@ -49,6 +47,8 @@ function compact(parts: Array<string | null | undefined>): string {
 
 export function providerLabel(provider: string): string {
   switch (provider) {
+    case "openrouter":
+      return "OpenRouter";
     case "claude-cli":
       return "Claude CLI";
     case "codex-cli":
@@ -58,45 +58,6 @@ export function providerLabel(provider: string): string {
     default:
       return provider;
   }
-}
-
-// The customer-facing rows never expose engine or model names ("Whisper
-// large-v3" 등) — 로컬 전사는 이름 없이 준비 상태만 보여 준다.
-export function formatWhisperStatus(health: WhisperHealthState | null): StatusDisplay {
-  if (health === null) {
-    return withTone({
-      label: "로컬 전사 · 확인 중",
-      shortLabel: "확인 중",
-      title: "로컬 전사 서버 상태 확인 중",
-      tone: "neutral",
-    });
-  }
-
-  if (!health.connected) {
-    return withTone({
-      label: "로컬 전사 · 연결 안 됨",
-      shortLabel: "연결 안 됨",
-      title: health.message || "로컬 전사 서버에 연결할 수 없습니다.",
-      tone: "error",
-    });
-  }
-
-  const ready = health.ready === true || (health.ready === undefined && health.ok !== false);
-  if (!ready) {
-    return withTone({
-      label: "로컬 전사 · 준비 중",
-      shortLabel: "준비 중",
-      title: health.message || "로컬 전사 준비 중",
-      tone: "warn",
-    });
-  }
-
-  return withTone({
-    label: "로컬 전사 · 준비 완료",
-    shortLabel: "준비 완료",
-    title: "로컬 전사 사용 가능",
-    tone: "success",
-  });
 }
 
 export function getLlmReadiness(health: LlmHealthState | null): LlmReadiness {
@@ -124,7 +85,7 @@ export function formatLlmStatus(health: LlmHealthState | null): StatusDisplay {
     });
   }
 
-  const provider = providerLabel(health.provider);
+  const provider = health.provider ? providerLabel(health.provider) : "AI 회의록";
   const model = health.model?.trim() || null;
   const name = compact([provider, model]);
 
@@ -132,7 +93,7 @@ export function formatLlmStatus(health: LlmHealthState | null): StatusDisplay {
     return withTone({
       label: `${name} · 실패`,
       shortLabel: "실패",
-      title: health.detail,
+      title: health.detail ?? "AI 회의록 기능을 사용할 수 없습니다.",
       tone: "error",
     });
   }
@@ -152,42 +113,41 @@ export function formatLlmStatus(health: LlmHealthState | null): StatusDisplay {
   return withTone({
     label: `${name} · 연결됨`,
     shortLabel: "연결됨",
-    title: health.detail,
+    title: health.detail ?? "AI 회의록 기능이 준비되었습니다.",
     tone: "success",
   });
 }
 
-// 사이드바 요약 모델 행: 요약 준비 상태만 vendor 중립으로 보여 준다. 공급자·모델
-// 이름은 노출하지 않는다(설정 화면에서만 provider/model을 드러낸다, ADR 0024).
+// 고객 사이드바에는 기능 준비 상태만 보여 주고 공급자·모델 정보는 노출하지 않는다.
 export function formatSummaryModelStatus(llm: LlmHealthState | null): StatusDisplay {
   if (llm === null) {
     return withTone({
-      label: "요약 모델 · 확인 중",
+      label: "AI 회의록 · 확인 중",
       shortLabel: "확인 중",
-      title: "요약 모델 상태를 확인하고 있습니다.",
+      title: "AI 회의록 기능을 확인하고 있습니다.",
       tone: "neutral",
     });
   }
   if (!llm.configured) {
     return withTone({
-      label: "요약 모델 · 미설정",
-      shortLabel: "미설정",
-      title: "설정에서 요약 모델을 지정해야 회의록 요약을 만들 수 있습니다.",
+      label: "AI 회의록 · 준비 중",
+      shortLabel: "준비 중",
+      title: "AI 회의록 기능을 준비하고 있습니다.",
       tone: "warn",
     });
   }
   if (!llm.ok) {
     return withTone({
-      label: "요약 모델 · 실패",
-      shortLabel: "실패",
-      title: "요약 모델을 사용할 수 없습니다. 설정에서 상태를 확인해 주세요.",
+      label: "AI 회의록 · 확인 필요",
+      shortLabel: "확인 필요",
+      title: "AI 회의록 기능을 지금 사용할 수 없습니다. 운영자에게 문의해 주세요.",
       tone: "error",
     });
   }
   return withTone({
-    label: "요약 모델 · 준비됨",
+    label: "AI 회의록 · 준비됨",
     shortLabel: "준비됨",
-    title: "요약 모델이 준비되었습니다.",
+    title: "AI 회의록 기능이 준비되었습니다.",
     tone: "success",
   });
 }

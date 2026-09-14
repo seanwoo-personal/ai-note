@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-import RootLayout from "@/app/layout";
+import RootLayout from "@/app/(product)/layout";
 
 vi.mock("@/components/LibraryProvider", () => ({
   LibraryProvider: ({ children }: { children: React.ReactNode }) => children,
@@ -12,6 +12,7 @@ vi.mock("@/components/RecorderSessionProvider", () => ({
 }));
 
 vi.mock("@/components/AppPreferences", () => ({
+  AppPreferencesHydrationGate: () => null,
   AppPreferencesProvider: ({ children }: { children: React.ReactNode }) => children,
   LocalizedText: ({ source }: { source: string }) => source,
 }));
@@ -33,6 +34,17 @@ describe("RootLayout responsive shell", () => {
     expect(script).toContain("ai-note-theme");
     expect(script).toContain("prefers-color-scheme: dark");
     expect(script).toContain("data-theme");
+  });
+
+  it("marks the trusted Android WebView before responsive styles are applied", () => {
+    const markup = renderToStaticMarkup(<RootLayout><main>본문</main></RootLayout>);
+    const document = new DOMParser().parseFromString(markup, "text/html");
+    const scripts = [...document.querySelectorAll("head script")].map((script) => script.textContent ?? "");
+
+    expect(scripts.some((script) => script.includes("hejhome-ai-note-android"))).toBe(true);
+    expect(scripts.some((script) => script.includes("data-ai-note-android-app"))).toBe(true);
+    expect(document.querySelector("[data-android-app-shell]")?.hasAttribute("data-android-app-shell"))
+      .toBe(true);
   });
 
   it("내비게이션의 데스크톱 breakpoint와 같은 lg에서만 가로 배치한다", () => {
@@ -118,7 +130,7 @@ describe("RootLayout responsive shell", () => {
     vi.resetModules();
     vi.doMock("@/lib/features", () => ({ MEETING_ASSISTANT_ENABLED: true }));
     try {
-      const { default: FlaggedLayout } = await import("@/app/layout");
+      const { default: FlaggedLayout } = await import("@/app/(product)/layout");
       const markup = renderToStaticMarkup(
         <FlaggedLayout>
           <main>본문</main>

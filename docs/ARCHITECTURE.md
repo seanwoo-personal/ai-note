@@ -9,9 +9,8 @@ src/
 ├── components/        # UI 컴포넌트
 ├── domain/            # 순수 타입/FSM/스키마 (의존 없음)
 ├── lib/               # atomic-write, id 검증, 파일 IO 유틸
-└── services/          # whisper 클라이언트(프록시) 등 외부 래퍼
-whisper/               # 로컬 Python whisper 서비스(uv 3.11/3.12 핀 venv)
-scripts/               # bootstrap/setup + check-links + isolated E2E harness
+└── services/          # Soniox·OpenRouter 등 외부 서비스 래퍼
+scripts/               # setup + check-links + isolated E2E harness
 e2e/                   # synthetic Playwright scenario + evidence reporter
 playwright.config.ts   # Chromium 3-viewport, isolated webServer 계약
 .claude/commands/      # meeting-summarize.md
@@ -26,35 +25,36 @@ fixtures/              # 테스트 픽스처(커밋): raw.md, summary happy/fall
 
 ## Synthetic browser QA 경계
 
-반복 가능한 시각/상호작용 gate의 정본은 `npm run test:e2e`다. `run-e2e.mjs`가 매 실행마다 loopback port와 OS temp snapshot을 소유하고, snapshot에는 allowlist된 `src/`(비활성 worker entrypoint 제외)·`public/`·build metadata와 새 empty `data/`만 복사한다. `node_modules`는 dependency root로만 연결하며 `data/`, `glossary.json`, `.env*`, Git metadata와 runtime 산출물은 복사하지 않는다. App child는 synthetic `HOME`, scrubbed env, `AI_NOTE_DISABLE_WORKER=1`로 실행되고 Whisper target은 같은 임시 Next server의 존재하지 않는 `/health`로 고정돼 실제 로컬 Whisper/LLM/CLI에 닿지 않는다. 서버 bind는 `127.0.0.1`; Next 15 Route Handler authority와 local Host guard를 일치시키기 위해 browser URL만 동등한 loopback 이름 `localhost`를 쓴다.
+반복 가능한 시각/상호작용 gate의 정본은 `npm run test:e2e`다. `run-e2e.mjs`가 매 실행마다 loopback port와 OS temp snapshot을 소유하고, snapshot에는 allowlist된 `src/`(비활성 worker entrypoint 제외)·`public/`·build metadata와 새 empty `data/`만 복사한다. `node_modules`는 dependency root로만 연결하며 `data/`, `glossary.json`, `.env*`, Git metadata와 runtime 산출물은 복사하지 않는다. App child는 synthetic `HOME`, scrubbed env, `AI_NOTE_DISABLE_WORKER=1`, fake provider로 실행돼 실제 Soniox/OpenRouter/로컬 CLI에 닿지 않는다. 서버 bind는 `127.0.0.1`; Next 15 Route Handler authority와 local Host guard를 일치시키기 위해 browser URL만 동등한 loopback 이름 `localhost`를 쓴다.
 
 `e2e/support/synthetic-test.ts`가 각 scenario의 성공 screenshot, console error, 외부 browser request를 자동 수집한다. Reporter는 desktop-1440/mobile-390/mobile-320 coverage, assertion pass, console error 0, external network 0, SHA-256/byte size를 가진 `manifest.json`을 생성한다. 평상시 산출물은 gitignored `test-results/`, `/execute`에서는 runner-owned Git local journal만 사용한다. Chrome DevTools MCP는 existing Chrome session이 필요한 정성 탐색에만 선택적으로 사용하며 이 gate나 evidence를 대체하지 않는다. 상세 결정은 ADR [0020](decisions/0020-deterministic-synthetic-browser-verification.md)을 따른다.
 
-## End-user bootstrap·owned runtime
+## 로컬·클라우드 runtime
 
-- Clone 뒤 canonical command는 Node stdlib만 필요한 `node scripts/bootstrap.mjs --launch`다. `scripts/setup.mjs` doctor를 먼저 실행하고 성공한 경우에만 `HUSKY=0 npm ci` → `npm run build` → background supervisor를 순서대로 수행한다. Doctor의 Node/`uv`/`ffmpeg` failure는 안전한 OS별 조치와 같은 command 재실행을 안내한다. Bootstrap이 `sudo`, package manager, provider login, Ollama pull 또는 Whisper model download를 몰래 실행하지 않는다.
-- Supervisor는 Whisper `127.0.0.1:8123..8142`, app `127.0.0.1:3000..3019` 후보를 순회한다. Availability probe 뒤 bind race가 확인되면 다음 후보로 이동하며 기존 listener에 연결하거나 signal하지 않는다. 선택한 app/Whisper port는 child env `PORT`/`LOCAL_STT_PORT`에만 주입하고 `.env.local`을 쓰지 않는다.
-- App root와 same-origin `/api/whisper/health`가 모두 ready일 때만 `AI_NOTE_URL=http://localhost:<actual-app-port>`를 출력한다. Supported desktop opener는 URL을 shell interpolation 없는 argv로 전달한다. Headless/unsupported/opener failure는 server 성공을 유지하고 exact URL과 agent browser surface fallback을 출력한다. Playwright, Chrome extension, MCP는 runtime dependency가 아니다.
-- `.ai-note-runtime/`은 gitignored repository-local owner namespace다. Directory mode `0700`, state/heartbeat/log mode `0600`을 유지하고 state에는 root/token/PID/port/time만 기록하며 inherited env/credential을 직렬화하지 않는다. `app:status`/`app:stop`은 canonical root, matching 256-bit token, fresh heartbeat, live supervisor가 모두 확인된 경우에만 조회/signal한다. Missing/stale/invalid/unverifiable state는 fail-closed다.
-- Bootstrap module import는 side-effect free이며 process/network/port/browser/time/fs boundary를 주입할 수 있다. Unit test는 fake와 temp directory만 사용해 `npm ci`, build, long-lived server, browser opener, external network, model download를 실행하지 않는다. Foreground `npm run dev`는 contributor lifecycle로 분리한다. 설치 target/agent handoff 결정은 ADR [0023](decisions/0023-installation-and-first-run-ux.md)을 따른다.
+- Clone 뒤 `npm ci`와 `.env.example` 복사, `npm run setup`, `npm run dev`가 로컬 정본이다. Setup은 Node·ffmpeg를 검사하고 provider 키 파일을 안내한다. Python·`uv`·로컬 STT 모델은 필요하지 않다.
+- 로컬 Next 서버는 `127.0.0.1`에만 bind한다. 고객 테스트는 multi-stage Docker 이미지에서 non-root 사용자로 실행하고 host의 `127.0.0.1:3000`에만 publish한다.
+- 외부 접속은 Cloudflare Quick Tunnel의 임시 HTTPS origin을 사용한다. 안정된 도메인을 연결하면 `APP_ORIGIN`을 정확한 HTTPS origin으로 고정한다.
+- `SONIOX_API_KEY`, `OPENROUTER_API_KEY`, `AI_NOTE_SMTP_PASSWORD` 등 외부 자격증명은 gitignored 환경 파일에서만 주입하고 build 시점에는 요구하지 않는다. 비밀번호 복구 메일은 `AI_NOTE_SMTP_*`를 핸들러 안에서 지연 로드하고 TLS 1.2 이상 SMTP만 허용한다. 테스트는 fake provider·fake mail만 사용한다.
+- 원격 테스트는 tenant partition 전 단계이므로 서버 하나에 고객사 한 곳만 승인한다(ADR 0026). Soniox/OpenRouter 전환은 ADR [0027](decisions/0027-soniox-transcription-and-openrouter-routing.md)을 따른다.
 
 ## 프로세스 & 데이터 흐름
+
+고객 비밀번호 복구는 `POST /api/auth/password/forgot`이 enumeration-safe 응답과 이메일별 rate limit을 적용한 뒤 `auth.json` 계정에 임시 비밀번호의 scrypt hash·request ID·30분 만료만 원자적으로 기록하고 SMTP로 평문을 한 번 전달한다. SMTP 실패 시 matching request ID만 취소하며 기존 영구 비밀번호는 유지한다. 임시 비밀번호를 실제 로그인에 사용한 순간 hash를 소비하고 `passwordChangeRequired`를 세운다. Middleware는 `/password/change`, 해당 API, 로그아웃·세션 확인 외의 고객 제품/API를 fail-closed하고, 새 비밀번호 변경은 모든 기존 고객 세션을 폐기한 뒤 새 세션을 발급한다. 응답·로그·파일에는 임시 비밀번호 평문과 SMTP 자격증명을 남기지 않는다.
 ```
 브라우저(녹음, 오디오만·메모리 버퍼) ─stop─▶ POST /api/meetings/{id}/finalize(바이너리 스트림)
   app-api: durable intent → hidden audio+status+receipt → directory publish → remux/placement/전사 독립 처리
-app-api ─POST /transcribe({meetingId,dispatchId})─▶ whisper(127.0.0.1, 배치 ko large-v3)
-  whisper: raw.md(세그먼트-per-line) + segments.json 디스크 기록 → 상태 HTTP 반환
-  app-api: 잡 폴링 → status.json 갱신(transcribing→transcribed)
-콘텐츠 coordinator(로컬 CLI/Ollama) {initial|transcript_regenerate|summary_regenerate}: intent별 입력 → staging payload → app publisher → transcript.md + summary.json
+app-api ─upload/create/status/transcript─▶ Soniox stt-async-v5
+  app-api: 원격 ID 영속화 → 재시작 후 resume → segments.json 먼저, raw.md 마지막 발행 → 원격 리소스 정리
+콘텐츠 coordinator(OpenRouter) {initial|transcript_regenerate|summary_regenerate}: intent별 입력 → 작업별 모델 체인 → staging payload → app publisher → transcript.md + summary.json
 ```
 
 ```mermaid
 flowchart LR
     UI["src · Recorder UI"] -->|"audio.webm (finalize)"| API["src · app-api"]
-    API -->|"POST /transcribe"| W["whisper · 127.0.0.1"]
-    W -->|"raw.md · segments.json"| API
+    API -->|"audio upload · async status"| W["Soniox · stt-async-v5"]
+    W -->|"tokens · speaker · timestamps"| API
     API -->|status.json| UI
-    W -->|raw.md| SUM["최초 교정·요약 / 독립 재생성 · 로컬 CLI/Ollama"]
+    API -->|raw.md| SUM["최초 교정·요약 / 독립 재생성 · OpenRouter"]
     SUM -->|validated payload| PUB["app summarize publisher"]
     PUB -->|"transcript.md · summary.json"| V["열람 · 수동 수정 · 내보내기"]
 ```
@@ -65,11 +65,11 @@ flowchart LR
 | `status.json` | **app-api만** | 생명주기 + `review` + `titleOverride`. `summarized`는 `summary.json` 존재로 파생 |
 | `audio.webm` / `play.webm` | app finalize publisher | 원본 불변 / 리먹스 |
 | `.finalize-receipt.json` | app finalize publisher | immutable metadata/location/audio identity; same-ID probe source |
-| `raw.md` + `segments.json` | whisper | 원본 불변 |
+| `raw.md` + `segments.json` | Soniox 전사 publisher | 원본 불변 |
 | `transcript.md` + `summary.json` | **app summarize publisher만** | API/UI/adapter 직접 쓰기 금지. 수동 저장·독립 재생성도 full pair로 발행하며 `summary.json`이 completion marker |
 | `data/library.json` | **library repository만** | workspace/folder/placement metadata. Meeting directory는 이동하지 않음 |
 | `data/user-profile.json` | **profile settings app-api만** | optional 표시 이름/별칭/시간 기준. `data/settings.json` LLM provider 설정과 분리 |
-| `.whisper-dispatch.json` | **whisper만** | audio identity + durable dispatch publication phase |
+| `.whisper-dispatch.json` | legacy 호환 reader | 과거 로컬 전사 publication claim. 신규 Soniox dispatch는 `status.json`이 정본 |
 | `meeting-tombstones/{id}.json` | **app lifecycle만** | 영구 logical-delete fence. 물리 cleanup 후에도 보존 |
 | `data/meetings/{id}/knowledge-card.json` | knowledge index repository | meeting별 검색 파생물. source summary/transcript SHA-256 포함, 삭제 후 재생성 가능 |
 | `data/knowledge/corpus-map.json` | knowledge index repository | card의 bounded summary projection만 모은 전체 검색 파생물, 삭제 후 재생성 가능 |
@@ -180,7 +180,8 @@ Surviving claim의 meeting은 첫 등장 순서로 `1..N` 번호를 서버가 �
 - 모든 current API route와 `/meetings/[id]` data-reading RSC는 params 해석·body read·filesystem/network/spawn보다 먼저 공통 guard를 통과한다. Host는 raw exact `127.0.0.1|localhost` + valid port만, API Fetch Metadata는 `same-origin`만 허용한다. Direct document navigation의 `Sec-Fetch-Site:none`은 page에서만 허용한다.
 - Unsafe method는 non-null Origin의 scheme/hostname/port가 request와 exact match해야 한다. `localhost`↔`127.0.0.1` alias 교차도 허용하지 않고 forwarded header/CORS를 신뢰하지 않는다.
 - JSON route는 `application/json` + optional UTF-8 charset, declared/streamed raw-byte cap, schema별 unknown-field 정책을 적용한다.
-- Public meeting DTO는 lifecycle/title/review/progress만 allowlist한다. Absolute path, Whisper job/dispatch, attempt, future internal field와 raw fs/provider output은 static error mapper에서 제거한다. 모든 data response는 `Cache-Control:no-store`다.
+- Public meeting DTO는 lifecycle/title/review/progress만 allowlist한다. Absolute path, Soniox 원격 ID/dispatch, attempt, future internal field와 raw fs/provider output은 static error mapper에서 제거한다. 모든 data response는 `Cache-Control:no-store`다.
+- Android USB 개발 연결은 `POST /api/realtime/android-temporary-key`만 로그인 예외로 두며, loopback Host·Origin guard를 그대로 적용한다. 이 경로는 development 서버에서만 single-use Soniox 키를 발급하고 production에서는 항상 404로 닫힌다. 운영 Android 앱은 Google ID token을 검증하는 인증된 `/api/realtime/temporary-key` 경계를 사용한다.
 
 모든 쓰기는 **temp→file fsync→rename→parent-directory fsync** 순서다. `rename`이 논리적 commit 지점이며 generic FileOps는 `not_committed`, `committed_durable`, `committed_best_effort`(directory sync가 알려진 미지원), `committed_durability_pending`(지원 환경의 일시 sync 실패)을 구분한다. Post-rename 실패는 canonical을 rollback하거나 blind replay하지 않는다. Central registry mutation은 absolute `library.json` path process queue와 `libraryId+revision` 낙관적 token을 함께 사용한다(ADR 0011).
 
@@ -292,7 +293,7 @@ Surviving claim의 meeting은 첫 등장 순서로 `1..N` 번호를 서버가 �
 - Valid tombstone은 live directory보다 항상 우선한다. List/detail/audio/export/reveal, status/summarize/transcribe/finalize writer, worker, library scanner는 해당 ID를 숨기거나 410으로 거절한다. Status updater는 critical section에서 다시 fence를 확인한다.
 - Malformed·unreadable·symlink tombstone은 `delete_state_ambiguous`로 fail-closed한다. Live로 복구하거나 marker/trash를 추측해 수정·삭제하지 않으며 library placement를 보존한다.
 - Physical cleanup은 placement을 제거하고 live directory를 deterministic `.trash-{id}`로 rename·parent sync한 뒤 recursive remove한다. 실패는 2xx `cleanup:"pending"`이며 tombstone을 되돌리지 않는다.
-- Guarded meeting/library access가 process-global deduplicated sweep을 lazy start한다. Sweep는 strict safe tombstone/deterministic trash만 ID별 cleanup operation→artifact write lease로 처리하고, unrelated dot path/symlink은 건드리지 않는다. Late Whisper raw/segments orphan은 노출되지 않고 다음 sweep에서 수거된다.
+- Guarded meeting/library access가 process-global deduplicated sweep을 lazy start한다. Sweep는 strict safe tombstone/deterministic trash만 ID별 cleanup operation→artifact write lease로 처리하고, unrelated dot path/symlink은 건드리지 않는다. Late transcription raw/segments orphan은 노출되지 않고 다음 sweep에서 수거된다.
 
 ## status.json 계약 (app-api 소유)
 ```jsonc
@@ -414,23 +415,21 @@ Manual freeform mode에서 `body`는 하나의 current editable truth다. Body�
 - 상세·content probe·export는 artifact read lease 안에서 두 파일을 같이 읽어 old pair 또는 new pair만 반환한다. Publisher/delete/cleanup은 write lease를 쓴다. Lock 순서는 `meeting operation → artifact RW lease → status queue → library queue`다.
 - 프로세스 재시작 뒤 attempt만 남으면 첫 pair read가 exclusive `summarize_reconcile` operation으로 manifest/staged/pre/current/intended hash를 판정해 completed/resume/restore/interrupted/ambiguous 중 하나로 수렴한다. 모순된 hash·source·manifest는 추측해 덮어쓰거나 mixed pair를 노출하지 않는다.
 
-## whisper HTTP 계약 (127.0.0.1)
-- **주소 고정(계약)**: `LOCAL_STT_HOST`는 exact `127.0.0.1|localhost`, port는 explicit 1–65535만 허용한다. whisper는 여기에 바인딩하고 app-api는 handler 안에서 지연 검증해 접속하며 redirect를 따르지 않는다.
-- `GET /health` → `{ ok, model, ready }` (app-api가 same-origin 프록시 `/api/whisper/health`로 노출).
-- `POST /transcribe` `{meetingId,dispatchId}` → `202 {dispatchId,status}`. Poll은 `GET /jobs/{meetingId}/{dispatchId}`. Absolute path/filename/output directory는 받지 않는다.
-- Whisper는 configured data root 아래의 `audio.webm`, `segments.json`, `raw.md`를 no-follow/containment 검사 후 파생한다. `segments.json`을 먼저, authoritative `raw.md`를 마지막에 publish한다.
-- App은 remote await 전 `status.transcriptionDispatch` proposed marker를 durable/best-effort commit한다. Response loss·app restart·retry는 같은 ID를 재전송하고, service가 기존 canonical ID를 반환할 때만 expected-proposed CAS로 adopt한 뒤 canonical request를 보낸다(ADR 0014).
-- Service-owned `.whisper-dispatch.json`은 `{schemaVersion,meetingId,dispatchId,audioSha256,phase,durability}`를 meeting lock 아래 durable create/update한다. `durability`는 `pending|durable|best_effort`, phase는 `accepted|segments_published|raw_published`다. Same pair retry/restart는 resume, same audio fresh proposal은 `adopt_existing_dispatch`, 다른 audio identity는 reject한다.
-- `segments.json`을 먼저 발행하고 claim을 `segments_published`로 올린 뒤 `raw.md`를 downstream completion marker로 마지막 발행한다. New record는 matching dispatch/audio + valid segments + `raw_published` + `durable|best_effort`일 때만 transcribed/detail/summary candidate로 본다. Claim-less legacy raw는 immutable completed로 호환한다.
-- Direct service는 exact Host/port, exact JSON+byte cap, unknown field reject, browser Origin/Fetch Metadata reject, no CORS다. App marker는 browser/server fetch 구분용이고 path 선택 권한을 만들지 않는다.
-- `FAKE_WHISPER=1` 스텁이 **동일 계약** 준수(모델 없이 canned segments 반환) → hermetic 테스트용.
-- ffmpeg는 mlx-whisper가 CLI 호출 → whisper·app-api(리먹스) 양쪽 **preflight** 체크(`/opt/homebrew/bin/ffmpeg`).
+## Soniox 비동기 전사 계약
+
+- App은 외부 호출 전에 `status.transcriptionDispatch`의 proposed dispatch를 commit한다. 오디오 업로드 뒤 Soniox file ID와 transcription ID를 같은 dispatch에 저장하므로 응답 유실·앱 재시작·retry가 기존 원격 작업을 resume한다.
+- 업로드는 `POST /v1/files`, 생성은 `POST /v1/transcriptions`이며 `stt-async-v5`, `ko|ja|en|zh` 힌트, 언어 식별, 화자 분리, meeting ID reference를 사용한다. 모든 호출은 HTTPS fixed origin, timeout, redirect 거부, opaque error를 강제한다.
+- 상태 조회가 `completed`일 때 transcript token을 strict validation한다. 번역 token을 원문에서 제외하고 speaker가 같은 연속 token을 segment로 합친다.
+- Publication은 짧은 `transcribe_publish` operation 안에서 `segments.json`을 먼저, `raw.md`를 downstream completion marker로 마지막 발행한다. 기존 `.whisper-dispatch.json` claim-less/legacy raw는 과거 데이터 읽기 호환용으로만 유지한다.
+- 완료·오류 뒤 Soniox transcription과 file resource를 best-effort 삭제한다. 삭제 실패가 이미 발행된 로컬 전사를 rollback하지 않는다.
+- `FAKE_SONIOX=1`은 같은 앱 계약의 canned 결과를 제공하며 unit·synthetic browser test에서만 사용한다.
+- ffmpeg는 app-api의 오디오 remux/preflight에만 필요하다. Python·`uv`·별도 STT 프로세스는 없다.
 
 ## LLM settings & health 계약
 - `GET /api/settings/llm` → 저장된 `{ provider, model?, baseUrl? }` 또는 `{ provider:null }`. app-api가 `data/settings.json`의 단일 writer이며 API 키를 저장하지 않는다.
-- `POST /api/settings/llm` → `{ provider:"claude-cli"|"codex-cli"|"ollama", model?, baseUrl? }`. 저장 전 `model/baseUrl`은 trim한다. `provider:"ollama"`는 `model` 필수이며 비어 있으면 400. `baseUrl`은 Ollama 설정에만 저장한다.
+- `POST /api/settings/llm` → `{ provider:"openrouter"|"claude-cli"|"codex-cli"|"ollama", model?, baseUrl? }`. 고객 배포 기본값은 `openrouter`다. 저장 전 `model/baseUrl`은 trim하며 `baseUrl`은 Ollama 설정에만 저장한다.
 - Settings client는 GET non-2xx/network/invalid public shape를 `load_error`로 fail-closed하고 editor/replace-save를 잠근다. 성공한 public body만 server-confirmed snapshot과 editable draft를 함께 초기화하며, normalized dirty draft만 POST할 수 있다. Save 실패는 draft를 보존하고 성공 body를 다시 검증해 snapshot/draft를 맞춘다.
-- Model selector는 provider별 draft를 session 동안 분리한다. Claude CLI는 empty model=CLI default(권장), `sonnet|opus|haiku`, custom을 제공하고 Codex CLI는 empty default/custom만 제공해 versioned catalog나 experimental command에 의존하지 않는다. Unknown stored model은 custom state에서 exact string을 보존하며 현재 provider save 직전에 trim한다. Provider 전환은 다른 provider model을 재사용하지 않고 save payload는 current provider의 non-empty model, Ollama일 때만 baseUrl을 포함한다.
+- OpenRouter model이 비어 있으면 교정·번역은 budget 체인, 요약·채팅은 quality 체인을 사용한다. Custom model은 해당 체인의 첫 후보가 되며 OpenRouter의 multi-model fallback과 provider 가격순 라우팅을 사용한다. 요청은 `zdr:true`, `data_collection:"deny"`를 요구한다. 기존 CLI/Ollama selector는 로컬 저장 설정 호환용으로 유지한다.
 - `POST /api/settings/llm/models`는 local guard를 body/settings/fs/network보다 먼저 통과하고 strict JSON 4 KiB, optional baseUrl 512자를 받는다. Draft 또는 default `http://127.0.0.1:11434`는 explicit-port loopback HTTP로 정규화되고 `/api/tags`는 redirect 금지·3초 timeout·256 KiB response cap을 적용한다. 최대 100개, 이름 256자, trim된 control-character 없는 unique model만 반환하며 failure는 sanitized `invalid_request|local_service_unavailable`로 낮춘다. Remote catalog/auto pull/API key/new dependency는 없다.
 - Ollama `baseUrl`은 저장 시와 사용 직전에 explicit-port `http://127.0.0.1|localhost`만 허용한다(credentials/path/query/hash/redirect 금지). Unsafe legacy value는 transcript를 읽거나 network를 호출하기 전에 unavailable이다.
 - `GET /api/settings/llm/health` → `{ configured:false }` 또는 `{ configured:true, provider, model?, ok, detail }`. `model`은 settings의 모델명만 노출하고 `baseUrl`은 반환하지 않는다. legacy Ollama 설정에 `model`이 없으면 daemon 상태와 무관하게 `{ ok:false, detail:"Ollama model not set" }`.
@@ -449,7 +448,7 @@ Manual freeform mode에서 `body`는 하나의 current editable truth다. Body�
 
 ## 프롬프트 (교정·요약)
 
-**용어집(glossary)** — `glossary.json`은 `{ terms: string[], corrections: {from,to}[] }` 객체다(구 형식인 문자열 배열은 읽기 시 `terms`로 자동 호환). `terms`=우선 적용 도메인 용어, `corrections`='잘못 인식→올바른 표기' 매핑. 앱 **"단어 관리"** 탭(app-api 단일 writer)에서 편집하며 **LLM 교정 단계**가 소비한다(whisper STT 아님). 형식 예시는 `glossary.example.json` 참조.
+**용어집(glossary)** — `glossary.json`은 `{ terms: string[], corrections: {from,to}[] }` 객체다(구 형식인 문자열 배열은 읽기 시 `terms`로 자동 호환). `terms`=우선 적용 도메인 용어, `corrections`='잘못 인식→올바른 표기' 매핑. 앱 **"단어 관리"** 탭(app-api 단일 writer)에서 편집하며 **OpenRouter 교정 단계**가 소비한다. 형식 예시는 `glossary.example.json` 참조.
 
 **교정(refine) 프롬프트** — 정본은 코드 `src/lib/summarizePrompts.ts`(`buildCorrectionPrompt`); 아래는 그 미러다(드리프트 가드 테스트가 규칙 문구를 verbatim 검증). `{terms}`=쉼표 결합 용어, `{corrections}`=`잘못→올바름` 쌍(비면 5) 규칙 생략, 이후 번호 당김):
 ```
@@ -499,7 +498,7 @@ JSON 스키마: {SUMMARY_SCHEMA_HINT}
 
 ## First-use·전사 실패 client recovery
 
-- Home은 LLM health가 unconfigured/unavailable일 때 recorder 앞에 비차단 readiness card를 둔다. Primary는 Settings, secondary는 같은 page의 `meeting-recorder-start`로 scroll+focus한다. 설정 page는 요약 모델을 optional profile보다 먼저 두며 profile 미설정이 녹음·전사·일반 검색을 막지 않는다. 첫 전사는 selected Whisper model download 때문에 오래 걸릴 수 있다고 알리되 download 전 progress를 만들지 않는다.
+- Home은 LLM health가 unconfigured/unavailable일 때 recorder 앞에 비차단 readiness card를 둔다. Primary는 Settings, secondary는 같은 page의 `meeting-recorder-start`로 scroll+focus한다. 설정 page는 요약 모델을 optional profile보다 먼저 둔다. Soniox/OpenRouter 키나 연결이 없으면 실제 작업 진행으로 표시하지 않는다.
 - `retry_transcription` meeting row는 `전사 실패`로 표시하고 detail link에서도 failure/action을 유지한다. Detail과 finalize result의 `전사 다시 시도`는 exact meeting ID로 기존 `POST /api/transcribe {id}`를 호출한다. Success 또는 already-running 409 뒤 authoritative server state를 다시 읽으며 disabled `전사 요청 중…`, safe error, polite announcement, trigger focus return을 제공한다.
 - Detail transcribing poll은 한 번에 fetch 하나만 두고 navigation/unmount/status transition에서 timer와 request를 정리한다. Client timeout은 persisted `retry_transcription` failure를 만들지 않는다. Retry는 기존 operation lease, tombstone fence, durable dispatch reuse와 raw-last completion을 우회하지 않으며 UI가 artifact를 직접 쓰지 않는다.
 - Meeting detail initial tab은 explicit `contentTab=script|summary`를 우선한다. Query가 없고 parsed usable summary가 있으면 summary, 아니면 script를 사용한다.

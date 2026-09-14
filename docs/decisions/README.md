@@ -16,7 +16,7 @@ $EDITOR docs/decisions/0024-내-결정.md   # 5칸 채우고 아래 목록에 �
 
 | # | 결정 | 상태 |
 |---|------|------|
-| [0001](0001-local-whisper-batch.md) | STT는 로컬 whisper 완전 배치 | 채택됨 |
+| [0001](0001-local-whisper-batch.md) | STT는 로컬 whisper 완전 배치 | 0027로 대체됨 |
 | [0002](0002-claude-command-no-app-llm.md) | 교정·요약은 로컬 CLI/Ollama로 처리 (팀 모드에서 갱신) | 채택됨(갱신) |
 | [0003](0003-local-files-single-writer.md) | 로컬 파일 저장 + 단일 writer 소유권 | 채택됨 |
 | [0006](0006-lean-mvp-defer-v2.md) | 린 MVP-0 — 견고성 일부 v2 연기 | 채택됨 |
@@ -25,9 +25,9 @@ $EDITOR docs/decisions/0024-내-결정.md   # 5칸 채우고 아래 목록에 �
 | [0009](0009-async-resummarize-failure-visibility.md) | 재요약 비동기화(202) + 실패 가시성 + 생성 타임아웃 600초 | 채택됨 |
 | [0010](0010-isolated-claude-summarize-invocation.md) | claude 요약 호출 격리(cwd·MCP-off·$0 env 스크럽) — ADR 0002 정제 | 채택됨 |
 | [0011](0011-library-registry-and-durable-commits.md) | 중앙 library registry, stable meeting path, 4-state 내구 commit | 채택됨 |
-| [0012](0012-local-ingress-and-fixed-id-service-boundary.md) | local-only request/DTO 경계와 fixed-ID Whisper protocol | 채택됨 |
+| [0012](0012-local-ingress-and-fixed-id-service-boundary.md) | local-only request/DTO 경계와 fixed-ID Whisper protocol | 전사 부분은 0027로 대체됨 |
 | [0013](0013-durable-summarize-pair-publication.md) | Durable summarize attempt와 generation-consistent pair 발행 | 채택됨 |
-| [0014](0014-durable-transcription-dispatch.md) | Durable transcription dispatch와 raw-last completion marker | 채택됨 |
+| [0014](0014-durable-transcription-dispatch.md) | Durable transcription dispatch와 raw-last completion marker | 0027에 계승됨 |
 | [0015](0015-durable-meeting-tombstone.md) | Durable meeting tombstone이 logical delete commit | 채택됨 |
 | [0016](0016-atomic-finalize-directory-publication.md) | Finalize는 receipt를 포함한 directory rename으로 publish | 채택됨 |
 | [0017](0017-corrupt-library-rebuild-and-generation-reset.md) | Corrupt library 원본 보존형 재구축과 client generation reset | 채택됨 |
@@ -39,3 +39,5 @@ $EDITOR docs/decisions/0024-내-결정.md   # 5칸 채우고 아래 목록에 �
 | [0023](0023-installation-and-first-run-ux.md) | 안전한 install target, owned background runtime과 provider-aware first-run UX | 채택됨 |
 | [0024](0024-external-provider-exception-and-vendor-neutral-ui.md) | 외부 provider 예외(실시간 STT/TTS·요약 API 키)와 vendor 중립 UI | 채택됨(사이드바 2행 규정만 →0025) |
 | [0025](0025-vision-customer-brand-and-split-system-rows.md) | Vision 고객사 브랜드(로케일 불변·로고 미사용)와 이벤트 기반 실시간 연결 상태의 3행 분리 | 채택됨 |
+| [0026](0026-local-account-gate-before-hosted-multitenancy.md) | 승인형 계정 게이트와 원격 멀티테넌시 경계 | 채택됨 |
+| [0027](0027-soniox-transcription-and-openrouter-routing.md) | Soniox 전사와 OpenRouter 작업별 라우팅 | 채택됨 |

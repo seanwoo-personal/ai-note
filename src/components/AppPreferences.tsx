@@ -9,11 +9,14 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 
 import { BRAND_NAME, BRAND_PRODUCT_NAME } from "@/lib/brand";
 import {
   type AppLocale,
+  DEFAULT_LOCALE,
+  DISPLAY_LOCALES,
   type FontSizePreference,
   parseFontSize,
   parseLocale,
@@ -21,7 +24,6 @@ import {
   type ResolvedTheme,
   resolveTheme,
   SUPPORTED_FONT_SIZES,
-  SUPPORTED_LOCALES,
   type ThemePreference,
 } from "@/lib/appPreferences";
 import { translateUi, type UiValues } from "@/lib/i18n";
@@ -30,6 +32,7 @@ const LOCALE_STORAGE_KEY = "ai-note-locale";
 const THEME_STORAGE_KEY = "ai-note-theme";
 const FONT_SIZE_STORAGE_KEY = "ai-note-font-size";
 const DARK_QUERY = "(prefers-color-scheme: dark)";
+const LOCALE_CHANGE_EVENT = "ai-note-locale-change";
 
 type AppPreferencesValue = {
   locale: AppLocale;
@@ -44,15 +47,7 @@ type AppPreferencesValue = {
 };
 
 const AppPreferencesContext = createContext<AppPreferencesValue | null>(null);
-
-function preferredBrowserLocale(): AppLocale {
-  if (typeof navigator === "undefined") return "ko";
-  for (const language of navigator.languages ?? [navigator.language]) {
-    const base = language.toLowerCase().split("-")[0];
-    if (base === "ko" || base === "en" || base === "zh" || base === "ja") return base;
-  }
-  return "ko";
-}
+const AppPreferencesHydrationContext = createContext<(() => void) | null>(null);
 
 function readStoredPreference(key: string): string | null {
   try {
@@ -62,17 +57,52 @@ function readStoredPreference(key: string): string | null {
   }
 }
 
-function persistPreference(key: string, value: string): void {
+function persistPreference(key: string, value: string): boolean {
   try {
     window.localStorage.setItem(key, value);
+    return true;
   } catch {
     // Keep the selected preference in memory when browser storage is unavailable.
+    return false;
   }
 }
 
-export function AppPreferencesProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<AppLocale>("ko");
-  const [theme, setThemeState] = useState<ThemePreference>("system");
+function readStoredLocale(): AppLocale {
+  const storedLocale = readStoredPreference(LOCALE_STORAGE_KEY);
+  return storedLocale && DISPLAY_LOCALES.includes(storedLocale as (typeof DISPLAY_LOCALES)[number])
+    ? parseLocale(storedLocale)
+    : DEFAULT_LOCALE;
+}
+
+function subscribeLocale(onStoreChange: () => void): () => void {
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === LOCALE_STORAGE_KEY) onStoreChange();
+  };
+  window.addEventListener("storage", onStorage);
+  window.addEventListener(LOCALE_CHANGE_EVENT, onStoreChange);
+  return () => {
+    window.removeEventListener("storage", onStorage);
+    window.removeEventListener(LOCALE_CHANGE_EVENT, onStoreChange);
+  };
+}
+
+export function AppPreferencesProvider({
+  children,
+  deferLocaleUntilHydrated = false,
+}: {
+  children: ReactNode;
+  deferLocaleUntilHydrated?: boolean;
+}) {
+  // useSyncExternalStore deliberately returns DEFAULT_LOCALE while React is
+  // hydrating. It switches to the browser preference only after hydration, so
+  // a delayed Suspense boundary never compares Japanese server copy with a
+  // Korean/English client render.
+  const storedLocale = useSyncExternalStore(subscribeLocale, readStoredLocale, () => DEFAULT_LOCALE);
+  const [memoryLocale, setMemoryLocale] = useState<AppLocale | null>(null);
+  const [localeHydrationReady, setLocaleHydrationReady] = useState(!deferLocaleUntilHydrated);
+  const locale = localeHydrationReady ? memoryLocale ?? storedLocale : DEFAULT_LOCALE;
+  // Light is the default a first run opens in; "system" is an explicit choice.
+  const [theme, setThemeState] = useState<ThemePreference>("light");
   const [fontSize, setFontSizeState] = useState<FontSizePreference>("default");
   const [fontSizeLoaded, setFontSizeLoaded] = useState(false);
   const [systemDark, setSystemDark] = useState(false);
@@ -80,10 +110,6 @@ export function AppPreferencesProvider({ children }: { children: ReactNode }) {
   const attributeSources = useRef(new WeakMap<Element, Map<string, { source: string; rendered: string }>>());
 
   useEffect(() => {
-    const storedLocale = readStoredPreference(LOCALE_STORAGE_KEY);
-    setLocaleState(storedLocale && SUPPORTED_LOCALES.includes(storedLocale as AppLocale)
-      ? parseLocale(storedLocale)
-      : preferredBrowserLocale());
     setThemeState(parseTheme(readStoredPreference(THEME_STORAGE_KEY)));
     setFontSizeState(parseFontSize(readStoredPreference(FONT_SIZE_STORAGE_KEY)));
     setFontSizeLoaded(true);
@@ -134,6 +160,7 @@ export function AppPreferencesProvider({ children }: { children: ReactNode }) {
   }, [locale]);
 
   useEffect(() => {
+    if (!localeHydrationReady) return;
     const excludedText = (element: Element | null) => Boolean(element?.closest(
       "[data-i18n-user-content], textarea, [contenteditable='true'], script, style",
     ));
@@ -185,31 +212,88 @@ export function AppPreferencesProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    localizeTree(document.body);
     document.documentElement.lang = locale;
-    const observer = new MutationObserver((mutations) => {
-      for (const mutation of mutations) {
-        if (mutation.type === "characterData") localizeText(mutation.target as Text);
-        else if (mutation.type === "attributes") localizeAttribute(
-          mutation.target as Element,
-          mutation.attributeName ?? "",
-        );
-        else for (const node of mutation.addedNodes) localizeTree(node);
+    let cancelled = false;
+    let observer: MutationObserver | null = null;
+    let firstFrame: number | null = null;
+    let secondFrame: number | null = null;
+    let idleCallback: number | null = null;
+    let fallbackTimer: number | null = null;
+
+    const activateLocalization = () => {
+      if (cancelled) return;
+      localizeTree(document.body);
+      observer = new MutationObserver((mutations) => {
+        for (const mutation of mutations) {
+          if (mutation.type === "characterData") localizeText(mutation.target as Text);
+          else if (mutation.type === "attributes") localizeAttribute(
+            mutation.target as Element,
+            mutation.attributeName ?? "",
+          );
+          else for (const node of mutation.addedNodes) localizeTree(node);
+        }
+      });
+      observer.observe(document.body, {
+        subtree: true,
+        childList: true,
+        characterData: true,
+        attributes: true,
+        attributeFilter: ["aria-label", "title", "placeholder", "alt"],
+      });
+    };
+    const scheduleAfterPaint = () => {
+      if (typeof window.requestAnimationFrame === "function") {
+        firstFrame = window.requestAnimationFrame(() => {
+          firstFrame = null;
+          secondFrame = window.requestAnimationFrame(() => {
+            secondFrame = null;
+            activateLocalization();
+          });
+        });
+        return;
       }
-    });
-    observer.observe(document.body, {
-      subtree: true,
-      childList: true,
-      characterData: true,
-      attributes: true,
-      attributeFilter: ["aria-label", "title", "placeholder", "alt"],
-    });
-    return () => observer.disconnect();
-  }, [locale]);
+      fallbackTimer = window.setTimeout(activateLocalization, 0);
+    };
+    const scheduleWhenBrowserIsIdle = () => {
+      if (typeof window.requestIdleCallback === "function") {
+        idleCallback = window.requestIdleCallback(() => {
+          idleCallback = null;
+          scheduleAfterPaint();
+        }, { timeout: 2_000 });
+        return;
+      }
+      scheduleAfterPaint();
+    };
+    const scheduleAfterLoad = () => {
+      window.removeEventListener("load", scheduleAfterLoad);
+      scheduleWhenBrowserIsIdle();
+    };
+
+    if (document.readyState === "complete") scheduleWhenBrowserIsIdle();
+    else window.addEventListener("load", scheduleAfterLoad, { once: true });
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("load", scheduleAfterLoad);
+      if (firstFrame !== null) window.cancelAnimationFrame(firstFrame);
+      if (secondFrame !== null) window.cancelAnimationFrame(secondFrame);
+      if (idleCallback !== null) window.cancelIdleCallback(idleCallback);
+      if (fallbackTimer !== null) window.clearTimeout(fallbackTimer);
+      observer?.disconnect();
+    };
+  }, [locale, localeHydrationReady]);
+
+  const markLocaleHydrationReady = useCallback(() => {
+    setLocaleHydrationReady(true);
+  }, []);
 
   const setLocale = useCallback((next: AppLocale) => {
-    setLocaleState(next);
-    persistPreference(LOCALE_STORAGE_KEY, next);
+    if (persistPreference(LOCALE_STORAGE_KEY, next)) {
+      setMemoryLocale(null);
+      window.dispatchEvent(new Event(LOCALE_CHANGE_EVENT));
+      return;
+    }
+    setMemoryLocale(next);
   }, []);
   const setTheme = useCallback((next: ThemePreference) => {
     setThemeState(next);
@@ -232,7 +316,17 @@ export function AppPreferencesProvider({ children }: { children: ReactNode }) {
     t: (source, values) => translateUi(locale, source, values),
   }), [fontSize, locale, resolvedTheme, setFontSize, setLocale, setTheme, theme]);
 
-  return <AppPreferencesContext.Provider value={value}>{children}</AppPreferencesContext.Provider>;
+  return (
+    <AppPreferencesHydrationContext.Provider value={markLocaleHydrationReady}>
+      <AppPreferencesContext.Provider value={value}>{children}</AppPreferencesContext.Provider>
+    </AppPreferencesHydrationContext.Provider>
+  );
+}
+
+export function AppPreferencesHydrationGate() {
+  const markReady = useContext(AppPreferencesHydrationContext);
+  useEffect(() => markReady?.(), [markReady]);
+  return null;
 }
 
 export function useAppPreferences(): AppPreferencesValue {
@@ -270,10 +364,9 @@ export function AppPreferencesControls() {
           onChange={(event) => setLocale(event.currentTarget.value as AppLocale)}
           className="min-h-11 w-full rounded-lg border border-line bg-panel px-2 text-[13px] text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
-          <option value="ko">한국어</option>
-          <option value="en">English</option>
-          <option value="zh">中文</option>
           <option value="ja">日本語</option>
+          <option value="en">English</option>
+          <option value="ko">한국어</option>
         </select>
       </label>
       <label className="flex min-w-0 flex-col gap-1 text-[12px] font-semibold text-inkSoft">

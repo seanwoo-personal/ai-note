@@ -48,6 +48,10 @@ export interface TranscriptionDispatch {
   dispatchId: string;
   createdAt: string;
   state: TranscriptionDispatchState;
+  /** Cloud STT metadata used to resume and clean up an interrupted job. */
+  service?: "soniox";
+  remoteFileId?: string;
+  remoteTranscriptionId?: string;
 }
 
 // status.json `paths` sub-object — the six artifact paths in the contract

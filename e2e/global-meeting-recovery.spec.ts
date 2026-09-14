@@ -7,6 +7,7 @@ import { expect, test } from "./support/synthetic-test";
 
 type ManualEditingFixtureModule = typeof import("../scripts/e2e-manual-editing-fixture.mjs");
 type E2eHarnessModule = typeof import("../scripts/e2e-harness.mjs");
+type AccountFixtureModule = typeof import("../scripts/e2e-account-fixture.mjs");
 const importRuntimeModule = new Function(
   "specifier",
   "return import(specifier)",
@@ -21,6 +22,9 @@ const fixtureModule = importRuntimeModule<ManualEditingFixtureModule>(
 // duplicating a divergent, weaker containment check.
 const harnessModule = importRuntimeModule<E2eHarnessModule>(
   runtimeModuleUrl("../scripts/e2e-harness.mjs"),
+);
+const accountFixtureModule = importRuntimeModule<AccountFixtureModule>(
+  runtimeModuleUrl("../scripts/e2e-account-fixture.mjs"),
 );
 
 // Deterministic, headless, synthetic-only browser proof for the Global Meeting
@@ -59,8 +63,13 @@ function sha256(value: string): string {
 // (absolute + lexically canonical + owned `ai-note-e2e-*` namespace) so this spec can
 // never write into an arbitrary absolute directory handed via the environment.
 async function e2eDataRoot(): Promise<string> {
-  const harness = await harnessModule;
-  return join(harness.resolveE2eSnapshotRoot(process.env.AI_NOTE_E2E_SNAPSHOT_ROOT ?? ""), "data");
+  const [harness, accountFixture] = await Promise.all([harnessModule, accountFixtureModule]);
+  return join(
+    harness.resolveE2eSnapshotRoot(process.env.AI_NOTE_E2E_SNAPSHOT_ROOT ?? ""),
+    "data",
+    "tenants",
+    createHash("sha256").update(accountFixture.E2E_CUSTOMER_ID).digest("hex"),
+  );
 }
 
 // Seed a completed Global Meeting (recordingKind: "transcript_only", no audio) so the
@@ -138,12 +147,13 @@ async function seedGlobalMeeting(project: string): Promise<{ meetingId: string; 
 // throws WITHOUT deleting — the seed never touches baseline fixtures, real `data/`, the
 // parent meetings/ tree, or `.env`, and never deletes on doubt.
 async function removeGlobalMeetingSeed(project: string): Promise<void> {
-  const harness = await harnessModule;
+  const [harness, accountFixture] = await Promise.all([harnessModule, accountFixtureModule]);
   await harness.removeOwnedE2eMeetingSeed({
     snapshotRoot: process.env.AI_NOTE_E2E_SNAPSHOT_ROOT ?? "",
     ownershipToken: process.env.AI_NOTE_E2E_OWNERSHIP_TOKEN ?? "",
     project,
     expectedTitleOverride: GLOBAL_MEETING_ONE_LINE,
+    tenantAccountId: accountFixture.E2E_CUSTOMER_ID,
   });
 }
 
@@ -183,6 +193,7 @@ function installStubs() {
   }
   w.__sonioxSent = [];
   w.__sonioxSockets = [];
+  w.__displayCaptureRequests = 0;
   const NativeWebSocket = w.WebSocket;
   class FakeWebSocket {
     url = "";
@@ -209,7 +220,10 @@ function installStubs() {
   w.MediaRecorder = FakeMediaRecorder;
   const fakeDevices = {
     getUserMedia: async () => new FakeStream(),
-    getDisplayMedia: async () => new FakeStream(),
+    getDisplayMedia: async () => {
+      w.__displayCaptureRequests += 1;
+      return new FakeStream();
+    },
   };
   try {
     Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: fakeDevices });
@@ -376,6 +390,7 @@ test.describe("Global Meeting recovery — synthetic browser proof", () => {
       contentType: "application/json",
       body: JSON.stringify({ translation: "（合成された翻訳）" }),
     }));
+    await page.addInitScript(() => localStorage.setItem("ai-note-locale", "ko"));
     await page.addInitScript(installStubs);
 
     await page.goto(`/live?workspace=${WORKSPACE_ID}&tool=test-product`);
@@ -384,11 +399,13 @@ test.describe("Global Meeting recovery — synthetic browser proof", () => {
     // ---- AC1: truthful language settings; recognition remains per utterance --
     const input = page.getByRole("combobox", { name: "내 언어" });
     const target = page.getByRole("combobox", { name: "상대방 언어" });
-    await expect(input).toHaveValue("ko");
+    await expect(input).toHaveValue("ja");
     const inputOptions = await input.locator("option").evaluateAll((opts) =>
       opts.map((o) => (o as HTMLOptionElement).value));
-    expect(inputOptions[0]).toBe("ko");
+    expect(inputOptions[0]).toBe("ja");
     expect(inputOptions).not.toContain("auto");
+    await input.selectOption("ko");
+    await expect(input).toHaveValue("ko");
     const inputLabel = await input.locator("option[value='ko']").textContent();
 
     // ---- AC1: user selects the translation target ---------------------------
@@ -417,6 +434,7 @@ test.describe("Global Meeting recovery — synthetic browser proof", () => {
     const observedConfig = await page.evaluate(() => JSON.parse((window as any).__sonioxSent[0]));
     expect(observedConfig).toBeTruthy();
     expect(observedConfig.enable_language_identification).toBe(true);
+    // One-way into 내 언어 — 상대방 언어 drives the push-to-talk broadcast only.
     expect(observedConfig.translation).toEqual({ type: "two_way", language_a: "ko", language_b: "ja" });
 
     // ---- Populate a tall transcript via fixture tokens ----------------------
@@ -842,6 +860,7 @@ test.describe("Global Meeting recovery — synthetic browser proof", () => {
     await page.route("**/api/translate", (route) => route.fulfill({
       status: 200, contentType: "application/json", body: JSON.stringify({ translation: "（合成された翻訳）" }),
     }));
+    await page.addInitScript(() => localStorage.setItem("ai-note-locale", "ko"));
     await page.addInitScript(installStubs);
 
     await page.goto(`/live?workspace=${WORKSPACE_ID}&tool=test-product`);
@@ -950,5 +969,98 @@ test.describe("Global Meeting recovery — synthetic browser proof", () => {
       contentType: "application/json",
     });
     expect(consoleErrors, `unexpected console errors: ${consoleErrors.join(" | ")}`).toEqual([]);
+  });
+
+  test("new media source restarts speaker context while preserving prior rows", async ({ page }, testInfo) => {
+    await page.route("**/api/realtime/temporary-key", (route) => route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ apiKey: "synthetic-e2e-key" }),
+    }));
+    await page.route("**/api/translate", (route) => route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ translation: "（合成された翻訳）" }),
+    }));
+    await page.addInitScript(() => localStorage.setItem("ai-note-locale", "ko"));
+    await page.addInitScript(installStubs);
+
+    await page.goto(`/live?workspace=${WORKSPACE_ID}&tool=test-product`);
+    const meetingControls = page.getByTestId("global-meeting-controls");
+    await meetingControls.getByRole("button", { name: "미팅 시작" }).click();
+    const sourceSwitch = meetingControls.getByRole("button", { name: "새 영상·음원" });
+    await expect(sourceSwitch).toBeEnabled();
+
+    const pushCapture = (frame: unknown) => page.evaluate(
+      (payload) => (window as any).__pushTo("transcribe", payload), // eslint-disable-line @typescript-eslint/no-explicit-any
+      frame,
+    );
+    await pushCapture(endpointFrame({
+      original: "첫 번째 영상의 화자입니다",
+      translated: "最初の映像の話者です",
+      source: "ko",
+      speaker: 1,
+    }));
+    const firstRow = page.getByRole("row", { name: "Speaker 1 대화 행" });
+    await expect(firstRow).toContainText("첫 번째 영상의 화자입니다");
+
+    await sourceSwitch.click();
+    await expect(page.getByText("현재 발화를 확정하는 중…")).toBeVisible();
+    await pushCapture({
+      tokens: [{ text: "<fin>", is_final: true, speaker: "1", translation_status: "original" }],
+    });
+    await expect.poll(() => page.evaluate(() => (
+      (window as any).__sonioxSent as unknown[] // eslint-disable-line @typescript-eslint/no-explicit-any
+    ).some((value) => value === ""))).toBe(true);
+    await pushCapture({ finished: true });
+    await expect.poll(() => page.evaluate(() => (
+      (window as any).__sonioxSockets as unknown[] // eslint-disable-line @typescript-eslint/no-explicit-any
+    ).length)).toBe(2);
+    await expect(sourceSwitch).toBeEnabled();
+
+    await pushCapture(endpointFrame({
+      original: "두 번째 영상의 새 화자입니다",
+      translated: "二つ目の映像の新しい話者です",
+      source: "ko",
+      speaker: 1,
+    }));
+    await expect(page.getByRole("row", { name: "Speaker 2 대화 행" }))
+      .toContainText("두 번째 영상의 새 화자입니다");
+    await expect(firstRow).toContainText("첫 번째 영상의 화자입니다");
+
+    await testInfo.attach(`new-media-speaker-reset:${testInfo.project.name}`, {
+      body: Buffer.from(JSON.stringify({
+        sockets: await page.evaluate(() => (window as any).__sonioxSockets.length), // eslint-disable-line @typescript-eslint/no-explicit-any
+        preservedSpeaker: 1,
+        nextSpeaker: 2,
+      }, null, 2)),
+      contentType: "application/json",
+    });
+  });
+
+  test("browser tab audio selection uses the display-audio capture path", async ({ page }, testInfo) => {
+    await page.route("**/api/realtime/temporary-key", (route) => route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ apiKey: "synthetic-e2e-key" }),
+    }));
+    await page.addInitScript(() => localStorage.setItem("ai-note-locale", "ko"));
+    await page.addInitScript(installStubs);
+
+    await page.goto(`/live?workspace=${WORKSPACE_ID}&tool=test-product`);
+    const meetingControls = page.getByTestId("global-meeting-controls");
+    await meetingControls.getByRole("combobox", { name: "입력 소스" }).selectOption("browser-tab");
+    await meetingControls.getByRole("button", { name: "미팅 시작" }).click();
+
+    await expect.poll(() => page.evaluate(() => (
+      (window as any).__displayCaptureRequests as number // eslint-disable-line @typescript-eslint/no-explicit-any
+    ))).toBe(1);
+    await expect.poll(() => page.evaluate(() => (
+      (window as any).__sonioxSockets.length as number // eslint-disable-line @typescript-eslint/no-explicit-any
+    ))).toBe(1);
+    await testInfo.attach(`browser-tab-audio:${testInfo.project.name}`, {
+      body: Buffer.from(JSON.stringify({ displayCaptureRequests: 1, realtimeSockets: 1 }, null, 2)),
+      contentType: "application/json",
+    });
   });
 });

@@ -23,12 +23,11 @@ import {
 } from "@/lib/publicApi";
 import { deriveStatus, readStatus, updateStatus } from "@/lib/status";
 import { invalidateSummaryWork } from "@/lib/summaryWorkCache";
-import { fetchWhisperJob } from "@/services/whisperClient";
+import { resumeTranscription } from "@/lib/transcribe";
 
 // GET /api/meetings/[id] — the meeting's status, folding in artifact-file existence
-// (transcribed/summarized derived) and, while still transcribing, a live whisper
-// job poll for progress/errors. app-api is the writer, so any derived change is
-// persisted here.
+// (transcribed/summarized derived). A status read also resumes a persisted
+// Soniox job after a server restart. app-api remains the single writer.
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -47,61 +46,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const persisted = await readStatus(id);
   if (!persisted) return publicErrorResponse("meeting_not_found", 404, { meetingId: id });
 
-  let working = persisted;
-  let dirty = false;
+  if (persisted.status === "transcribing") void resumeTranscription(id).catch(() => {});
 
-  // raw.md existence (checked in deriveStatus) is the authoritative "done" signal;
-  // this poll only surfaces progress/errors while we wait. whisper being down is
-  // non-fatal — leave the status untouched.
-  const dispatchId = working.transcriptionDispatch?.dispatchId ?? working.whisper.jobId;
-  if (working.status === "transcribing" && dispatchId) {
-    try {
-      const job = await fetchWhisperJob(id, dispatchId);
-      if (job.status === "error" && job.error !== "durability_pending") {
-        working = {
-          ...working,
-          transcriptionDispatch: working.transcriptionDispatch?.dispatchId === dispatchId
-            ? { ...working.transcriptionDispatch, state: "failed" }
-            : working.transcriptionDispatch,
-          error: {
-            code: "transcription_failed",
-            message: "전사를 완료하지 못했습니다. 로컬 전사 서비스를 확인해 주세요",
-            action: "retry_transcription",
-          },
-        };
-        dirty = true;
-      } else if (job.status === "done") {
-        working = { ...working, whisper: { ...working.whisper, progress: 1 } };
-        dirty = true;
-      } else if (job.progress !== working.whisper.progress) {
-        working = { ...working, whisper: { ...working.whisper, progress: job.progress } };
-        dirty = true;
-      }
-    } catch {
-      // whisper unreachable — transient; keep current status.
-    }
-  }
-
-  const { status, changed } = deriveStatus(id, working);
-  const current = changed || dirty
-    ? (await updateStatus(id, undefined, (latest) => {
-        let next = latest;
-        if (
-          dirty
-          && latest.status === "transcribing"
-          && latest.whisper.jobId === persisted.whisper.jobId
-        ) {
-          next = {
-            ...latest,
-            error: working.error,
-            transcriptionDispatch: latest.transcriptionDispatch?.dispatchId === dispatchId
-              ? working.transcriptionDispatch
-              : latest.transcriptionDispatch,
-            whisper: { ...latest.whisper, progress: working.whisper.progress },
-          };
-        }
-        return deriveStatus(id, next).status;
-      })).status
+  const { status, changed } = deriveStatus(id, persisted);
+  const current = changed
+    ? (await updateStatus(id, undefined, (latest) => deriveStatus(id, latest).status)).status
     : status;
   return jsonNoStore(toPublicMeeting(current));
 }

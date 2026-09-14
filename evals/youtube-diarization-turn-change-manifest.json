@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "description": "짧은 질문 뒤 긴 답변으로 넘어가는 영어 2인 구간의 화자 합침 회귀 세트",
+  "silenceMs": 0,
+  "sources": [
+    {
+      "id": "sam-altman-founders",
+      "url": "https://www.youtube.com/watch?v=kG8AoExkX40",
+      "title": "Sam Altman on Building OpenAI & Betting on the Impossible",
+      "file": "01-sam-altman.m4a",
+      "language": "en",
+      "start": "13:20",
+      "end": "13:55",
+      "expectedMinSpeakers": 2,
+      "expectedMaxSpeakers": 2
+    }
+  ]
+}

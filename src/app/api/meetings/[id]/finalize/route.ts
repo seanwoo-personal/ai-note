@@ -26,7 +26,10 @@ import { assertSafeId } from "@/lib/meetingId";
 import { meetingPaths } from "@/lib/paths";
 import { invalidateOrganizationPending } from "@/lib/organizationPending";
 import { jsonNoStore, publicErrorResponse, safeLog } from "@/lib/publicApi";
+import { recordRequestUsage } from "@/lib/accountUsage";
+import { resolveRequestSession } from "@/lib/accountSession";
 import { readStatus, updateStatus } from "@/lib/status";
+import { activateAccountTenantData } from "@/lib/tenantDataContext";
 import { enqueueTranscription } from "@/lib/transcribe";
 
 export const runtime = "nodejs";
@@ -161,7 +164,7 @@ async function ensureTranscription(
         ...latest,
         error: {
           code: "transcription_failed",
-          message: "전사를 완료하지 못했습니다. 로컬 전사 서비스를 확인해 주세요",
+          message: "전사를 시작하지 못했습니다. 잠시 후 다시 시도하거나 운영자에게 문의해 주세요",
           action: "retry_transcription",
         },
         ...(latest.transcriptionDispatch
@@ -200,6 +203,14 @@ function finalizeErrorResponse(error: unknown, id: string): Response {
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const denied = guardLocalApiRequest(request);
   if (denied) return denied;
+  if (
+    process.env.AI_NOTE_DEPLOYMENT_MODE === "cloud"
+    && !request.headers.get("x-vision-account-id")
+  ) {
+    const session = await resolveRequestSession(request, "customer");
+    if (!session) return publicErrorResponse("authentication_required", 401);
+    activateAccountTenantData(session.account.id);
+  }
   let id: string;
   try {
     id = assertSafeId((await params).id);
@@ -271,6 +282,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
     const transcription = await ensureTranscription(id, operation.ownerToken);
     const status = await readStatus(id);
+    if (artifact === "published") await recordRequestUsage(request, "recording");
     return jsonNoStore({
       id,
       artifact,

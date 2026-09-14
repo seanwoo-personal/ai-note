@@ -59,6 +59,30 @@ function decodeBase64(value: string): Uint8Array {
   return bytes;
 }
 
+// Longest text handed to the provider in a single frame. A realtime TTS stream
+// is designed to take text incrementally — that is what `text_end` separates —
+// and one oversized blob is what long utterances were failing on. Sentences are
+// kept whole so prosody is unchanged, and the concatenation of the chunks is
+// byte-identical to the input, so short text still travels as one frame.
+const TEXT_CHUNK_MAX_CHARS = 180;
+
+export function chunkTextForSynthesis(text: string): string[] {
+  if (text.length <= TEXT_CHUNK_MAX_CHARS) return [text];
+  const sentences = text.match(/[^.!?。！？]+[.!?。！？]*\s*/gu) ?? [text];
+  const chunks: string[] = [];
+  let current = "";
+  for (const sentence of sentences) {
+    if (current && (current + sentence).length > TEXT_CHUNK_MAX_CHARS) {
+      chunks.push(current);
+      current = sentence;
+    } else {
+      current += sentence;
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks;
+}
+
 function createStreamId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `tts-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
@@ -167,11 +191,11 @@ export async function connectSonioxTts(
       const result = JSON.parse(String(event.data)) as SonioxTtsResponse;
       if (result.stream_id !== streamId) return;
       if (typeof result.error_code === "number") {
-        failRuntime(
-          typeof result.error_message === "string" && result.error_message
-            ? result.error_message
-            : "번역 음성을 만들 수 없습니다.",
-        );
+        // Never surface the provider's raw error text (it can carry the vendor
+        // name or account details) — a generic local message plus the numeric
+        // code, matching the realtime STT contract, keeps this diagnosable
+        // without leaking who the provider is (ADR 0024).
+        failRuntime(`번역 음성을 만들 수 없습니다. (코드 ${result.error_code})`);
         return;
       }
       if (typeof result.audio === "string" && result.audio) {
@@ -195,7 +219,12 @@ export async function connectSonioxTts(
       if (closed || cancelled || socket.readyState !== 1) return;
       const normalized = text.trim();
       if (!normalized) return;
-      socket.send(JSON.stringify({ text: normalized, text_end: true, stream_id: streamId }));
+      const chunks = chunkTextForSynthesis(normalized);
+      chunks.forEach((chunk, index) => {
+        socket.send(JSON.stringify(index === chunks.length - 1
+          ? { text: chunk, text_end: true, stream_id: streamId }
+          : { text: chunk, stream_id: streamId }));
+      });
       armInactivityTimeout();
     },
     cancel() {

@@ -309,6 +309,9 @@ const transcriptionDispatchSchema = z
     dispatchId: uuidSchema,
     createdAt: timestampSchema,
     state: z.enum(["proposed", "accepted", "sent", "completed", "failed"]),
+    service: z.literal("soniox").optional(),
+    remoteFileId: z.string().min(1).max(256).optional(),
+    remoteTranscriptionId: z.string().min(1).max(256).optional(),
   })
   .strict();
 

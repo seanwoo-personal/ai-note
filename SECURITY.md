@@ -1,23 +1,24 @@
 # Security Policy
 
-AI NOTE is a **local-first, single-user** desktop web app. Understanding that
-shape is the fastest way to understand its security posture.
+AI NOTE can run on loopback for development or behind an HTTPS reverse proxy for
+a single-customer test deployment. It processes meeting audio through Soniox and
+text through the configured OpenRouter models.
 
 ## Threat model
 
-- **Local only.** The Next.js server and the Whisper transcription service both
-  bind to `127.0.0.1` — never your LAN or the public internet. Nothing is
-  exposed to other machines unless you deliberately reconfigure it.
-- **Loopback request boundary.** Data APIs accept only exact `127.0.0.1` or
-  `localhost` Host values. Unsafe methods require an exact same-origin `Origin`,
-  and Fetch Metadata rejects cross-site/API document-style requests. Forwarded
-  headers are not trusted and CORS is not enabled.
-- **No accounts, no stored keys.** Summaries run through a CLI you are already
-  signed in to (Claude / Codex) or a local model (Ollama). AI NOTE never asks
-  for, stores, or transmits an API key.
-- **No telemetry.** There are no analytics and no outbound calls. Recordings,
-  transcripts, and summaries live under `data/` (gitignored) and never leave
-  your disk.
+- **Two explicit ingress modes.** Development accepts exact loopback hosts.
+  Cloud mode requires an HTTPS forwarded protocol and safe host; unsafe methods
+  require an exact same-origin `Origin`, and `APP_ORIGIN` can pin a stable host.
+- **Account gate.** Customers cannot log in until an operator approves them and
+  marks payment complete. Operators use separate sessions; invited operators
+  must enroll TOTP two-factor authentication.
+- **Server-only credentials.** `SONIOX_API_KEY` and `OPENROUTER_API_KEY` are read
+  only by server code. They must remain in ignored environment files or the
+  deployment secret store and are never returned by public DTOs.
+- **External processing.** Recorded audio is uploaded to Soniox for
+  transcription. Transcript text and prompts are sent to OpenRouter for enabled
+  correction, translation, summary, or chat work. Provider terms and retention
+  controls therefore apply.
 - **Glossary is local PII.** The domain glossary (`glossary.json`) may contain
   personal names; it is gitignored and never committed. Exported hand-off docs
   (`.md` / `.json`) are written verbatim — AI NOTE does **not** currently scrub
@@ -25,14 +26,10 @@ shape is the fastest way to understand its security posture.
   [ADR 0015](docs/decisions/0015-durable-meeting-tombstone.md)); on a single-user
   machine the export is already as trusted as the rest of `data/`.
 
-Because everything runs locally under the user's own account, the primary risk
-surface is **local**: an attacker who already has code execution or file access
-on your machine, a malicious dependency, or a bug that causes AI NOTE to bind
-somewhere other than `127.0.0.1` or to leak sensitive data into an artifact.
-Reports that assume remote/multi-tenant exposure generally do not apply — but if
-you find a way to make the app reachable off-localhost, or to exfiltrate data,
-that is very much in scope. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for
-the module boundaries and data flow.
+The current filesystem repository is not tenant-partitioned. A remote test
+instance must approve only one customer organization. Multi-customer production
+hosting is out of scope until account-scoped storage and a transactional shared
+store are implemented; see [ADR 0026](docs/decisions/0026-local-account-gate-before-hosted-multitenancy.md).
 
 ### In scope
 
@@ -43,21 +40,21 @@ the module boundaries and data flow.
 
 ### Out of scope
 
-- Attacks requiring you to intentionally expose the app to a network.
 - Social-engineering or physical-access scenarios.
-- Issues in third-party summarizer CLIs/models themselves (report those upstream).
+- Issues in Soniox, OpenRouter, or routed models themselves (report those upstream).
 
 ## Local service and data controls
 
-- Ollama and Whisper destinations are validated at save/use time as explicit-port
-  loopback HTTP URLs; credentials, redirects, paths, query strings, and fragments
-  are rejected.
-- The app never sends a filesystem path to Whisper. It sends safe meeting and
-  dispatch IDs; Whisper derives fixed paths under its configured data root and
-  rejects symlinks/containment escapes.
-- Whisper persists a service-owned claim with the immutable audio hash before
-  model work. Retries/restarts resume the same protocol pair; a changed audio
-  identity fails closed.
+- Soniox requests use fixed HTTPS API paths, validate remote IDs before reuse,
+  reject redirects, and expose only stable error codes. The app commits a
+  dispatch before upload, persists remote file/transcription IDs, and can resume
+  status monitoring after restart.
+- Soniox publishes validated segments before the raw completion marker. Remote
+  transcription and uploaded file resources are deleted on completion or error
+  as a best-effort cleanup.
+- OpenRouter receives an ordered model fallback list. Provider routing requests
+  price ordering, zero-data-retention providers, and denial of provider data
+  collection. Failure responses do not expose provider bodies.
 - Recording finalize validates the MIME allowlist, IDs, timestamps, tombstone,
   and request metadata before reading the unbounded streaming body. It durably
   pins metadata/location in a hidden intent, fsyncs the streamed audio, and only

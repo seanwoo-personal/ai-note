@@ -1,10 +1,11 @@
-// LLM summarizer backends. The app never stores an API key: each backend is
-// either a CLI you're already signed into (Claude/Codex) or a local model
-// (Ollama). Adapters produce raw text; src/lib/summarizeCore.ts parses/validates.
+// LLM summarizer backends. API keys are read lazily from environment variables
+// and are never persisted in the app data directory. Adapters produce raw text;
+// src/lib/summarizeCore.ts parses and validates the structured result.
 
-export type LlmProvider = "claude-cli" | "codex-cli" | "ollama";
+export type LlmProvider = "openrouter" | "claude-cli" | "codex-cli" | "ollama";
 
 export const LLM_PROVIDERS: readonly LlmProvider[] = [
+  "openrouter",
   "claude-cli",
   "codex-cli",
   "ollama",
@@ -24,6 +25,14 @@ export interface LlmHealth {
   detail: string;
 }
 
+export type LlmTask = "summary" | "chat" | "transcript" | "translation";
+
+export interface LlmRunOptions {
+  json?: boolean;
+  /** Selects the cost/quality model chain without exposing routing in callers. */
+  task?: LlmTask;
+}
+
 export interface LlmAdapter {
   provider: LlmProvider;
   /**
@@ -31,7 +40,7 @@ export interface LlmAdapter {
    * backend to emit JSON where supported (summarizeCore tolerates prose/fences
    * regardless, so this is best-effort).
    */
-  run(prompt: string, opts?: { json?: boolean }): Promise<string>;
+  run(prompt: string, opts?: LlmRunOptions): Promise<string>;
   /** Cheap reachability/auth check for the settings "test connection" button. */
   health(): Promise<LlmHealth>;
 }

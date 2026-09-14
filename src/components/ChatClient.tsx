@@ -11,7 +11,6 @@ import {
 
 import { ChatAnswer, type ChatDeepError } from "@/components/ChatAnswer";
 import { ChatStatus, type ChatBusyKind } from "@/components/ChatStatus";
-import { GuardedLink } from "@/components/RecorderNavigation";
 import {
   CHAT_REQUEST_LIMITS,
   chatResponseSchema,
@@ -110,13 +109,13 @@ function failureForCode(code: unknown): ChatFailure {
   if (code === "chat_llm_unconfigured") {
     return {
       kind: "model_unconfigured",
-      message: "요약 모델 설정이 필요합니다. 질문과 이전 대화는 그대로 두었습니다. 설정을 확인한 뒤 다시 시도해 주세요.",
+      message: "질문 기능을 준비하고 있습니다. 질문과 이전 대화는 그대로 두었습니다. 잠시 후 다시 시도해 주세요.",
     };
   }
   if (code === "chat_llm_unavailable" || code === "chat_timeout") {
     return {
       kind: "model_unavailable",
-      message: "답변을 만들지 못했습니다. 질문과 이전 대화는 그대로 두었습니다. 요약 모델 상태를 확인한 뒤 다시 시도해 주세요.",
+      message: "답변을 만들지 못했습니다. 질문과 이전 대화는 그대로 두었습니다. 잠시 후 다시 시도하거나 운영자에게 문의해 주세요.",
     };
   }
   if (code === "chat_index_unavailable") {
@@ -472,19 +471,10 @@ function ChatFailureView({
   busy: boolean;
   onUpdateSearchData(): void;
 }) {
-  const showSettings = failure.kind === "model_unconfigured" || failure.kind === "model_unavailable";
   const showSearchUpdate = failure.kind === "search_unavailable" || failure.kind === "reindex_failed";
   return (
     <div className="flex min-w-0 flex-col items-start gap-3 rounded-[12px] border border-error/30 bg-panel px-4 py-3 text-[13px] leading-relaxed sm:flex-row sm:items-center sm:justify-between">
       <p role="status" className="min-w-0 break-words text-error">{failure.message}</p>
-      {showSettings && (
-        <GuardedLink
-          href="/settings"
-          className="inline-flex min-h-11 w-full shrink-0 items-center justify-center rounded-lg border border-inkFaint px-4 font-semibold text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:w-auto"
-        >
-          {failure.kind === "model_unconfigured" ? "요약 모델 설정" : "요약 모델 확인"}
-        </GuardedLink>
-      )}
       {showSearchUpdate && (
         <button
           type="button"

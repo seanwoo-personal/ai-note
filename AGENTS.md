@@ -2,24 +2,24 @@
 
 > 모델·도구 무관 **에이전트 진입점**. Claude Code·Codex 등 어떤 에이전트가 열어도 이 파일을 먼저 읽는다. `CLAUDE.md`는 이 파일의 심링크(내용 하나). 사람 온보딩은 [README.md](README.md).
 
-로컬 단일 사용자 웹앱. 노트북 마이크 녹음 → 로컬 whisper 배치 전사 → 로컬 CLI(claude/codex)·Ollama 교정·요약 → 열람·내보내기. 상세 기획은 [docs/PRD.md](docs/PRD.md), 계약·데이터흐름은 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), 디자인은 [docs/UI_GUIDE.md](docs/UI_GUIDE.md).
+승인형 고객 계정을 갖춘 회의 웹앱. 마이크 녹음 → Soniox 클라우드 전사 → OpenRouter 작업별 모델 라우팅 교정·요약 → 열람·내보내기. 상세 기획은 [docs/PRD.md](docs/PRD.md), 계약·데이터흐름은 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), 디자인은 [docs/UI_GUIDE.md](docs/UI_GUIDE.md).
 
 ## 데이터 흐름 · Dependencies (cross-module)
 
 ```mermaid
 flowchart LR
-    R["src · Recorder UI"] -->|audio.webm| W["whisper · STT"]
-    W -->|raw.md| S["최초 교정·요약 / 독립 재생성 · 로컬 CLI/Ollama"]
+    R["src · Recorder UI"] -->|audio.webm| W["Soniox · STT"]
+    W -->|raw.md| S["최초 교정·요약 / 독립 재생성 · OpenRouter"]
     S -->|transcript.md · summary.json| V["열람 · 수동 수정 · 내보내기"]
 ```
 
-- 흐름: `src`(녹음/API) → `whisper`(HTTP 127.0.0.1) → 최초 교정·요약 또는 종류별 독립 재생성(로컬 CLI/Ollama) → 열람·수동 수정·내보내기. 단일 writer 소유권은 아래 CRITICAL 참조.
-- 모듈별 상세: [src/CLAUDE.md](src/CLAUDE.md) · [whisper/CLAUDE.md](whisper/CLAUDE.md) · [scripts/CLAUDE.md](scripts/CLAUDE.md).
+- 흐름: `src`(녹음/API) → Soniox 비동기 또는 실시간 전사 → OpenRouter 교정·요약·번역 → 열람·수동 수정·내보내기. 단일 writer 소유권은 아래 CRITICAL 참조.
+- 모듈별 상세: [src/CLAUDE.md](src/CLAUDE.md) · [scripts/CLAUDE.md](scripts/CLAUDE.md).
 - 결정 기록(ADR): [docs/decisions/](docs/decisions/) · AI 기능 품질: [evals/](evals/).
 
 ## 기술 스택
 - Next.js 15 (App Router) · TypeScript strict · Tailwind CSS
-- 로컬 whisper 서비스: Python(**uv로 3.11/3.12 핀 venv**, 시스템 3.14 금지), mlx-whisper large-v3(폴백 faster-whisper), `127.0.0.1`
+- 전사: Soniox `stt-async-v5`와 `stt-rt-v5`; 생성형 AI: OpenRouter 작업별 저비용 모델 체인
 - 테스트: Vitest(+ RTL/jsdom component test) + 고정 버전 Playwright/Chromium synthetic browser 회귀. Chrome DevTools MCP는 선택적 정성 검토 전용이며 자동 gate가 아니다(ADR 0020).
 - 저장: 로컬 파일(`data/meetings/{id}/`) — DB 없음.
 
@@ -39,14 +39,11 @@ flowchart LR
 ### Clone 뒤 정본 실행
 
 1. **Node ≥ 20 확보** — `node -v`. 없거나 낮으면 nvm 또는 OS package manager 설치 명령을 사용자에게 보여 주고 필요한 권한을 받는다.
-2. Target root에서 `node scripts/bootstrap.mjs --launch`를 실행한다. 이 무의존 command가 먼저 doctor를 실행하고, 통과하면 `HUSKY=0 npm ci` → `npm run build` → repository-owned background app/Whisper 기동 → 두 health 확인 → 실제 브라우저 열기 순서로 완료한다.
-3. Doctor가 필수 `uv` 또는 `ffmpeg` 누락으로 멈추면 출력된 OS별 조치를 사용자에게 보여 주고 설치한 뒤 같은 `--launch` command를 다시 실행한다. Bootstrap은 `sudo`, package manager, provider 로그인, `ollama pull`, Whisper model download를 몰래 실행하지 않는다.
-4. 요약기는 녹음·전사의 설치 blocker가 아니다. 앱이 열린 뒤 **설정 → 요약 모델**에서 Claude/Codex CLI 또는 Ollama를 선택하고 저장한다. 필요한 CLI 로그인, `ollama serve`/`ollama pull <model>`은 사용자 권한과 선택으로 수행하며 `data/settings.json`을 직접 쓰지 않는다.
-5. 성공 시 `AI_NOTE_URL=http://localhost:<actual-port>`를 정본으로 사용한다. Headless/opener 실패도 server 성공을 유지하므로 출력된 exact URL을 사용 가능한 agent browser surface로 연다. 최종 handoff에는 absolute install path, branch 또는 revision, 실제 앱 URL을 함께 보고한다.
+2. Target root에서 `npm ci`, `cp .env.example .env.local`을 실행하고 사용자가 발급한 `SONIOX_API_KEY`와 `OPENROUTER_API_KEY`를 입력한다.
+3. `npm run setup`으로 Node·ffmpeg를 확인하고 `npm run dev`로 로컬 실행한다. 고객 테스트 배포는 [docs/AWS_DEPLOYMENT.md](docs/AWS_DEPLOYMENT.md)를 따른다.
+4. 성공 시 로컬은 `http://127.0.0.1:3000`, 배포는 터널이 출력한 정확한 HTTPS 주소를 사용한다. 최종 handoff에는 absolute install path, branch 또는 revision, 실제 앱 URL을 함께 보고한다.
 
-앱은 `127.0.0.1:3000`부터, Whisper는 `127.0.0.1:8123`부터 bounded 후보를 고르며 기존 process에 연결하거나 종료하지 않는다. 선택 포트는 child environment에만 전달하고 `.env.local`을 만들거나 덮어쓰지 않는다. Runtime state/heartbeat/log는 gitignored `.ai-note-runtime/`에 mode를 제한해 저장하며 credential이나 inherited environment를 기록하지 않는다. `npm run app:status`/`npm run app:stop`은 live ownership token이 검증된 supervisor만 조회·종료하고 stale 또는 검증 불가 PID에는 signal을 보내지 않는다.
-
-Claude Code 세션은 같은 계약의 `/setup` command를 사용할 수 있다. `npm run dev`는 contributor용 foreground command이며 end-user 설치 성공 경로가 아니다.
+로컬 앱은 `127.0.0.1:3000`에만 바인딩한다. 클라우드 컨테이너는 내부 `0.0.0.0:3000`에서 실행하되 외부에는 HTTPS 터널만 노출한다. `.env.local`·`.env.production`을 만들거나 덮어쓸 때는 사용자 키를 보존한다.
 
 ## 아키텍처 규칙
 
@@ -54,37 +51,35 @@ Claude Code 세션은 같은 계약의 `/setup` command를 사용할 수 있다.
 - **TDD**: 새 기능은 테스트 먼저 작성 → 통과하는 구현.
 - **원본 불가침**: `audio.webm`·`raw.md`·`segments.json`은 생성 후 수정 금지. `transcript.md`·`summary.json`만 재생성·수동 수정 가능한 파생물이다.
 - **원자적·내구 쓰기**: 모든 아티팩트는 temp 파일 → file `fsync` → `rename` → parent-directory `fsync`로 쓴다. `rename`이 논리적 commit 지점이며 결과는 `not_committed | committed_durable | committed_best_effort | committed_durability_pending`으로 구분한다. rename 뒤 sync 실패를 rollback하거나 미커밋으로 오인하지 않는다(ADR 0011).
-- **파일 소유권(단일 writer)**: `status.json`=app-api만, `data/library.json`=library repository만, `raw.md`/`segments.json`=whisper만, `transcript.md`/`summary.json`=app summarize publisher만, `meeting-tombstones/`=app lifecycle만. 남의 파일을 쓰지 않는다. Workspace/folder/placement는 중앙 registry metadata이며 `data/meetings/{id}/` 경로는 이동하지 않는다. 사용자 지정 제목은 `status.json.titleOverride`, 참석자는 `status.json.review`의 전용 app-api surface가 소유하며 summary editor가 `title`/`topicSlug`/`summary.participants`를 수정하지 않는다(ADR 0008, 0021, 0022).
+- **파일 소유권(단일 writer)**: `status.json`=app-api만, `data/library.json`=library repository만, `raw.md`/`segments.json`=Soniox 전사 publisher만, `transcript.md`/`summary.json`=app summarize publisher만, `meeting-tombstones/`=app lifecycle만. 남의 파일을 쓰지 않는다. Workspace/folder/placement는 중앙 registry metadata이며 `data/meetings/{id}/` 경로는 이동하지 않는다. 사용자 지정 제목은 `status.json.titleOverride`, 참석자는 `status.json.review`의 전용 app-api surface가 소유하며 summary editor가 `title`/`topicSlug`/`summary.participants`를 수정하지 않는다(ADR 0008, 0021, 0022).
 - **영구 삭제 fence**: 회의 삭제는 `meeting-tombstones/{id}.json` durable rename을 logical commit으로 삼는다. Tombstone은 live directory보다 우선하며 모든 reader/writer/worker/scanner가 재생성을 fail-closed해야 한다. Malformed/unreadable/symlink marker는 임의 복구하지 말 것. Placement·deterministic trash·late producer orphan은 operation→artifact write lease 순서의 lazy sweep으로 정리하고 tombstone은 영구 보존한다(ADR 0015).
 - **원자 finalize**: request body 전에 hidden `.finalize-{id}` intent를 durable create-exclusive하고, audio+initial status+immutable receipt를 staging에서 완성한 뒤 directory rename으로 publish한다. Published same-ID retry는 body를 읽거나 `audio.webm`을 덮지 않고 receipt 기반 probe/recovery를 수행한다. Placement pending/unavailable은 generic default reconcile에서 defer하며 post-publish remux·placement·dispatch 실패는 artifact commit을 되돌리지 않는다(ADR 0016).
 - **편집 가능한 파생 pair 발행**: API/UI/adapter는 canonical `transcript.md`/`summary.json`을 직접 쓰지 않고 `summarizePublisher`만 두 파일을 함께 발행한다. 최초 생성만 불변 `raw.md` 교정 뒤 그 결과로 요약한다. 이후 `transcript_regenerate`는 `raw.md` 교정만 실행해 기존 summary를 보존하고, `summary_regenerate`는 현재 canonical transcript만 사용해 summary만 만든다. 수동 transcript/summary 저장도 반대편 artifact를 그대로 포함한 full-pair payload를 발행한다. Transcript 변경은 summary를 자동 생성하지 않고 `summaryOutdated`를 파생시키며, summary 수동 저장·재생성만 현재 transcript 기준 fresh 상태를 만든다. Adapter/202 또는 수동 발행 전 durable `summarizeAttempt`를 commit하고 `summary.json`을 completion marker로 마지막 발행한다. Pair consumer는 artifact read lease, publisher/delete/cleanup은 write lease를 사용하며 lock 순서 `meeting operation → artifact RW → status queue → library queue`를 거슬러 획득하지 말 것(ADR 0013, 0021).
 - **자유 본문 요약 계약**: Generated summary는 기존 structured shape로 읽고, 수동 저장한 summary는 optional `body` 하나를 current editable truth로 쓴다. `body`가 있으면 `oneLine`/`purpose`와 모든 structured editable list/action item은 비어 있어야 하며 dual truth를 schema에서 거부한다. Body는 CRLF만 LF로 정규화하고 trim/heading parse/action-item 추론을 하지 않는다. Copy·Markdown/JSON·knowledge/search/chat evidence는 body를 사용하되 outdated summary에는 fresh semantic credit을 주지 않는다. 선택 tab의 local action bar는 tablist 직후, warning과 읽기 본문 또는 이를 교체한 single textarea 앞에 둔다(ADR 0022).
 - **Library 직렬화**: `library.json`의 bootstrap/reconcile/mutation은 absolute canonical path 기준 process-global queue에서만 수행한다. Public mutation token은 `libraryId + revision`; durability pending 동안 후속 mutation은 fail-closed한다. 손상·상위 버전·I/O 오류 registry를 자동 bootstrap/sanitize하지 않는다.
 - **Library 복구**: corrupt에서만 latest fingerprint를 요구하는 명시적 rebuild를 허용한다(ADR 0017). `libraryRecoveryPlanner`의 action을 같은 library queue 안에서 실행하고 original→private archive→new canonical 순서와 양쪽 namespace sync를 지킨다. Intent phase는 atomic replace하며 active marker를 truncate하지 않는다. Unsupported/I/O/conflict를 rebuild로 낮추지 말고 archive는 자동 삭제하지 않는다. 새 `libraryId` 수용 시 client generation epoch를 올려 old poll/mutation/page/dialog/source URL을 전부 폐기한다.
-- **앱은 API 키를 저장하지 않는다**: 교정·요약은 백그라운드 워커가 사용자의 로컬 CLI(claude/codex)나 Ollama로 수행한다. 앱 코드·데이터에 API 키를 저장하거나 임의의 유료 API 호출을 넣지 말 것 — 기본은 로컬 CLI/모델($0 원칙). **예외는 ADR 0024 두 가지뿐**: (1) `.env.local`의 실시간 전사·번역 키를 `/api/realtime/temporary-key`가 60초 single-use 임시 키로만 중개, (2) `.env.local`의 외부 요약 API 키(`CODEX_API_KEY`/`OPENAI_API_KEY`)가 있을 때 `codex-cli` backend의 HTTPS API 모드. 두 키 모두 env 전용이며 UI·응답·로그에 키나 provider 상호를 노출하지 않는다(vendor 중립 UI 계약).
-- **build-green**: `next build`가 시크릿/DB/env 없이 매번 통과해야 한다. `data/`를 읽는 라우트·페이지는 `export const dynamic='force-dynamic'` + `cache:'no-store'`; top-level `process.env` 접근 금지(핸들러 내 지연); whisper 클라이언트 지연 초기화; `data/`가 없어도 견디게; MediaRecorder/Web Audio 코드는 `"use client"`; 라우트는 Node 런타임(edge 금지).
-- **127.0.0.1 바인딩**: whisper·로컬 서버는 로컬 인터페이스만. LAN 노출 금지.
+- **앱은 API 키를 저장하지 않는다**: `SONIOX_API_KEY`와 `OPENROUTER_API_KEY`는 서버 환경 변수에서 지연 로드하고 앱 데이터·응답·로그에 저장하거나 노출하지 않는다. 브라우저 실시간 전사는 60초 single-use Soniox 임시 키만 사용한다. OpenRouter 요청은 zero-retention과 data-collection deny를 요구한다.
+- **build-green**: `next build`가 시크릿/DB/env 없이 매번 통과해야 한다. `data/`를 읽는 라우트·페이지는 `export const dynamic='force-dynamic'` + `cache:'no-store'`; top-level `process.env` 접근 금지(핸들러 내 지연); `data/`가 없어도 견디게; MediaRecorder/Web Audio 코드는 `"use client"`; 라우트는 Node 런타임(edge 금지).
+- **바인딩**: 로컬 서버는 로컬 인터페이스만. 클라우드 앱 포트는 Docker 네트워크와 loopback health check에만 노출하고 외부 접속은 HTTPS 터널로 제한한다.
 - **로컬 요청 경계**: 모든 data API와 data-reading RSC는 params/body/fs/network/spawn보다 먼저 공통 guard를 통과한다. Raw Host는 exact `127.0.0.1|localhost`, unsafe method Origin은 request origin과 exact match, Fetch Metadata는 same-origin만 허용(API에서 `none` 금지). JSON은 exact content type + raw byte cap이며 public DTO/error는 path·job/dispatch ID·raw provider/fs output을 노출하지 않는다.
-- **로컬 서비스 경계**: Ollama/Whisper egress는 explicit-port `http://127.0.0.1|localhost`만, redirect 금지. 비-loopback egress는 ADR 0024가 허용한 두 provider endpoint(임시 키 발급, 외부 요약 API)만 예외이며 둘 다 `redirect:"error"`+timeout을 강제한다. App→Whisper는 path 대신 `{meetingId,dispatchId}`만 보낸다. Whisper는 fixed data root에서 경로를 파생하고 service-owned durable claim으로 same-pair dedupe/resume한다.
-- **전사 dispatch/completion**: app은 Whisper 호출 전 `status.transcriptionDispatch` proposed ID를 durable commit하고 retry/restart에서 같은 ID를 재사용한다. Whisper는 `segments.json` 먼저, `raw.md` 마지막 순서로 발행한다. Consumer는 matching service claim의 `raw_published` + `durable|best_effort` + audio identity를 확인하기 전 partial segments/raw를 읽지 말 것(ADR 0014).
-- **로컬 데이터 취급**: `data/`·`glossary.json`은 로컬 전용(gitignored, 커밋 금지) — 오디오·전사·요약·단어장(사람 이름 등 PII 포함 가능)은 디스크를 떠나지 않는다. 요약/내보내기물의 토큰·이메일·전화·URL **scrub은 지향 목표이나 현재 미구현**이며, 로컬 단일 사용자 hand-off 문서(`export`)엔 의도적으로 미적용한다(ADR 0007). 공유/업로드 표면이 생기면 그때 scrub을 강제한다.
-- **Synthetic browser QA 경계**: 반복 가능 UI gate는 repository-owned Playwright command만 사용한다. `data/`·`glossary.json`·`.env*`·실제 Whisper/LLM·외부 network를 사용하지 않고 runner-owned 임시 snapshot과 empty data만 쓴다. 성공 screenshot/assertion/console manifest는 `test-results/` 또는 execute local journal에만 두며 Git에 커밋하지 않는다. Chrome DevTools MCP는 로그인 세션/정성 탐색이 꼭 필요할 때만 보조로 사용하고 자동 검증을 대체하지 않는다(ADR 0020).
+- **외부 서비스 경계**: Ollama egress는 explicit-port loopback만 허용한다. Soniox/OpenRouter HTTPS 호출은 redirect 금지와 timeout을 강제하고 provider 응답 본문을 public error에 포함하지 않는다.
+- **전사 dispatch/completion**: app은 Soniox 호출 전 `status.transcriptionDispatch` proposed ID를 durable commit한다. 원격 file/transcription ID를 저장해 재시작 후 resume하고 `segments.json` 먼저, `raw.md` 마지막 순서로 발행한 뒤 원격 리소스를 정리한다.
+- **클라우드 데이터 취급**: `data/`·glossary는 gitignored이며 오디오·전사·요약·단어장은 PII를 포함할 수 있다. Soniox에는 전사를 위해 오디오가, OpenRouter에는 교정·요약·질문·번역 문맥이 전송된다. 현재 배포는 한 고객사 테스트 인스턴스로 제한한다.
+- **Synthetic browser QA 경계**: 반복 가능 UI gate는 repository-owned Playwright command만 사용한다. `data/`·glossary·`.env*`·실제 외부 network를 사용하지 않고 runner-owned 임시 snapshot과 FAKE 서비스를 쓴다. 성공 screenshot/assertion/console manifest는 `test-results/` 또는 execute local journal에만 두며 Git에 커밋하지 않는다(ADR 0020).
 
 ### 일반 규칙
 - 컴포넌트는 `src/components/`, 타입은 `src/types/`(또는 `src/domain/`), 유틸은 `src/lib/`, 외부 래퍼는 `src/services/`.
 - 커밋 메시지는 conventional commits(feat:, fix:, docs:, refactor:, chore:).
 
 ## 개발 프로세스
-- 모델 다운로드·긴 전사·`uv`/`npm install` 같은 무거운 작업은 **런타임에만**. 테스트·스모크는 tiny 모델/FAKE 스텁으로.
+- 실제 전사·외부 모델 호출은 **런타임에만**. 테스트·스모크는 FAKE 스텁으로.
 - Playwright/Chromium 갱신은 `package.json`의 exact version을 의도적으로 바꾼 뒤 browser 재설치 → doctor → 전체 E2E 순서로만 한다. 앱/Next 변경 때마다 Chrome DevTools MCP를 갱신하거나 별도 adapter를 보수하지 않는다.
 
 ## 명령어
 ```bash
-npm run bootstrap   # doctor + npm ci + build + owned background app/Whisper + browser
-npm run app:start   # 설치된 build를 owned background runtime으로 시작
-npm run app:status  # ownership 확인 뒤 실제 URL과 app/Whisper 상태 조회
-npm run app:stop    # ownership 확인된 supervisor만 종료
-npm run dev         # contributor용 foreground next dev + whisper
+npm run setup       # Node·ffmpeg와 환경 파일 안내 점검
+npm run dev         # contributor용 foreground Next 개발 서버
+npm run start:cloud # Docker/HTTPS 프록시 뒤 클라우드 실행
 npm run build       # 프로덕션 빌드 (시크릿 없이 통과해야 함)
 npm run lint        # ESLint
 npm test            # vitest run (+ component test), watch 금지

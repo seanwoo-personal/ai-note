@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "description": "진행자의 내레이션과 대화 음색 차이를 같은 사람으로 유지해야 하는 영어 3인 구간 품질 세트",
+  "silenceMs": 0,
+  "sources": [
+    {
+      "id": "english-three-person-intro",
+      "url": "https://www.youtube.com/watch?v=subu-xHrp1w",
+      "title": "Godmother of AI: In 10 Years There Will Be Only 2 Kinds of Workers | Fei-Fei Li",
+      "file": "04-english-two.m4a",
+      "language": "en",
+      "start": "00:30",
+      "end": "02:00",
+      "expectedMinSpeakers": 3,
+      "expectedMaxSpeakers": 3,
+      "expectedMinSupportedSpeakers": 3,
+      "expectedMaxSupportedSpeakers": 3
+    }
+  ]
+}

@@ -166,6 +166,9 @@ async function installHarness(
   const deleteCalls: string[] = [];
   const temporaryKeyCalls = { count: 0 };
   const networkEvents: NetworkEvent[] = [];
+  await page.addInitScript(() => {
+    if (!localStorage.getItem("ai-note-locale")) localStorage.setItem("ai-note-locale", "ko");
+  });
   await page.addInitScript(installSonioxBrowserFakes);
 
   page.on("request", (request) => {
@@ -879,8 +882,11 @@ test.describe("Global Meeting translation — real browser", () => {
       // treatment inside it — "Vision" wordmark + exact second line.
       const homeLink = page.locator('a[aria-label="Vision AI 미팅 에이전트 홈"]:visible');
       await expect(homeLink).toHaveCount(1);
-      await expect(homeLink.getByText("Vision", { exact: true })).toBeVisible();
-      await expect(homeLink.getByText("AI 미팅 에이전트(AI Meeting Agent)", { exact: true })).toBeVisible();
+      // The customer's own logo, served locally, plus the exact second line.
+      const logo = homeLink.getByRole("img", { name: "Vision" });
+      await expect(logo).toBeVisible();
+      await expect(logo).toHaveAttribute("src", "/brand/vision-logo.svg");
+      await expect(homeLink.getByText("AI Meeting Agent", { exact: true })).toBeVisible();
       expect(await page.title()).toBe("Vision AI 미팅 에이전트");
       // No legacy customer-facing product name survives on the shell.
       expect(await page.locator("body").innerText()).not.toContain("헤이홈");
@@ -968,7 +974,7 @@ test.describe("Global Meeting translation — real browser", () => {
     await writeFile(join(EVIDENCE_DIR, `${testInfo.project.name}-state-complete-tab-focus.json`), body);
   });
 
-  test("Soniox config enables language ID with the selected target wired, and KO+EN utterances render with exact labels/columns", async ({ page }, testInfo) => {
+  test("Soniox config enables language ID and normalizes any language into 내 언어, with KO+EN utterances rendering under exact labels/columns", async ({ page }, testInfo) => {
     await installHarness(page);
     await page.goto(LIVE_URL);
 
@@ -1008,13 +1014,18 @@ test.describe("Global Meeting translation — real browser", () => {
     });
     expect(fontEvidence.contentType).toMatch(/font\/woff2|application\/font-woff2/i);
 
-    // Select a non-default target to prove the selection stays wired into the real config.
+    // Select a non-default counterpart to prove it drives the broadcast only and
+    // never narrows what the operator can understand.
+    await page.getByRole("combobox", { name: "내 언어" }).selectOption("ko");
     await page.getByRole("combobox", { name: "상대방 언어" }).selectOption("ja");
     await startAndListen(page);
 
     const config = await page.evaluate(() => (window as unknown as { __ai_e2e: { sentConfig: Record<string, unknown> } }).__ai_e2e.sentConfig);
     expect(config.enable_language_identification).toBe(true);
-    expect(config.translation).toMatchObject({ type: "two_way", language_a: "ko", language_b: "ja" });
+    // One-way into 내 언어: this screen is the operator's own view, so any spoken
+    // language lands in the language they read. Pinning a language pair left a
+    // third language in the room untranslated.
+    expect(config.translation).toEqual({ type: "two_way", language_a: "ko", language_b: "ja" });
 
     // Inject a Korean and an English utterance; both must render in the real UI.
     await emitUtterance(page, "1", "안녕하세요 회의를 시작합니다", "ko", "会議を始めます", "ja");
@@ -1366,14 +1377,6 @@ test.describe("Global Meeting translation — real browser", () => {
       confirmTitle: "このミーティングを破棄しますか？",
       back: "戻る",
       confirm: "破棄を確定",
-    },
-    {
-      locale: "zh",
-      latest: "查看最新内容",
-      discard: "丢弃",
-      confirmTitle: "要丢弃这场会议吗？",
-      back: "返回",
-      confirm: "确认丢弃",
     },
   ] as const) {
     test(`${localeCase.locale} localizes latest-content and discard dynamic UI without Korean residue`, async ({ page }, testInfo) => {

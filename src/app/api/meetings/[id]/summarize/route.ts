@@ -10,6 +10,7 @@ import { assertSafeId } from "@/lib/meetingId";
 import { meetingFenceResponse } from "@/lib/meetingFence";
 import { jsonNoStore, publicErrorResponse } from "@/lib/publicApi";
 import { acceptSummarize } from "@/lib/summarize";
+import { recordRequestUsage } from "@/lib/accountUsage";
 
 // Initial generation retains correction + summary. An explicit re-summarize is
 // revision-bound and runs summary-only from the current canonical transcript.
@@ -91,5 +92,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return publicErrorResponse("meeting_conflict", 409, { meetingId: id, action: "summarize" });
   }
 
+  await recordRequestUsage(request, "summary");
   return jsonNoStore({ ok: true, durability: accepted.durability }, 202);
 }

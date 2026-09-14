@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   AppPreferencesControls,
+  AppPreferencesHydrationGate,
   AppPreferencesProvider,
   FontSizeSettingsCard,
   useAppPreferences,
@@ -60,6 +61,53 @@ describe("AppPreferencesProvider", () => {
     expect(document.title).toBe("Vision AI 미팅 에이전트");
     document.title = "AI NOTE";
     await waitFor(() => expect(document.title).toBe("Vision AI 미팅 에이전트"));
+  });
+
+  it("defaults to Japanese and exposes display languages in the Japan-first order", async () => {
+    render(<AppPreferencesProvider><AppPreferencesControls /><Probe /></AppPreferencesProvider>);
+
+    await waitFor(() => expect(screen.getByTestId("preferences")).toHaveTextContent("ja:light:light:Vision"));
+    const localeSelect = screen.getByTestId("locale-select") as HTMLSelectElement;
+    expect(Array.from(localeSelect.options).map((option) => option.value)).toEqual(["ja", "en", "ko"]);
+    await waitFor(() => expect(Array.from(localeSelect.options).map((option) => option.textContent))
+      .toEqual(["日本語", "English", "韓国語"]));
+  });
+
+  it("waits until a paint boundary before mutating server-authored copy", async () => {
+    render(
+      <AppPreferencesProvider>
+        <span data-testid="deferred-copy">설정</span>
+      </AppPreferencesProvider>,
+    );
+
+    // Streaming/Suspense descendants may still be hydrating when the provider's
+    // first effect runs. Mutating them in that same commit creates a hydration
+    // mismatch, so the Korean source must survive at least until the next paint.
+    expect(screen.getByTestId("deferred-copy")).toHaveTextContent("설정");
+    await waitFor(() => expect(screen.getByTestId("deferred-copy")).toHaveTextContent("設定"));
+  });
+
+  it("keeps the server locale until a delayed hydration boundary commits", async () => {
+    window.localStorage.setItem("ai-note-locale", "ko");
+    const view = render(
+      <AppPreferencesProvider deferLocaleUntilHydrated>
+        <Probe />
+        <span data-testid="delayed-hydration-copy">설정</span>
+      </AppPreferencesProvider>,
+    );
+
+    await act(async () => {});
+    expect(screen.getByTestId("preferences")).toHaveTextContent("ja:light:light:Vision");
+    expect(screen.getByTestId("delayed-hydration-copy")).toHaveTextContent("설정");
+
+    view.rerender(
+      <AppPreferencesProvider deferLocaleUntilHydrated>
+        <Probe />
+        <span data-testid="delayed-hydration-copy">설정</span>
+        <AppPreferencesHydrationGate />
+      </AppPreferencesProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId("preferences")).toHaveTextContent("ko:light:light:Vision"));
   });
 
   it("localizes registered fixed DOM copy while preserving marked user content", async () => {
@@ -132,7 +180,7 @@ describe("AppPreferencesProvider", () => {
     });
 
     render(<AppPreferencesProvider><AppPreferencesControls /><Probe /></AppPreferencesProvider>);
-    await waitFor(() => expect(screen.getByTestId("preferences")).toHaveTextContent("en:system:light:Vision"));
+    await waitFor(() => expect(screen.getByTestId("preferences")).toHaveTextContent("ja:light:light:Vision"));
 
     expect(() => {
       fireEvent.change(screen.getByTestId("locale-select"), { target: { value: "ja" } });
@@ -146,15 +194,15 @@ describe("AppPreferencesProvider", () => {
   it("uses the browser locale when a stored locale is corrupt", async () => {
     window.localStorage.setItem("ai-note-locale", "fr");
     render(<AppPreferencesProvider><Probe /></AppPreferencesProvider>);
-    await waitFor(() => expect(screen.getByTestId("preferences")).toHaveTextContent("en:system:light:Vision"));
+    await waitFor(() => expect(screen.getByTestId("preferences")).toHaveTextContent("ja:light:light:Vision"));
   });
 
   it("keeps locale and theme usable when matchMedia is unavailable", async () => {
     vi.stubGlobal("matchMedia", vi.fn(() => { throw new TypeError("blocked"); }));
     render(<AppPreferencesProvider><Probe /></AppPreferencesProvider>);
 
-    await waitFor(() => expect(screen.getByTestId("preferences")).toHaveTextContent("en:system:light:Vision"));
-    expect(document.documentElement).toHaveAttribute("lang", "en");
+    await waitFor(() => expect(screen.getByTestId("preferences")).toHaveTextContent("ja:light:light:Vision"));
+    expect(document.documentElement).toHaveAttribute("lang", "ja");
     expect(document.documentElement).toHaveAttribute("data-theme", "light");
   });
 });

@@ -8,7 +8,7 @@ describe("product brand", () => {
   it("uses the exact Vision customer brand strings", () => {
     expect(BRAND_NAME).toBe("Vision");
     expect(BRAND_PRODUCT_NAME).toBe("Vision AI 미팅 에이전트");
-    expect(BRAND_TAGLINE).toBe("AI 미팅 에이전트(AI Meeting Agent)");
+    expect(BRAND_TAGLINE).toBe("AI Meeting Agent");
     expect(BRAND_HOME_LABEL).toBe("Vision AI 미팅 에이전트 홈");
   });
 

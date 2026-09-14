@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 
 import { LLM_GENERATION_TIMEOUT_MS, runProcess } from "@/services/llm/exec";
-import type { LlmAdapter, LlmHealth, LlmProvider, LlmSettings } from "@/services/llm/types";
+import type { LlmAdapter, LlmHealth, LlmProvider, LlmRunOptions, LlmSettings } from "@/services/llm/types";
 
 // Claude Code CLI backend. `claude -p` runs non-interactively and reads the
 // prompt from STDIN when piped. Summary tasks are self-contained (no tools,
@@ -42,7 +42,7 @@ export class ClaudeCliAdapter implements LlmAdapter {
   // never silently metered to a paid API ($0 invariant); HOME/PATH stay so OAuth
   // keychain access and binary lookup still work. The transcript goes via stdin
   // only (never argv: `ps` exposure + ARG_MAX).
-  async run(prompt: string, opts?: { json?: boolean }): Promise<string> {
+  async run(prompt: string, opts?: LlmRunOptions): Promise<string> {
     const args = [
       "-p",
       ...(opts?.json ? ["--output-format", "json"] : []),

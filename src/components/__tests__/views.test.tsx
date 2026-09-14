@@ -135,11 +135,12 @@ describe("EmptyState", () => {
 });
 
 describe("PendingBanner", () => {
-  it("prompts to configure a model when none is set and meetings await summary", () => {
+  it("keeps implementation details hidden while AI meeting notes are being prepared", () => {
     render(<PendingBanner count={2} readiness="unconfigured" />);
-    expect(screen.getByText("2개 회의가 요약 대기 중")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "설정" })).toBeInTheDocument();
-    expect(screen.getByText(/녹음·전사는 모델 없이 동작합니다/)).toBeInTheDocument();
+    expect(screen.getByText("2개 회의가 AI 회의록 작성 대기 중")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "설정" })).not.toBeInTheDocument();
+    expect(screen.getByText(/준비 전에도 회의 녹음과 전사를 사용할 수 있습니다/)).toBeInTheDocument();
+    expect(screen.queryByText(/모델|OpenRouter|Ollama|Claude CLI/)).not.toBeInTheDocument();
     expect(screen.queryByText(/\/meeting-summarize/)).not.toBeInTheDocument();
   });
 
@@ -151,8 +152,8 @@ describe("PendingBanner", () => {
 
   it("does not say auto-processing when the configured model is unavailable", () => {
     render(<PendingBanner count={2} readiness="unavailable" />);
-    expect(screen.getByText("2개 회의가 요약 대기 중")).toBeInTheDocument();
-    expect(screen.getByText(/요약 모델을 확인하세요/)).toBeInTheDocument();
+    expect(screen.getByText("2개 회의가 AI 회의록 작성 대기 중")).toBeInTheDocument();
+    expect(screen.getByText(/지금은 자동으로 만들 수 없습니다/)).toBeInTheDocument();
     expect(screen.queryByText(/요약 자동 처리 중/)).not.toBeInTheDocument();
   });
 
@@ -181,15 +182,13 @@ describe("PendingBanner", () => {
 
   it("counts needs-attention meetings in the not-ready backlog total", () => {
     render(<PendingBanner count={2} needsAttention={1} readiness="unavailable" />);
-    expect(screen.getByText("3개 회의가 요약 대기 중")).toBeInTheDocument();
+    expect(screen.getByText("3개 회의가 AI 회의록 작성 대기 중")).toBeInTheDocument();
   });
 
-  it("stacks unavailable copy and its action on mobile without shrinking the text column", () => {
+  it("keeps unavailable copy mobile-safe without exposing a technical settings action", () => {
     render(<PendingBanner count={2} readiness="unavailable" />);
-    const settings = screen.getByRole("link", { name: "설정" });
-    expect(settings.parentElement).toHaveClass("flex-col", "sm:flex-row");
-    expect(settings).toHaveClass("w-full", "sm:w-auto", "min-h-11");
-    expect(screen.getByText(/요약 모델을 확인하세요/)).toHaveClass("min-w-0");
+    expect(screen.queryByRole("link", { name: "설정" })).not.toBeInTheDocument();
+    expect(screen.getByText(/AI 회의록 작성 대기 중/).closest("p")).toHaveClass("min-w-0", "break-words");
   });
 
   it("lets the ready attention action reflow below copy on mobile", () => {
@@ -266,11 +265,11 @@ describe("Recorder — responsive layout", () => {
     const heading = screen.getByRole("heading", { name: "새 회의 녹음" });
     expect(heading.parentElement?.parentElement).toHaveClass("flex-col");
     expect(heading.parentElement?.parentElement).toHaveClass("sm:flex-row");
-    const start = screen.getByRole("button", { name: "Whisper 전사용 녹음 시작" });
+    const start = screen.getByRole("button", { name: "회의 녹음 시작" });
     expect(start).toHaveClass("w-full");
     expect(start).toHaveClass("sm:w-auto");
     expect(start).toHaveClass("min-h-11");
-    expect(screen.getByText(/처음 쓰는 모델은 준비에 시간이 걸릴 수 있습니다/)).toBeInTheDocument();
+    expect(screen.getByText(/다국어 인식과 화자 구분을 포함한 전체 스크립트/)).toBeInTheDocument();
   });
 });
 
@@ -1051,7 +1050,7 @@ describe("MeetingDetailView — 요약 상태 카드", () => {
         hasAudio={false}
       />,
     );
-    await waitFor(() => expect(screen.getByText(/요약 모델을 확인하세요/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/AI 회의록 기능을 지금 사용할 수 없습니다/)).toBeInTheDocument());
     expect(screen.queryByText(/요약 대기 · 자동 생성 중/)).not.toBeInTheDocument();
   });
 });
@@ -2148,7 +2147,7 @@ describe("SettingsForm — persisted draft/load/test state", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   type SettingsBody = {
-    provider: "claude-cli" | "codex-cli" | "ollama" | null;
+    provider: "openrouter" | "claude-cli" | "codex-cli" | "ollama" | null;
     model?: string;
     baseUrl?: string;
   };
@@ -2240,19 +2239,32 @@ describe("SettingsForm — persisted draft/load/test state", () => {
     expect(screen.getByText(/먼저 설정을 저장한 뒤 연결을 테스트하세요/)).toBeInTheDocument();
   });
 
-  it("offers only provider-valid native options and omits the CLI default model on save", async () => {
+  it("offers automatic OpenRouter routing by default and valid Claude options when selected", async () => {
     const { posted, fetchMock } = stubSettings({
-      saved: { provider: "claude-cli" },
+      saved: { provider: "openrouter" },
       health: {
         configured: true,
-        provider: "claude-cli",
+        provider: "openrouter",
         ok: true,
-        detail: "Claude CLI가 설치되어 있습니다",
+        detail: "OpenRouter 연결을 확인했습니다",
       },
     });
     render(<SettingsForm />);
     await screen.findByText("저장된 요약 모델 설정이 없습니다.");
 
+    const openrouterModels = screen.getByRole("combobox", { name: "모델" });
+    expect(within(openrouterModels).getAllByRole("option").map((option) => option.textContent)).toEqual([
+      "작업별 자동 선택 (권장)",
+      "직접 입력",
+    ]);
+
+    fireEvent.click(screen.getByRole("button", { name: "저장" }));
+    await waitFor(() => expect(posted).toEqual([{ provider: "openrouter" }]));
+    expect(await screen.findByText(/OpenRouter · 연결됨/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "첫 회의 녹음" })).toHaveAttribute("href", "/#recorder");
+    expect(fetchMock.mock.calls.some(([input]) => String(input) === "/api/settings/llm/health")).toBe(true);
+
+    fireEvent.click(screen.getByLabelText(/Claude CLI/));
     const claudeModels = screen.getByRole("combobox", { name: "모델" });
     expect(within(claudeModels).getByRole("option", { name: "CLI 기본값 (권장)" })).toBeInTheDocument();
     expect(within(claudeModels).getByRole("option", { name: "Sonnet" })).toHaveValue("sonnet");
@@ -2260,19 +2272,6 @@ describe("SettingsForm — persisted draft/load/test state", () => {
     expect(within(claudeModels).getByRole("option", { name: "Haiku" })).toHaveValue("haiku");
     expect(within(claudeModels).getByRole("option", { name: "직접 입력" })).toHaveValue("__custom__");
 
-    fireEvent.click(screen.getByRole("button", { name: "저장" }));
-    await waitFor(() => expect(posted).toEqual([{ provider: "claude-cli" }]));
-    expect(await screen.findByText(/Claude CLI · 감지됨/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "첫 회의 녹음" })).toHaveAttribute("href", "/#recorder");
-    expect(fetchMock.mock.calls.some(([input]) => String(input) === "/api/settings/llm/health")).toBe(true);
-
-    fireEvent.click(screen.getByLabelText(/외부 모델/));
-    const codexModels = screen.getByRole("combobox", { name: "모델" });
-    expect(within(codexModels).getAllByRole("option").map((option) => option.textContent)).toEqual([
-      "기본 모델 (권장)",
-      "직접 입력",
-    ]);
-    expect(within(codexModels).queryByText(/gpt-|codex-/i)).not.toBeInTheDocument();
   });
 
   it("preserves unknown saved models exactly in direct-input mode", async () => {
@@ -2293,25 +2292,25 @@ describe("SettingsForm — persisted draft/load/test state", () => {
       target: { value: "__custom__" },
     });
     fireEvent.change(screen.getByRole("textbox", { name: "직접 입력 모델" }), {
-      target: { value: " claude-private " },
+      target: { value: " router-private " },
     });
 
-    fireEvent.click(screen.getByLabelText(/외부 모델/));
+    fireEvent.click(screen.getByLabelText(/Claude CLI/));
     fireEvent.change(screen.getByRole("combobox", { name: "모델" }), {
       target: { value: "__custom__" },
     });
     fireEvent.change(screen.getByRole("textbox", { name: "직접 입력 모델" }), {
-      target: { value: " codex-private " },
+      target: { value: " claude-private " },
     });
 
+    fireEvent.click(screen.getByLabelText(/OpenRouter/));
+    expect(screen.getByRole("textbox", { name: "직접 입력 모델" })).toHaveValue(" router-private ");
     fireEvent.click(screen.getByLabelText(/Claude CLI/));
     expect(screen.getByRole("textbox", { name: "직접 입력 모델" })).toHaveValue(" claude-private ");
-    fireEvent.click(screen.getByLabelText(/외부 모델/));
-    expect(screen.getByRole("textbox", { name: "직접 입력 모델" })).toHaveValue(" codex-private ");
     fireEvent.click(screen.getByRole("button", { name: "저장" }));
 
-    await waitFor(() => expect(posted).toEqual([{ provider: "codex-cli", model: "codex-private" }]));
-    expect(JSON.stringify(posted[0])).not.toContain("claude-private");
+    await waitFor(() => expect(posted).toEqual([{ provider: "claude-cli", model: "claude-private" }]));
+    expect(JSON.stringify(posted[0])).not.toContain("router-private");
     expect(JSON.stringify(posted[0])).not.toContain("baseUrl");
   });
 
@@ -2361,13 +2360,13 @@ describe("SettingsForm — persisted draft/load/test state", () => {
     vi.stubGlobal("fetch", vi.fn(async () => {
       getCalls += 1;
       if (getCalls === 1) return { ok: false, status: 500, json: async () => ({}) };
-      return { ok: true, status: 200, json: async () => ({ provider: "codex-cli", model: "gpt-5" }) };
+      return { ok: true, status: 200, json: async () => ({ provider: "openrouter", model: "custom/router-model" }) };
     }));
     render(<SettingsForm />);
     fireEvent.click(await screen.findByRole("button", { name: "다시 시도" }));
     expect(await screen.findByRole("combobox", { name: "모델" })).toHaveValue("__custom__");
-    expect(screen.getByRole("textbox", { name: "직접 입력 모델" })).toHaveValue("gpt-5");
-    expect(screen.getByLabelText(/외부 모델/)).toBeChecked();
+    expect(screen.getByRole("textbox", { name: "직접 입력 모델" })).toHaveValue("custom/router-model");
+    expect(screen.getByLabelText(/OpenRouter/)).toBeChecked();
     expect(screen.getByRole("button", { name: "저장" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "연결 테스트" })).toBeEnabled();
   });

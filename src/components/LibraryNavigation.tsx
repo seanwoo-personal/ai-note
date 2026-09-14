@@ -13,6 +13,7 @@ import { GuardedLink, useGuardedRouter } from "@/components/RecorderNavigation";
 import { AppPreferencesControls, useAppPreferences } from "@/components/AppPreferences";
 import { AppDrawer } from "@/components/AppDialog";
 import { BrandWordmark } from "@/components/BrandWordmark";
+import { AccountSummary } from "@/components/AccountSummary";
 import {
   ChevronDownIcon,
   ChevronRightIcon,
@@ -33,10 +34,9 @@ import { useLibrary } from "@/components/LibraryProvider";
 import {
   formatRealtimeStatus,
   formatSummaryModelStatus,
-  formatWhisperStatus,
   type LlmHealthState,
   type SonioxHealthState,
-  type WhisperHealthState,
+  type StatusDisplay,
 } from "@/components/healthStatus";
 import { useHealth } from "@/components/useHealth";
 import { useSonioxConnection } from "@/components/useSonioxConnection";
@@ -82,11 +82,12 @@ export function LibraryNavigation() {
   const { t } = useAppPreferences();
   const library = useLibrary();
   const router = useGuardedRouter();
-  const { whisper, llm, soniox } = useHealth();
+  const { llm, soniox } = useHealth();
   const connection = useSonioxConnection();
   const pathname = usePathname() ?? "/";
   const search = useSearchParams();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [menuReturnFocus, setMenuReturnFocus] = useState<HTMLElement | null>(null);
   const [editor, setEditor] = useState<Editor | null>(null);
   const [folderMoveMessage, setFolderMoveMessage] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -216,7 +217,6 @@ export function LibraryNavigation() {
       homePath={pathname === "/" && search.toString() === ""}
       sonioxSelection={sonioxSelection}
       canMutate={canMutate}
-      whisper={whisper}
       llm={llm}
       soniox={soniox}
       connection={connection}
@@ -229,7 +229,6 @@ export function LibraryNavigation() {
   ) : (
     <FallbackNavigation
       pathname={pathname}
-      whisper={whisper}
       llm={llm}
       soniox={soniox}
       connection={connection}
@@ -237,13 +236,34 @@ export function LibraryNavigation() {
       onOpenSearch={openSearch}
     />
   );
+  const adaptiveWorkspaceId = currentWorkspaceId
+    ?? library.library?.defaultWorkspaceId
+    ?? "";
+  const openAdaptiveMenu = (trigger: HTMLButtonElement) => {
+    setMenuReturnFocus(trigger);
+    setDrawerOpen(true);
+  };
+  const adaptiveNavigation = (variant: "compact" | "expanded") => (
+    <AndroidNavigationDestinations
+      variant={variant}
+      workspaceId={adaptiveWorkspaceId}
+      folderId={currentFolderId}
+      pathname={pathname}
+      homePath={pathname === "/" && search.toString() === ""}
+      activeTool={sonioxSelection?.tool ?? null}
+      drawerOpen={drawerOpen}
+      onNavigationCommitted={navigationCommitted}
+      onOpenMenu={openAdaptiveMenu}
+    />
+  );
 
   return (
     <nav
+      data-android-navigation-root=""
       aria-label={t("라이브러리")}
       className="relative w-full shrink-0 border-b border-line bg-chrome lg:h-dvh lg:min-h-0 lg:w-[272px] lg:overflow-y-auto lg:overscroll-contain lg:border-b-0 lg:border-r"
     >
-      <div className="flex min-h-16 items-center justify-between gap-3 px-4 lg:hidden">
+      <div data-android-top-app-bar="" className="flex min-h-16 items-center justify-between gap-3 px-4 lg:hidden">
         <GuardedLink
           href="/"
           data-i18n-user-content
@@ -257,23 +277,44 @@ export function LibraryNavigation() {
           type="button"
           aria-label={t("라이브러리 메뉴 열기")}
           aria-expanded={drawerOpen}
-          onClick={() => setDrawerOpen(true)}
+          onClick={(event) => {
+            setMenuReturnFocus(event.currentTarget);
+            setDrawerOpen(true);
+          }}
           className="flex min-h-11 min-w-11 items-center justify-center rounded-full border border-inkFaint bg-panel text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           <MenuIcon />
         </button>
       </div>
 
-      <div className="hidden h-screen flex-col lg:flex">{navigation}</div>
+      <div data-desktop-navigation="" className="hidden h-screen flex-col lg:flex">{navigation}</div>
+
+      <div
+        data-testid="android-compact-navigation"
+        data-android-compact-navigation=""
+        className="hidden"
+        style={{ display: "none" }}
+      >
+        {adaptiveNavigation("compact")}
+      </div>
+
+      <div
+        data-testid="android-expanded-navigation"
+        data-android-expanded-navigation=""
+        className="hidden"
+        style={{ display: "none" }}
+      >
+        {adaptiveNavigation("expanded")}
+      </div>
 
       {drawerOpen && (
         <AppDrawer
           open
           title={t("라이브러리 메뉴")}
           initialFocusRef={drawerCloseRef}
-          returnFocus={menuButtonRef}
+          returnFocus={menuReturnFocus ?? menuButtonRef}
           onDismiss={() => setDrawerOpen(false)}
-          className="lg:hidden"
+          className="android-app-drawer lg:hidden"
           panelClassName="flex w-[min(88vw,22rem)] flex-col border-r border-line bg-chrome shadow-xl"
         >
           {(dismiss) => (
@@ -345,6 +386,105 @@ export function LibraryNavigation() {
   );
 }
 
+function AndroidNavigationDestinations({
+  variant,
+  workspaceId,
+  folderId,
+  pathname,
+  homePath,
+  activeTool,
+  drawerOpen,
+  onNavigationCommitted,
+  onOpenMenu,
+}: {
+  variant: "compact" | "expanded";
+  workspaceId: string;
+  folderId: string | null;
+  pathname: string;
+  homePath: boolean;
+  activeTool: SonioxTool | null;
+  drawerOpen: boolean;
+  onNavigationCommitted: () => void;
+  onOpenMenu: (trigger: HTMLButtonElement) => void;
+}) {
+  const { t } = useAppPreferences();
+  const destinations: Array<{
+    kind: "home" | "notes" | "translate" | "dictation";
+    label: string;
+    href: string;
+    active: boolean;
+  }> = [
+    { kind: "home", label: t("홈"), href: "/", active: homePath },
+    {
+      kind: "notes",
+      label: t("미팅노트"),
+      href: buildSonioxToolHref({ workspaceId, folderId, tool: "transcription" }),
+      active: pathname.startsWith("/live") && activeTool === "transcription",
+    },
+    {
+      kind: "translate",
+      label: t("번역"),
+      href: buildSonioxToolHref({ workspaceId, folderId, tool: "test-product" }),
+      active: pathname.startsWith("/live") && activeTool === "test-product",
+    },
+    {
+      kind: "dictation",
+      label: t("음성 입력"),
+      href: buildSonioxToolHref({ workspaceId, folderId, tool: "voice-typing" }),
+      active: pathname.startsWith("/live") && activeTool === "voice-typing",
+    },
+  ];
+
+  return (
+    <div data-android-navigation-destinations="" data-variant={variant}>
+      {destinations.map((destination) => (
+        <GuardedLink
+          key={destination.kind}
+          href={destination.href}
+          aria-label={destination.label}
+          aria-current={destination.active ? "page" : undefined}
+          data-android-navigation-item=""
+          onNavigationCommitted={onNavigationCommitted}
+          className="flex min-h-12 min-w-12 flex-col items-center justify-center gap-1 rounded-2xl text-inkSoft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          <span data-android-navigation-icon="" aria-hidden="true">
+            <AndroidDestinationIcon kind={destination.kind} />
+          </span>
+          <span data-android-navigation-label="">{destination.label}</span>
+        </GuardedLink>
+      ))}
+      <button
+        type="button"
+        aria-label={t("더보기")}
+        aria-expanded={drawerOpen}
+        data-android-navigation-item=""
+        onClick={(event) => onOpenMenu(event.currentTarget)}
+        className="flex min-h-12 min-w-12 flex-col items-center justify-center gap-1 rounded-2xl text-inkSoft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      >
+        <span data-android-navigation-icon="" aria-hidden="true"><MenuIcon /></span>
+        <span data-android-navigation-label="">{t("더보기")}</span>
+      </button>
+    </div>
+  );
+}
+
+function AndroidDestinationIcon({ kind }: {
+  kind: "home" | "notes" | "translate" | "dictation";
+}) {
+  const path = kind === "home"
+    ? "M4.5 10.5 12 4l7.5 6.5v8a1.5 1.5 0 0 1-1.5 1.5h-3.5v-6h-5v6H6a1.5 1.5 0 0 1-1.5-1.5z"
+    : kind === "notes"
+      ? "M8 4.5h8A2.5 2.5 0 0 1 18.5 7v10A2.5 2.5 0 0 1 16 19.5H8A2.5 2.5 0 0 1 5.5 17V7A2.5 2.5 0 0 1 8 4.5Zm1 5h6m-6 4h6"
+      : kind === "translate"
+        ? "M5 5h8m-4-2v2c0 4-2 7-5 9m3-6c1 2 3 4 6 5m1-3h3l3 9m-1.2-3h-6.6"
+        : "M12 4.5a3 3 0 0 1 3 3v4a3 3 0 0 1-6 0v-4a3 3 0 0 1 3-3Zm-6 7a6 6 0 0 0 12 0M12 17.5V21m-3 0h6";
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+      <path d={path} stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function SonioxToolLinks({
   selection,
   activeTool = selection.tool,
@@ -379,7 +519,6 @@ function NavigationContents({
   homePath,
   sonioxSelection,
   canMutate,
-  whisper,
   llm,
   soniox,
   connection,
@@ -397,7 +536,6 @@ function NavigationContents({
   homePath: boolean;
   sonioxSelection: { workspaceId: string; folderId: string | null; tool: SonioxTool } | null;
   canMutate: boolean;
-  whisper: WhisperHealthState | null;
   llm: LlmHealthState | null;
   soniox: SonioxHealthState | null;
   connection: SonioxConnectionSnapshot;
@@ -536,10 +674,10 @@ function NavigationContents({
         )}
         <NavigationRow href="/glossary" active={pathname.startsWith("/glossary")} label={t("단어 관리")} onNavigationCommitted={onNavigationCommitted} />
         <NavigationRow href="/settings" active={pathname === "/settings"} label={t("설정")} onNavigationCommitted={onNavigationCommitted} />
-        <NavigationRow href="/settings/releases" active={pathname.startsWith("/settings/releases")} label={t("릴리즈 노트")} onNavigationCommitted={onNavigationCommitted} />
       </div>
       <AppPreferencesControls />
-      <SystemRows whisper={whisper} llm={llm} soniox={soniox} connection={connection} />
+      <SystemRows llm={llm} soniox={soniox} connection={connection} />
+      <AccountSummary />
     </>
   );
 }
@@ -548,7 +686,6 @@ type LibraryProviderValueLike = ReturnType<typeof useLibrary>;
 
 function FallbackNavigation({
   pathname,
-  whisper,
   llm,
   soniox,
   connection,
@@ -556,7 +693,6 @@ function FallbackNavigation({
   onOpenSearch,
 }: {
   pathname: string;
-  whisper: WhisperHealthState | null;
   llm: LlmHealthState | null;
   soniox: SonioxHealthState | null;
   connection: SonioxConnectionSnapshot;
@@ -572,9 +708,9 @@ function FallbackNavigation({
       <div className="mt-auto">
         <NavigationRow href="/glossary" active={pathname.startsWith("/glossary")} label={t("단어 관리")} onNavigationCommitted={onNavigationCommitted} />
         <NavigationRow href="/settings" active={pathname === "/settings"} label={t("설정")} onNavigationCommitted={onNavigationCommitted} />
-        <NavigationRow href="/settings/releases" active={pathname.startsWith("/settings/releases")} label={t("릴리즈 노트")} onNavigationCommitted={onNavigationCommitted} />
         <AppPreferencesControls />
-        <SystemRows whisper={whisper} llm={llm} soniox={soniox} connection={connection} />
+        <SystemRows llm={llm} soniox={soniox} connection={connection} />
+        <AccountSummary />
       </div>
     </div>
   );
@@ -712,14 +848,12 @@ function ColorDot({ color }: { color: LibraryColor }) {
   return <span title={option.label} aria-label={option.label} className={`h-2.5 w-2.5 shrink-0 rounded-full ${option.className}`} />;
 }
 
-function SystemRows({ whisper, llm, soniox, connection }: {
-  whisper: WhisperHealthState | null;
+function SystemRows({ llm, soniox, connection }: {
   llm: LlmHealthState | null;
   soniox: SonioxHealthState | null;
   connection: SonioxConnectionSnapshot;
 }) {
   const { t } = useAppPreferences();
-  const whisperStatus = formatWhisperStatus(whisper);
   const summaryStatus = formatSummaryModelStatus(llm);
   // The realtime row derives its connection truth from the live WebSocket store,
   // not from the config-presence poll (that only distinguishes idle 미설정/대기).
@@ -727,7 +861,6 @@ function SystemRows({ whisper, llm, soniox, connection }: {
   return (
     <div className="border-t border-line p-3">
       <p className="px-2 text-[11px] font-semibold text-inkSoft">{t("시스템")}</p>
-      <SystemRow label={t("로컬")} status={{ ...whisperStatus, shortLabel: t(whisperStatus.shortLabel), title: t(whisperStatus.title) }} />
       <SystemRow label={t("요약")} status={{ ...summaryStatus, shortLabel: t(summaryStatus.shortLabel), title: t(summaryStatus.title) }} />
       <SystemRow label={t("실시간")} status={{ ...realtimeStatus, shortLabel: t(realtimeStatus.shortLabel), title: t(realtimeStatus.title) }} />
       <p className="mt-1 flex min-h-11 items-center rounded-md px-2 text-[11px] font-semibold text-inkSoft">
@@ -737,7 +870,7 @@ function SystemRows({ whisper, llm, soniox, connection }: {
   );
 }
 
-function SystemRow({ label, status }: { label: string; status: ReturnType<typeof formatWhisperStatus> }) {
+function SystemRow({ label, status }: { label: string; status: StatusDisplay }) {
   return (
     <div className="mt-1 flex min-h-11 items-center gap-2 rounded-md px-2" title={status.title} aria-live="polite">
       <span className="w-16 shrink-0 text-[11px] font-semibold text-inkSoft">{label}</span>

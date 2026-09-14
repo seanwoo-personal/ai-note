@@ -53,7 +53,17 @@
 | 카드 제목 | ~16–19px, weight 700 |
 | 본문 | ~14–15px, line-height 1.6, `#6B6158` |
 
+### 줄바꿈·다국어 원칙
+
+- 일반 UI 문장은 단어 중간에서 끊지 않는다. 한국어 화면은 공통 `word-break: keep-all`을 사용하고 제목·본문·버튼마다 임의의 글자 단위 분할 규칙을 추가하지 않는다.
+- 영문은 공백 기준의 기본 줄바꿈을 사용하고 자동 하이픈 분할은 끈다. 일본어·중국어는 `word-break: normal`과 `line-break: strict`로 해당 언어의 CJK 줄바꿈과 문장부호 규칙을 따른다.
+- 제목은 `text-wrap: balance`, 설명·목록 본문은 `text-wrap: pretty`를 기본으로 하되, 문구를 특정 폭에 맞추려고 수동 `<br>`이나 줄바꿈 문자로 고정하지 않는다. 번역으로 문장 길이가 달라져도 컨테이너가 자연스럽게 재배치되어야 한다.
+- URL·이메일·인증 키·복구 코드·파일 경로처럼 공백 없는 식별자만 `break-all` 또는 `overflow-wrap: anywhere`를 명시적으로 사용할 수 있다. 일반 문장에 이 예외를 적용하지 않는다.
+- 사용자 입력·전사·번역처럼 언어를 알고 있는 콘텐츠는 가능한 한 정확한 `lang`을 부여한다. 언어를 알 수 없는 긴 원문은 `overflow-wrap`을 최후의 오버플로 방지책으로 쓰되, UI 설명 문구의 기본 규칙을 덮어쓰지 않는다.
+- 320px, 390px, desktop 뷰포트와 한국어·영어·일본어·중국어에서 단어 중간 분할과 가로 오버플로가 없는지 회귀 검증한다.
+
 ## 레이아웃
+- **Android 앱·폴더블**: APK의 전용 user-agent를 첫 paint 전에 `data-ai-note-android-app`으로 표시하고 일반 웹 대시보드와 앱 표현을 분리한다. 기기 모델명이 아니라 현재 앱 window 폭을 기준으로 compact(`<600dp`)·medium(`600–839dp`)·expanded(`≥840dp`)를 판정한다. 접힌 화면은 단일 열·56dp 주요 동작·하단 safe-area와 3–5개의 주요 목적지를 담은 하단 navigation bar를 사용한다. 펼친 폴드는 하단 bar를 왼쪽 navigation rail로 바꾸고, 홈은 빠른 시작/최근 문서 supporting pane, 글로벌 미팅은 설정/조작 pane과 대화 기록 pane을 동시에 보여 준다. Android system bar inset은 native shell에서 적용해 상태 표시줄·gesture navigation과 웹 콘텐츠가 겹치지 않게 한다. 펼치기·접기·회전 중에도 같은 미팅 상태를 유지하며 고정 방향·고정 종횡비·전체 폭으로 늘어난 긴 버튼을 강제하지 않는다. Pane은 `min-width:0`을 소유하고 접힘선 부근에는 핵심 조작이나 긴 문장을 고정 배치하지 않는다. Google Material 3 Adaptive의 window size class와 navigation suite·supporting/list-detail 원칙을 따르되 기존 헤이홈 색상·타입·접근성 계약을 유지한다.
 - **앱 셸**: desktop `lg` 이상은 약 272px library rail(`border-r border-line`, `bg-chrome`) + 콘텐츠(`flex-1 min-w-0`)를 기본으로 하며, 회의 도우미가 활성일 때 우측 접이식 회의 도우미 `<aside>`(`border-l border-line`, `bg-chrome`, 약 380px)가 세 번째 flex child로 붙어 3열 flex 셸이 된다. **회의 도우미(챗봇)는 현재 dormant다** — `MEETING_ASSISTANT_ENABLED`(`src/lib/features.ts`, 기본 `false`)가 `true`일 때만 `layout.tsx`가 이 `<aside>`(및 mobile launcher)를 마운트하며, dormant 상태에서는 셸이 2열로만 렌더된다(ADR 0019, §검색·질문 참조). 활성 시 aside는 접으면 우측 세로 `회의 도우미` 재열기 토글만 남는다. Mobile/tablet은 64px top bar와 `h-dvh` modal drawer를 사용하고, 활성 시 회의 도우미는 좌하단 launcher가 여는 `AppDrawer`로 제공한다. Modal dialog/drawer는 native `<dialog>.showModal()` browser top layer를 사용해 background inert와 focus containment를 얻고, app-level ref-count scroll lock으로 body 스크롤을 막는다. Native dialog가 아닌 popup만 별도 layer를 쓴다.
 - **Library rail 구조**: identity → workspace switcher/create/rename → 돋보기 `검색` 트리거 → `모든 회의`/`미분류` → 독립 scroll folder section → 위치 저장 대기/단어 관리/설정 → shared 전사·요약 health. 진입 순서는 검색 → 모든 회의 → 폴더다. `검색` 트리거는 shared `SearchOverlay`(native top-layer `AppDialog`)를 열며 별도 `/search` 페이지는 없다. 프로필/팀/권한/템플릿/사용량 위젯은 없다.
 - **Folder tree**: nested `ul/li`를 쓰고 disclosure, scope link, edit/create-child trigger를 분리한다. 구현하지 않은 full ARIA tree role은 선언하지 않는다. Active ancestor는 자동 expand하며 depth 3에서는 child create를 노출하지 않고 최대 깊이 이유를 제공한다. 색상은 dot만 쓰지 않고 브라운/샌드/앰버/올리브/세이지 label과 selected shape/text를 함께 쓴다.
@@ -136,7 +146,7 @@
 
 ### 녹음 화면
 - 상단 우측 **다크 "회의 녹음 시작"** 버튼. 실시간 자막/기록을 약속하지 않는다. 녹음 중: 펄스 red dot + "기록 중" + `mm:ss` 타이머(mono) + **레벨 미터**(입력 소리 확인). 마이크 무음 시 레벨 0 = 사용자가 문제 인지. 페이지 이탈 시 `beforeunload` 경고.
-- 첫 전사는 선택한 Whisper model을 먼저 내려받느라 오래 걸릴 수 있다고 recorder helper에서 알린다. Model download가 끝나기 전에는 전사 percentage를 알 수 있는 것처럼 가짜 progress를 표시하지 않는다. 내부 `best-effort` 같은 운영 용어는 사용자 copy에 쓰지 않는다.
+- 첫 전사는 오디오 업로드와 Soniox 비동기 처리를 기다릴 수 있다고 recorder helper에서 알린다. 원격 상태를 확인하기 전에는 전사 percentage를 아는 것처럼 가짜 progress를 표시하지 않는다. 내부 `best-effort` 같은 운영 용어는 사용자 copy에 쓰지 않는다.
 - 시각 timer와 `role="meter"`의 빠른 값 변화는 live region 밖에 둔다. Full/compact recorder 모두 작은 전용 `role="status" aria-live="polite"`가 권한 확인·기록 시작·정리·저장·실패 같은 phase 전환만 알린다.
 - Non-idle 녹음 session은 layout 우하단 compact control(`min-height:44px`)로 모든 route에 유지한다. 상태 텍스트와 함께 기록 중지, captured 저장, ambiguous same-ID probe, 확인 후 재전송을 제공하며 full Recorder가 unmount돼도 숨기지 않는다. `녹음 버리기`는 원본과 복구 상태를 되돌릴 수 없이 지운다는 별도 확인을 거친다.
 - Unsaved capture에서 non-scope navigation을 시도하면 modal dialog를 띄운다. 초기 focus는 `계속 녹음/현재 화면에 머물기`, Escape/cancel은 trigger로 focus를 복귀한다. Recording은 `기록 중지하고 머물기`, 유일한 destructive escape는 텍스트가 명시된 `녹음 버리고 이동`이다. 색만으로 파괴성을 전달하지 않는다.
@@ -145,7 +155,15 @@
 - **First-use readiness**: LLM health가 미설정이면 `회의록 요약을 준비하세요`, 저장 설정이 unavailable이면 `요약 모델을 확인하세요` card를 recorder 바로 앞에 둔다. 공통 copy는 요약 모델 없이도 녹음·로컬 전사가 가능하다고 명시한다. Primary **AI 요약 설정**은 Settings로 이동하고 secondary **요약 없이 회의 녹음**은 같은 화면 recorder로 scroll한 뒤 **회의 녹음 시작**에 focus한다. Route/modal tour/step persistence/account/recording gate는 만들지 않는다.
 - 회의 카드 목록(제목·날짜·상태 라벨). **전역 처리 배너**는 `summary-work`의 전체 library aggregate로 요약 처리 중과 확인 필요를 분리하고, 확인 필요는 bounded attention detail로 연결한다. Terminal command를 active product action으로 안내하지 않는다.
 - 빈 상태: "아직 회의록이 없습니다 — 첫 회의를 녹음해보세요" + 큰 녹음 버튼 + 3단계 안내(녹음 → 전사 → 요약 확인). Default All은 heading·border surface를 한 번만 렌더하고 onboarding을 같은 surface에 통합하며, folder/unfiled는 해당 scope copy만 한 번 표시한다.
-- **상태 표시**: 색만으로 전달하지 않는다. whisper는 `Whisper {model} · 준비됨/준비 중/연결 안 됨`, 요약 모델은 `{Provider} {model?} · 연결됨/감지됨/미설정/실패`처럼 dot + 텍스트를 함께 표시한다. CLI provider(claude·codex)는 바이너리 감지라 “감지됨”, Ollama는 검증된 “연결됨”으로 라벨을 구분한다. 긴 모델명/오류는 truncate하고 full detail은 `title` 또는 설정 화면에서 확인한다. `baseUrl`은 사이드바에 노출하지 않는다.
+- **상태 표시**: 색만으로 전달하지 않는다. 전사는 `Soniox · 준비됨/처리 중/설정 필요/실패`, 요약은 `OpenRouter {model?} · 연결됨/미설정/실패`처럼 dot + 텍스트를 함께 표시한다. 긴 모델명/오류는 truncate하고 full detail은 `title` 또는 설정 화면에서 확인한다. API 키나 provider 원문 오류는 노출하지 않는다.
+
+### 글로벌 미팅 · 새 영상과 음원
+
+- `새 영상·음원`은 미팅이 실시간 수신 중이고 Push-to-Talk가 쉬는 상태일 때만 사용할 수 있다. 현재 발화를 먼저 확정하고 새 화자 세션이 준비되는 동안 버튼을 비활성화하며 `현재 발화를 확정하는 중…`과 `새 영상의 화자 인식을 준비하는 중…`을 순서대로 표시한다.
+- 기존 대화 행과 번역 결과는 지우지 않는다. 새 세션이 내부적으로 Speaker 1부터 다시 시작해도 화면에서는 이전 기록 다음의 새 번호로 이어서 보여 주며, 저장되는 회의록에도 중복되지 않는 화면 번호를 사용한다.
+- 버튼 가까이에 `서로 다른 영상이나 음원으로 바꿀 때 누르세요. 기존 대화는 유지하고 새 화자를 다시 구분합니다.`를 표시한다. 같은 회의가 이어지는 동안의 침묵·휴식에는 사용하지 않는다는 의미가 드러나야 한다.
+- 버튼 문구와 처리 상태는 일본어·영어·한국어·중국어 catalog에 모두 등록한다. 좁은 화면에서는 다른 미팅 동작과 함께 자연스럽게 여러 줄로 재배치하되 단어 중간을 끊지 않는다.
+- 완료 신호가 지연되면 12초 뒤 현재 세션 종료를 계속 진행한다. 기존 대화 기록은 이 복구 경로에서도 유지하며, 새 세션 연결이 실패하면 일반 실시간 연결 오류로 안내하고 사용자가 다시 시작할 수 있게 한다.
 - **전사 실패 row**: `retry_transcription`은 일반 `전사 중` label로 덮지 않고 error tone+text `전사 실패`를 지속 표시한다. Row detail href는 같은 meeting을 가리키며 상세에서도 persisted failure와 recovery action이 보여야 한다.
 - **행 액션(케밥 ⋯ 메뉴)**: 각 회의 행 우측의 44px kebab 버튼(카드 링크 바깥 형제) → ready library에서는 **이동**, 요약 완료 회의는 **이름 수정**, 모든 회의는 **삭제**. Mobile row는 title/date/breadcrumb와 status를 세로로 reflow하고 content owner는 `w-full min-w-0`을 가진다. 이름 수정은 320px에서 full-width input + action row로 stack하고(Enter=저장, Esc=취소, Korean IME 조합 Enter 무시), 실패 시 값·입력 focus를 유지한다. 삭제 확인도 copy 아래 action row로 stack하며 취소에 initial focus를 둔다. 삭제 버튼은 파괴적 색뿐 아니라 `영구 삭제` text를 유지하고 저장/삭제 완료·실패는 `aria-live="polite"`로 공지한다.
 - **Scoped list**: Workspace All row는 effective folder breadcrumb를 표시하고, 미분류/folder는 direct meeting만 표시한다. 이전/다음 cursor page를 제공하고 client는 current±2/max 5 pages만 유지한다. Empty copy는 All/미분류/folder를 구분한다.
@@ -183,7 +201,7 @@
 
 #### 수동 편집 browser 검증 기준
 
-- ADR 0020의 repository-owned synthetic Playwright scenario는 `desktop-1440`(1440×900), `mobile-390`(390×844), `mobile-320`(320×700)에서 같은 계약을 검증해야 한다. Runner-owned 임시 snapshot과 empty data만 사용하고 실제 사용자 데이터·Whisper/LLM·외부 network를 사용하지 않는다.
+- ADR 0020의 repository-owned synthetic Playwright scenario는 `desktop-1440`(1440×900), `mobile-390`(390×844), `mobile-320`(320×700)에서 같은 계약을 검증해야 한다. Runner-owned 임시 snapshot과 empty data, fake provider만 사용하고 실제 사용자 데이터·Soniox/OpenRouter·외부 network를 사용하지 않는다.
 - 세 viewport에서 tab-local action이 warning/body/editor보다 앞서는 DOM 순서, 최소 44px target, read/edit mutual exclusion, summary heading text 삭제와 exact save, confirmed-copy 안내, discard의 **계속 수정** focus, cancel 뒤 original restoration, transcript 저장 뒤 outdated와 summary 저장 뒤 fresh 전환, horizontal overflow 0을 assertion으로 남긴다.
 - Evidence는 성공 screenshot, assertion 결과, console error, viewport/fixture manifest를 `test-results/` 또는 execute local journal에 남긴다. 실제 실행 결과가 생성되기 전에는 이 문서가 pass를 선언하지 않는다.
 

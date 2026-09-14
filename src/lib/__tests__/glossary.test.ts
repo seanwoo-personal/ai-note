@@ -6,10 +6,10 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { localSttGlossaryPath } from "@/lib/config";
+import { glossaryPath } from "@/lib/config";
 import { readGlossary, writeGlossary } from "@/lib/glossary";
 
-// localSttGlossaryPath() = cwd/glossary.json (unless LOCAL_STT_GLOSSARY is set), so
+// glossaryPath() = cwd/glossary.json (unless AI_NOTE_GLOSSARY_PATH is set), so
 // isolate via chdir into a temp dir and clear the env override.
 
 let workDir: string;
@@ -45,7 +45,7 @@ describe("glossary", () => {
   });
 
   it("coerces a legacy string[] file to the new object shape", async () => {
-    await writeFile(localSttGlossaryPath(), JSON.stringify(["Kubernetes", "OKR", "roadmap"]));
+    await writeFile(glossaryPath(), JSON.stringify(["Kubernetes", "OKR", "roadmap"]));
     expect(await readGlossary()).toEqual({
       terms: ["Kubernetes", "OKR", "roadmap"],
       corrections: [],
@@ -53,10 +53,10 @@ describe("glossary", () => {
   });
 
   it("falls back to empty on a corrupt object / bad JSON", async () => {
-    await writeFile(localSttGlossaryPath(), '{"terms": "not-an-array"}');
+    await writeFile(glossaryPath(), '{"terms": "not-an-array"}');
     expect(await readGlossary()).toEqual({ terms: [], corrections: [] });
 
-    await writeFile(localSttGlossaryPath(), "{ this is not json");
+    await writeFile(glossaryPath(), "{ this is not json");
     expect(await readGlossary()).toEqual({ terms: [], corrections: [] });
   });
 

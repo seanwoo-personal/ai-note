@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   DATA_SURFACE_INVENTORY,
   guardLocalApiRequest,
+  guardLoopbackApiRequest,
   parseBoundedJsonBody,
   validateLocalRequest,
 } from "@/lib/localRequestGuard";
@@ -122,6 +123,119 @@ describe("local request boundary", () => {
   });
 });
 
+describe("HTTPS cloud request boundary", () => {
+  function cloudRequest(path: string, init: RequestInit = {}) {
+    return new Request(`http://app:3000${path}`, {
+      ...init,
+      headers: {
+        host: "temporary-test.trycloudflare.com",
+        "x-forwarded-proto": "https",
+        ...(init.headers ?? {}),
+      },
+    });
+  }
+
+  it("accepts a same-origin HTTPS request forwarded by the deployment proxy", () => {
+    vi.stubEnv("AI_NOTE_DEPLOYMENT_MODE", "cloud");
+    const req = cloudRequest("/api/settings/llm", {
+      method: "POST",
+      headers: {
+        origin: "https://temporary-test.trycloudflare.com",
+        "content-type": "application/json",
+        "sec-fetch-site": "same-origin",
+      },
+      body: "{}",
+    });
+    expect(validateLocalRequest(req, "api")).toEqual({ ok: true });
+    vi.unstubAllEnvs();
+  });
+
+  it("accepts an HTTP loopback origin forwarded inside the cloud container network", () => {
+    vi.stubEnv("AI_NOTE_DEPLOYMENT_MODE", "cloud");
+    const req = new Request("http://app:3000/api/admin/login", {
+      method: "POST",
+      headers: {
+        host: "localhost:43101",
+        origin: "http://localhost:43101",
+        "x-forwarded-proto": "http",
+        "content-type": "application/json",
+        "sec-fetch-site": "same-origin",
+      },
+      body: "{}",
+    });
+    expect(validateLocalRequest(req, "api")).toEqual({ ok: true });
+    vi.unstubAllEnvs();
+  });
+
+  it("does not treat HTTPS ingress with a loopback Host as a local tunnel", () => {
+    vi.stubEnv("AI_NOTE_DEPLOYMENT_MODE", "cloud");
+    const req = new Request("http://app:3000/api/admin/login", {
+      method: "POST",
+      headers: {
+        host: "localhost:43101",
+        origin: "http://localhost:43101",
+        "x-forwarded-proto": "https",
+        "content-type": "application/json",
+        "sec-fetch-site": "same-origin",
+      },
+      body: "{}",
+    });
+    expect(validateLocalRequest(req, "api")).toMatchObject({ ok: false, code: "invalid_host" });
+    vi.unstubAllEnvs();
+  });
+
+  it("rejects plain HTTP, ambiguous forwarded hosts, and cross-origin writes", () => {
+    vi.stubEnv("AI_NOTE_DEPLOYMENT_MODE", "cloud");
+    expect(validateLocalRequest(new Request("http://app:3000/api/meetings", {
+      headers: { host: "temporary-test.trycloudflare.com", "x-forwarded-proto": "http" },
+    }), "api")).toMatchObject({ ok: false, code: "invalid_host" });
+    expect(validateLocalRequest(cloudRequest("/api/meetings", {
+      headers: { "x-forwarded-host": "good.example, evil.example" },
+    }), "api")).toMatchObject({ ok: false, code: "invalid_host" });
+    expect(validateLocalRequest(cloudRequest("/api/settings/llm", {
+      method: "POST",
+      headers: { origin: "https://evil.example", "content-type": "application/json" },
+      body: "{}",
+    }), "api")).toMatchObject({ ok: false, code: "invalid_origin" });
+    vi.unstubAllEnvs();
+  });
+
+  it("pins the public origin when APP_ORIGIN is configured", () => {
+    vi.stubEnv("AI_NOTE_DEPLOYMENT_MODE", "cloud");
+    vi.stubEnv("APP_ORIGIN", "https://stable.example.com");
+    expect(validateLocalRequest(cloudRequest("/api/meetings"), "api"))
+      .toMatchObject({ ok: false, code: "invalid_host" });
+    const pinned = new Request("http://app:3000/api/meetings", {
+      headers: { host: "stable.example.com", "x-forwarded-proto": "https" },
+    });
+    expect(validateLocalRequest(pinned, "api")).toEqual({ ok: true });
+    vi.unstubAllEnvs();
+  });
+
+  it("keeps one-time administrative bootstrap restricted to loopback", async () => {
+    vi.stubEnv("AI_NOTE_DEPLOYMENT_MODE", "cloud");
+    const cloud = cloudRequest("/api/admin/bootstrap");
+    const denied = guardLoopbackApiRequest(cloud);
+    expect(denied?.status).toBe(403);
+    await expect(denied?.json()).resolves.toMatchObject({
+      error: { code: "invalid_host" },
+    });
+    expect(guardLoopbackApiRequest(request("/api/admin/bootstrap"))).toBeNull();
+    expect(guardLoopbackApiRequest(new Request("http://app:3000/api/admin/bootstrap", {
+      headers: { host: "localhost:3101", "sec-fetch-site": "same-origin" },
+    }))).toBeNull();
+    expect(guardLoopbackApiRequest(new Request("http://app:3000/api/admin/bootstrap", {
+      method: "POST",
+      headers: {
+        host: "localhost:3101",
+        origin: "http://localhost:3101",
+        "sec-fetch-site": "same-origin",
+      },
+    }))).toBeNull();
+    vi.unstubAllEnvs();
+  });
+});
+
 describe("bounded JSON stream", () => {
   function jsonRequest(body: BodyInit, headers: Record<string, string> = {}) {
     return request("/api/test", {
@@ -187,6 +301,11 @@ describe("data-surface inventory", () => {
   it("contains every current API and data-reading RSC boundary", () => {
     expect(DATA_SURFACE_INVENTORY).toEqual(expect.arrayContaining([
       "/api/chat",
+      "/api/auth/login",
+      "/api/auth/register",
+      "/api/auth/session",
+      "/api/admin/bootstrap",
+      "/api/admin/overview",
       "/api/meetings",
       "/api/meetings/[id]",
       "/api/meetings/[id]/audio",
@@ -208,7 +327,6 @@ describe("data-surface inventory", () => {
       "/api/settings/llm/health",
       "/api/settings/profile",
       "/api/realtime/temporary-key",
-      "/api/whisper/health",
       "/meetings/[id]",
     ]));
     expect(new Set(DATA_SURFACE_INVENTORY).size).toBe(DATA_SURFACE_INVENTORY.length);
@@ -225,7 +343,12 @@ describe("data-surface inventory", () => {
     expect(routeInventory).toEqual(routeFiles);
     for (const relativePath of routeFiles) {
       const source = readFileSync(join(apiRoot, relativePath), "utf8");
-      const guardIndex = source.indexOf("guardLocalApiRequest(request)");
+      const directGuardIndex = [
+        source.indexOf("guardLocalApiRequest(request)"),
+        source.indexOf("guardLoopbackApiRequest(request)"),
+      ].filter((index) => index >= 0).sort((left, right) => left - right)[0] ?? -1;
+      const guardedBodyIndex = source.indexOf("readAccountJson(request)");
+      const guardIndex = directGuardIndex >= 0 ? directGuardIndex : guardedBodyIndex;
       expect(guardIndex, relativePath).toBeGreaterThan(-1);
       const paramsIndex = source.indexOf("await params");
       if (paramsIndex >= 0) expect(guardIndex, relativePath).toBeLessThan(paramsIndex);

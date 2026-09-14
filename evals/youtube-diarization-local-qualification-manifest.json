@@ -1,0 +1,93 @@
+{
+  "version": 1,
+  "description": "Linux 로컬 화자 모델의 다국어·다인원 교차 검증을 위한 실제 유튜브 자격 세트",
+  "silenceMs": 2000,
+  "sources": [
+    {
+      "id": "japanese-remote-three-speakers",
+      "url": "https://www.youtube.com/watch?v=z57Zvpitwg4",
+      "title": "カルカル リモート配信～プロデューサーZOOMトーク",
+      "file": "01-japanese-remote-three-speakers.m4a",
+      "language": "ja",
+      "start": "05:00",
+      "end": "09:00",
+      "expectedMinSpeakers": 3,
+      "expectedMaxSpeakers": 3,
+      "expectedMinSupportedSpeakers": 3,
+      "expectedMaxSupportedSpeakers": 3,
+      "referenceSpeakerAnchors": [
+        { "speaker": "올백 머리", "startMs": 0, "endMs": 5500 },
+        { "speaker": "모자·안경", "startMs": 6000, "endMs": 9500 },
+        { "speaker": "올백 머리", "startMs": 10000, "endMs": 13500 },
+        { "speaker": "비니", "startMs": 34000, "endMs": 49500 },
+        { "speaker": "올백 머리", "startMs": 50000, "endMs": 55500 },
+        { "speaker": "올백 머리", "startMs": 90000, "endMs": 94500 },
+        { "speaker": "모자·안경", "startMs": 97000, "endMs": 99000 },
+        { "speaker": "모자·안경", "startMs": 136000, "endMs": 148000 },
+        { "speaker": "모자·안경", "startMs": 186000, "endMs": 240000 }
+      ],
+      "minimumAnchorAgreement": 0.95
+    },
+    {
+      "id": "japanese-two-women",
+      "url": "https://www.youtube.com/watch?v=m7-a__Df2zE",
+      "title": "日本語女性2人対談",
+      "file": "02-japanese-two-women.m4a",
+      "language": "ja",
+      "start": "00:55",
+      "end": "03:55",
+      "expectedMinSpeakers": 2,
+      "expectedMaxSpeakers": 2
+    },
+    {
+      "id": "korean-four-speakers",
+      "url": "https://www.youtube.com/watch?v=j3QbNOOPeSw",
+      "title": "한국어 남성 4인 토론",
+      "file": "03-korean-four-speakers.m4a",
+      "language": "ko",
+      "start": "00:30",
+      "end": "04:30",
+      "expectedMinSpeakers": 4,
+      "expectedMaxSpeakers": 4
+    },
+    {
+      "id": "korean-two-women-and-interviewer",
+      "url": "https://www.youtube.com/watch?v=69e5L6c0XG8",
+      "title": "한국어 여성 2명과 화면 밖 질문자",
+      "file": "04-korean-two-women-and-interviewer.m4a",
+      "language": "ko",
+      "start": "01:56",
+      "end": "02:50",
+      "expectedMinSpeakers": 3,
+      "expectedMaxSpeakers": 3,
+      "expectedMinSupportedSpeakers": 2,
+      "expectedMaxSupportedSpeakers": 3
+    },
+    {
+      "id": "english-three-person-intro",
+      "url": "https://www.youtube.com/watch?v=subu-xHrp1w",
+      "title": "Godmother of AI: In 10 Years There Will Be Only 2 Kinds of Workers | Fei-Fei Li",
+      "file": "05-english-three-person-intro.m4a",
+      "language": "en",
+      "start": "00:30",
+      "end": "02:00",
+      "expectedMinSpeakers": 3,
+      "expectedMaxSpeakers": 3,
+      "expectedMinSupportedSpeakers": 3,
+      "expectedMaxSupportedSpeakers": 3
+    },
+    {
+      "id": "japanese-single-speaker-guard",
+      "url": "https://www.youtube.com/watch?v=z57Zvpitwg4",
+      "title": "일본어 단일 화자 대조 구간",
+      "file": "06-japanese-single-speaker.wav",
+      "language": "ja",
+      "start": "07:55",
+      "end": "09:00",
+      "expectedMinSpeakers": 1,
+      "expectedMaxSpeakers": 1,
+      "expectedMinSupportedSpeakers": 1,
+      "expectedMaxSupportedSpeakers": 1
+    }
+  ]
+}

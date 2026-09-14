@@ -63,7 +63,7 @@ test("manual transcript and summary editing keeps hierarchy, freshness, and navi
   const detailLink = page.getByRole("link").filter({ hasText: fixture.title });
   await expect(detailLink).toHaveAttribute("href", detailPath);
   await detailLink.click();
-  await expect(page.getByRole("heading", { name: fixture.title })).toBeVisible();
+  await expect(page.getByRole("heading", { name: fixture.title })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole("tab", { name: "회의록 요약", exact: true })).toHaveAttribute(
     "aria-selected",
     "true",

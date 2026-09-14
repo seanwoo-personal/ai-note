@@ -383,7 +383,7 @@ export async function runChat(
         repairReason,
         modelTurnsRemaining: budget.modelTurns - modelTurns,
         toolCallsRemaining: budget.toolCalls - toolCalls,
-      }), { json: true });
+      }), { json: true, task: "chat" });
     } catch (error) {
       throw classifyAdapterFailure(error);
     }

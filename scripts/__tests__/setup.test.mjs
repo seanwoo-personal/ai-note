@@ -111,18 +111,15 @@ describe("parseOllamaModels", () => {
 });
 
 describe("doctor completion guidance", () => {
-  it("makes the canonical bootstrap resume command primary", () => {
+  it("shows the local and deployment commands", () => {
     const message = doctorCompletionMessage({ blocked: false });
-    expect(message).toContain("node scripts/bootstrap.mjs --launch");
     expect(message).toContain("npm run dev");
-    expect(message.indexOf("node scripts/bootstrap.mjs --launch")).toBeLessThan(
-      message.indexOf("npm run dev"),
-    );
+    expect(message).toContain("docker compose up -d --build");
   });
 
-  it("uses the same resume command after missing prerequisites are installed", () => {
+  it("uses the local command after missing prerequisites are installed", () => {
     expect(doctorCompletionMessage({ blocked: true })).toContain(
-      "node scripts/bootstrap.mjs --launch",
+      "npm run dev",
     );
   });
 });

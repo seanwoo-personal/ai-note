@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "description": "실제 Zoom으로 진행된 일본어 남성 3인 원격 대담 검증 세트",
+  "silenceMs": 2000,
+  "sources": [
+    {
+      "id": "japanese-remote-three-speakers",
+      "url": "https://www.youtube.com/watch?v=z57Zvpitwg4",
+      "title": "カルカル リモート配信～プロデューサーZOOMトーク",
+      "file": "01-japanese-remote-three-speakers.m4a",
+      "language": "ja",
+      "start": "05:00",
+      "end": "09:00",
+      "expectedMinSpeakers": 3,
+      "expectedMaxSpeakers": 3,
+      "expectedMinSupportedSpeakers": 3,
+      "expectedMaxSupportedSpeakers": 3,
+      "minimumAnchorAgreement": 0.95,
+      "referenceSpeakerAnchors": [
+        { "speaker": "올백 머리", "startMs": 0, "endMs": 5500 },
+        { "speaker": "모자·안경", "startMs": 6000, "endMs": 9500 },
+        { "speaker": "올백 머리", "startMs": 10000, "endMs": 13500 },
+        { "speaker": "비니", "startMs": 34000, "endMs": 49500 },
+        { "speaker": "올백 머리", "startMs": 50000, "endMs": 55500 },
+        { "speaker": "올백 머리", "startMs": 90000, "endMs": 94500 },
+        { "speaker": "모자·안경", "startMs": 97000, "endMs": 99000 },
+        { "speaker": "모자·안경", "startMs": 136000, "endMs": 148000 },
+        { "speaker": "모자·안경", "startMs": 186000, "endMs": 240000 }
+      ]
+    }
+  ]
+}

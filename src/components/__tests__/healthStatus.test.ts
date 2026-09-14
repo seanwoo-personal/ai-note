@@ -4,31 +4,13 @@ import {
   formatLlmStatus,
   formatRealtimeStatus,
   formatSummaryModelStatus,
-  formatWhisperStatus,
   getLlmReadiness,
   providerLabel,
 } from "@/components/healthStatus";
 
 describe("healthStatus", () => {
-  it("formats local transcription readiness without exposing model names", () => {
-    expect(formatWhisperStatus({ connected: true, ready: true, model: "base" })).toMatchObject({
-      label: "로컬 전사 · 준비 완료",
-      shortLabel: "준비 완료",
-      tone: "success",
-    });
-    expect(formatWhisperStatus({ connected: true, ready: true, model: "large-v3" }).label)
-      .not.toMatch(/whisper|large/i);
-    expect(formatWhisperStatus({ connected: true, ready: false, model: "large-v3" })).toMatchObject({
-      label: "로컬 전사 · 준비 중",
-      tone: "warn",
-    });
-    expect(formatWhisperStatus({ connected: false, ready: false, model: null })).toMatchObject({
-      label: "로컬 전사 · 연결 안 됨",
-      tone: "error",
-    });
-  });
-
   it("formats llm provider/model labels and readiness", () => {
+    expect(providerLabel("openrouter")).toBe("OpenRouter");
     expect(providerLabel("claude-cli")).toBe("Claude CLI");
     expect(providerLabel("ollama")).toBe("Ollama");
 
@@ -65,29 +47,29 @@ describe("healthStatus", () => {
     expect(getLlmReadiness({ configured: true, provider: "claude-cli", ok: true, detail: "ready" })).toBe("ready");
   });
 
-  it("shows a vendor-neutral summary-model row separate from the realtime row", () => {
+  it("shows a customer-facing AI meeting-notes row separate from the realtime row", () => {
     expect(formatSummaryModelStatus(null)).toMatchObject({
-      label: "요약 모델 · 확인 중",
+      label: "AI 회의록 · 확인 중",
       shortLabel: "확인 중",
       tone: "neutral",
     });
     expect(formatSummaryModelStatus({ configured: false })).toMatchObject({
-      label: "요약 모델 · 미설정",
-      shortLabel: "미설정",
+      label: "AI 회의록 · 준비 중",
+      shortLabel: "준비 중",
       tone: "warn",
     });
     expect(
       formatSummaryModelStatus({ configured: true, provider: "claude-cli", ok: true, detail: "ready", model: "sonnet" }),
     ).toMatchObject({
-      label: "요약 모델 · 준비됨",
+      label: "AI 회의록 · 준비됨",
       shortLabel: "준비됨",
       tone: "success",
     });
     expect(
       formatSummaryModelStatus({ configured: true, provider: "ollama", ok: false, detail: "down", model: "x" }),
     ).toMatchObject({
-      label: "요약 모델 · 실패",
-      shortLabel: "실패",
+      label: "AI 회의록 · 확인 필요",
+      shortLabel: "확인 필요",
       tone: "error",
     });
     // The sidebar summary row never leaks the provider/model name (settings does that, not here).

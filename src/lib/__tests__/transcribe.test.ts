@@ -1,48 +1,39 @@
 // @vitest-environment node
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  createDirectorySyncCapability,
-  createNodeFileOps,
-  type FileOps,
-} from "@/lib/durableFileOps";
 import { resetMeetingLifecycleForTests } from "@/lib/meetingLifecycle";
-import { dataRoot, meetingPaths } from "@/lib/paths";
+import { meetingPaths } from "@/lib/paths";
 import { initialStatus, readStatus, writeStatus } from "@/lib/status";
+import { resetStatusUpdaterStateForTests } from "@/lib/statusUpdater";
 import {
-  createStatusUpdater,
-  resetStatusUpdaterStateForTests,
-  setStatusUpdaterForTests,
-} from "@/lib/statusUpdater";
-import { enqueueTranscription } from "@/lib/transcribe";
-
-const CANONICAL = "30000000-0000-4000-8000-000000000002";
+  enqueueTranscription,
+  resetTranscriptionMonitorsForTests,
+} from "@/lib/transcribe";
 
 let originalCwd: string;
 let workDir: string;
 
 beforeEach(() => {
   originalCwd = process.cwd();
-  workDir = mkdtempSync(join(tmpdir(), "transcribe-dispatch-"));
+  workDir = mkdtempSync(join(tmpdir(), "soniox-transcribe-"));
   process.chdir(workDir);
-  process.env.LOCAL_STT_HOST = "127.0.0.1";
-  process.env.LOCAL_STT_PORT = "8123";
+  process.env.FAKE_SONIOX = "1";
   resetStatusUpdaterStateForTests();
   resetMeetingLifecycleForTests();
+  resetTranscriptionMonitorsForTests();
 });
 
 afterEach(() => {
   process.chdir(originalCwd);
-  delete process.env.LOCAL_STT_HOST;
-  delete process.env.LOCAL_STT_PORT;
+  delete process.env.FAKE_SONIOX;
   resetStatusUpdaterStateForTests();
   resetMeetingLifecycleForTests();
-  vi.unstubAllGlobals();
+  resetTranscriptionMonitorsForTests();
   rmSync(workDir, { recursive: true, force: true });
 });
 
@@ -58,118 +49,57 @@ async function seed(id: string) {
   }));
 }
 
-describe("durable transcription dispatch", () => {
-  it("commits a proposed dispatch before the first service call", async () => {
-    const id = "meeting-marker-first";
+describe("Soniox 전사 발행", () => {
+  it("원격 식별자를 내구성 있게 기록하고 segments 다음 raw 완료 마커를 발행한다", async () => {
+    const id = "meeting-soniox-success";
     await seed(id);
-    let observedDispatch: string | undefined;
-    const fetchMock = vi.fn(async () => {
-      const status = await readStatus(id);
-      observedDispatch = status?.transcriptionDispatch?.dispatchId;
-      expect(status?.transcriptionDispatch?.state).toBe("proposed");
-      return {
-        status: 202,
-        json: async () => ({ dispatchId: observedDispatch, status: "accepted" }),
-      };
-    });
-    vi.stubGlobal("fetch", fetchMock);
 
-    const result = await enqueueTranscription(id);
-    expect(result).toMatchObject({ ok: true, dispatchId: observedDispatch, durability: "durable" });
-    expect(observedDispatch).toMatch(/^[a-f0-9-]{36}$/u);
-    expect((await readStatus(id))?.transcriptionDispatch).toMatchObject({
-      dispatchId: observedDispatch,
-      state: "sent",
-    });
-  });
-
-  it("reuses the durable proposed ID after response loss and updater restart", async () => {
-    const id = "meeting-response-loss";
-    await seed(id);
-    const bodies: Array<{ meetingId: string; dispatchId: string }> = [];
-    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
-      const body = JSON.parse(String(init?.body)) as { meetingId: string; dispatchId: string };
-      bodies.push(body);
-      if (bodies.length === 1) throw new Error("response lost");
-      return { status: 202, json: async () => ({ dispatchId: body.dispatchId, status: "accepted" }) };
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    await expect(enqueueTranscription(id)).rejects.toThrowError();
-    const proposed = (await readStatus(id))?.transcriptionDispatch?.dispatchId;
-    resetStatusUpdaterStateForTests();
-    await expect(enqueueTranscription(id)).resolves.toMatchObject({ ok: true, dispatchId: proposed });
-    expect(bodies).toHaveLength(2);
-    expect(bodies[0]?.dispatchId).toBe(proposed);
-    expect(bodies[1]?.dispatchId).toBe(proposed);
-  });
-
-  it("CAS-adopts the service canonical dispatch before sending it", async () => {
-    const id = "meeting-adopt-canonical";
-    await seed(id);
-    const bodies: string[] = [];
-    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
-      const body = JSON.parse(String(init?.body)) as { dispatchId: string };
-      bodies.push(body.dispatchId);
-      if (bodies.length === 1) {
-        return {
-          status: 409,
-          json: async () => ({ error: { code: "adopt_existing_dispatch" }, dispatchId: CANONICAL }),
-        };
-      }
-      expect((await readStatus(id))?.transcriptionDispatch).toMatchObject({
-        dispatchId: CANONICAL,
-        state: "accepted",
-      });
-      return { status: 202, json: async () => ({ dispatchId: CANONICAL, status: "accepted" }) };
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    await expect(enqueueTranscription(id)).resolves.toMatchObject({ ok: true, dispatchId: CANONICAL });
-    expect(bodies[1]).toBe(CANONICAL);
-  });
-
-  it("does not call Whisper when proposed-marker durability is pending", async () => {
-    const id = "meeting-dispatch-pending";
-    await seed(id);
-    const base = createNodeFileOps();
-    let failSync = true;
-    const fileOps: FileOps = {
-      ...base,
-      openDirectory: async (...args) => {
-        const handle = await base.openDirectory(...args);
-        return {
-          ...handle,
-          sync: async () => {
-            if (failSync) throw Object.assign(new Error("transient"), { code: "EIO" });
-            await handle.sync();
-          },
-        };
-      },
-    };
-    resetStatusUpdaterStateForTests();
-    setStatusUpdaterForTests(dataRoot(), createStatusUpdater({
-      dataRoot: dataRoot(),
-      fileOps,
-      capability: createDirectorySyncCapability("supported"),
-    }));
-    const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
-
-    await expect(enqueueTranscription(id)).rejects.toThrowError("status_durability_pending");
-    expect(fetchMock).not.toHaveBeenCalled();
-    const proposed = (await readStatus(id))?.transcriptionDispatch?.dispatchId;
-    expect((await readStatus(id))?.transcriptionDispatch?.state).toBe("proposed");
-
-    failSync = false;
-    fetchMock.mockResolvedValue({
-      status: 202,
-      json: async () => ({ dispatchId: proposed, status: "accepted" }),
-    });
     await expect(enqueueTranscription(id)).resolves.toMatchObject({
       ok: true,
-      dispatchId: proposed,
+      state: "sent",
+      durability: "durable",
     });
-    expect(fetchMock).toHaveBeenCalledOnce();
+
+    await vi.waitFor(async () => {
+      expect((await readStatus(id))?.status).toBe("transcribed");
+    });
+    const paths = meetingPaths(id);
+    expect(existsSync(paths.segments)).toBe(true);
+    expect(existsSync(paths.raw)).toBe(true);
+    expect(JSON.parse(readFileSync(paths.segments, "utf8"))).toEqual([
+      { start: 0, end: 1, text: "테스트 회의 전사입니다." },
+    ]);
+    expect(readFileSync(paths.raw, "utf8")).toBe("테스트 회의 전사입니다.\n");
+    expect((await readStatus(id))?.transcriptionDispatch).toMatchObject({
+      state: "completed",
+      service: "soniox",
+    });
+  });
+
+  it("이미 발행된 raw 원문은 다시 전송하지 않는다", async () => {
+    const id = "meeting-soniox-complete";
+    await seed(id);
+    await writeFile(meetingPaths(id).raw, "이미 완료됨\n");
+
+    await expect(enqueueTranscription(id)).resolves.toEqual({
+      ok: false,
+      reason: "already_transcribed",
+    });
+  });
+
+  it("키가 없으면 재시도 가능한 실패 상태를 유지하고 원본 오디오는 보존한다", async () => {
+    const id = "meeting-soniox-no-key";
+    await seed(id);
+    delete process.env.FAKE_SONIOX;
+    delete process.env.SONIOX_API_KEY;
+
+    await expect(enqueueTranscription(id)).rejects.toThrow("soniox_key_missing");
+    const status = await readStatus(id);
+    expect(status?.transcriptionDispatch).toMatchObject({
+      state: "proposed",
+      service: "soniox",
+    });
+    expect(existsSync(meetingPaths(id).audio)).toBe(true);
+    expect(existsSync(meetingPaths(id).raw)).toBe(false);
   });
 });

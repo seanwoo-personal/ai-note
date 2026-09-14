@@ -151,8 +151,8 @@ export function buildE2eServerEnv(sourceEnv, syntheticHome, appPort) {
     ...result,
     HOME: syntheticHome,
     AI_NOTE_DISABLE_WORKER: "1",
-    LOCAL_STT_HOST: "127.0.0.1",
-    LOCAL_STT_PORT: appPort,
+    FAKE_PASSWORD_EMAIL: "1",
+    FAKE_SONIOX: "1",
     NEXT_TELEMETRY_DISABLED: "1",
     NODE_ENV: "development",
   };
@@ -379,16 +379,19 @@ export async function removeOwnedE2eSnapshotRoot({ snapshotRoot, ownershipToken,
   return { removed: true, snapshotRoot: root };
 }
 
-async function captureOwnedMeetingIdentity({ snapshotRoot, ownershipToken, meetingId, meetingRoot }) {
+async function captureOwnedMeetingIdentity({ snapshotRoot, ownershipToken, meetingId, meetingRoot, meetingSegments }) {
   const root = await assertE2eSnapshotOwnership(snapshotRoot, ownershipToken);
-  const dataRoot = join(root, "data");
-  const meetingsRoot = join(dataRoot, "meetings");
-  const expectedMeetingRoot = join(meetingsRoot, basename(meetingRoot));
+  const expectedMeetingRoot = join(root, ...meetingSegments);
   if (meetingRoot !== expectedMeetingRoot) {
     throw new Error(`E2E meeting identity escaped its owned parent: ${meetingRoot}`);
   }
 
-  const directoryPaths = [root, dataRoot, meetingsRoot, meetingRoot];
+  const directoryPaths = [root];
+  let descendant = root;
+  for (const segment of meetingSegments) {
+    descendant = join(descendant, segment);
+    directoryPaths.push(descendant);
+  }
   const directories = [];
   for (const path of directoryPaths) {
     const info = await lstat(path);
@@ -462,6 +465,7 @@ export async function removeOwnedE2eMeetingSeed({
   ownershipToken,
   project,
   expectedTitleOverride,
+  tenantAccountId,
   testHooks = {},
 }) {
   if (typeof project !== "string" || project.length === 0) {
@@ -469,17 +473,43 @@ export async function removeOwnedE2eMeetingSeed({
   }
   await assertE2eSnapshotOwnership(snapshotRoot, ownershipToken);
   const meetingId = `synthetic-global-${project}`;
-  const segments = ["data", "meetings", meetingId];
+  if (
+    tenantAccountId !== undefined
+    && (typeof tenantAccountId !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(tenantAccountId))
+  ) {
+    throw new Error("E2E owned meeting seed tenant account id is invalid");
+  }
+  const segments = tenantAccountId === undefined
+    ? ["data", "meetings", meetingId]
+    : [
+        "data",
+        "tenants",
+        createHash("sha256").update(tenantAccountId).digest("hex"),
+        "meetings",
+        meetingId,
+      ];
   const meetingRoot = await resolveOwnedE2eDescendant(snapshotRoot, segments);
   if (meetingRoot === null) return { removed: false, reason: "absent" };
-  const captured = await captureOwnedMeetingIdentity({ snapshotRoot, ownershipToken, meetingId, meetingRoot });
+  const captured = await captureOwnedMeetingIdentity({
+    snapshotRoot,
+    ownershipToken,
+    meetingId,
+    meetingRoot,
+    meetingSegments: segments,
+  });
   const status = JSON.parse(captured.statusBytes.toString("utf8"));
   if (status?.id !== meetingId || status?.titleOverride !== expectedTitleOverride) {
     throw new Error(`refusing to remove unrecognized meeting directory: ${meetingRoot}`);
   }
   await testHooks.afterCapture?.();
 
-  const revalidated = await captureOwnedMeetingIdentity({ snapshotRoot, ownershipToken, meetingId, meetingRoot });
+  const revalidated = await captureOwnedMeetingIdentity({
+    snapshotRoot,
+    ownershipToken,
+    meetingId,
+    meetingRoot,
+    meetingSegments: segments,
+  });
   if (!sameCapturedMeetingIdentity(captured, revalidated)) {
     throw new Error(`refusing to remove Global Meeting seed whose identity changed before delete: ${meetingRoot}`);
   }
@@ -498,6 +528,7 @@ export async function removeOwnedE2eMeetingSeed({
       ownershipToken,
       meetingId,
       meetingRoot: quarantineRoot,
+      meetingSegments: [...segments.slice(0, -1), basename(quarantineRoot)],
     });
   } catch (error) {
     await restoreQuarantineWithoutOverwrite(quarantineRoot, meetingRoot);

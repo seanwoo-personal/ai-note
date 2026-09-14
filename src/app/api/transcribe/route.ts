@@ -9,9 +9,8 @@ import { jsonNoStore, publicErrorResponse } from "@/lib/publicApi";
 import { readStatus, updateStatus } from "@/lib/status";
 import { enqueueTranscription } from "@/lib/transcribe";
 
-// POST /api/transcribe { id } — manual (re)enqueue, e.g. after a whisper outage on
-// finalize. Same delegation path as finalize; whisper being unreachable maps to a
-// retryable error + 502 (not a crash).
+// POST /api/transcribe { id } — manually enqueue/retry the cloud transcription.
+// Provider failures map to a retryable error and never discard the recording.
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -53,11 +52,11 @@ export async function POST(request: Request) {
         ...latest,
         error: {
           code: "transcription_failed",
-          message: "전사를 완료하지 못했습니다. 로컬 전사 서비스를 확인해 주세요",
+          message: "전사를 시작하지 못했습니다. 잠시 후 다시 시도하거나 운영자에게 문의해 주세요",
           action: "retry_transcription",
         },
       }));
     }
-    return publicErrorResponse("local_service_unavailable", 502);
+    return publicErrorResponse("cloud_service_unavailable", 502);
   }
 }

@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "description": "실제 유튜브 인터뷰 4개를 순차 재생했을 때 후반 화자가 한 명으로 합쳐지는지 확인하는 반복 품질 세트",
+  "silenceMs": 2000,
+  "sources": [
+    {
+      "id": "korean-interview",
+      "url": "https://www.youtube.com/watch?v=AWb5q5gBkFE",
+      "title": "Showbiz Korea Run Off Interview",
+      "file": "01-korean.m4a",
+      "language": "ko",
+      "start": "00:45",
+      "end": "02:15",
+      "expectedMinSpeakers": 2,
+      "expectedMaxSpeakers": 4
+    },
+    {
+      "id": "japanese-dialogue",
+      "url": "https://www.youtube.com/watch?v=Z774GYhLuo0",
+      "title": "久保建英×内田篤人 スペシャル対談",
+      "file": "02-japanese.m4a",
+      "language": "ja",
+      "start": "00:45",
+      "end": "02:15",
+      "expectedMinSpeakers": 2,
+      "expectedMaxSpeakers": 2
+    },
+    {
+      "id": "english-three-person",
+      "url": "https://www.youtube.com/watch?v=IR8hZBvDFs4",
+      "title": "The intersection of AI, art, and design",
+      "file": "03-english-three.m4a",
+      "language": "en",
+      "start": "00:30",
+      "end": "02:00",
+      "expectedMinSpeakers": 2,
+      "expectedMaxSpeakers": 3
+    },
+    {
+      "id": "english-three-person-intro",
+      "url": "https://www.youtube.com/watch?v=subu-xHrp1w",
+      "title": "Godmother of AI: In 10 Years There Will Be Only 2 Kinds of Workers | Fei-Fei Li",
+      "file": "04-english-two.m4a",
+      "language": "en",
+      "start": "00:30",
+      "end": "02:00",
+      "expectedMinSpeakers": 3,
+      "expectedMaxSpeakers": 3,
+      "expectedMinSupportedSpeakers": 3,
+      "expectedMaxSupportedSpeakers": 3
+    }
+  ]
+}

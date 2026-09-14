@@ -400,7 +400,10 @@ async function generateSummary(
   transcript: string,
   preservedParticipants: readonly string[] = [],
 ) {
-  let summaryOutput = await adapter.run(buildSummaryPrompt(transcript, title), { json: true });
+  let summaryOutput = await adapter.run(buildSummaryPrompt(transcript, title), {
+    json: true,
+    task: "summary",
+  });
   let result = await summarizeTranscript({
     title,
     transcript,
@@ -409,7 +412,10 @@ async function generateSummary(
   });
   if (result.usedFallback) {
     try {
-      summaryOutput = await adapter.run(buildSummaryPrompt(transcript, title), { json: true });
+      summaryOutput = await adapter.run(buildSummaryPrompt(transcript, title), {
+        json: true,
+        task: "summary",
+      });
       result = await summarizeTranscript({
         title,
         transcript,
@@ -539,11 +545,13 @@ async function executePreparedGeneration(
       if (!status) return { ok: false, reason: "not_found" };
       const raw = await readFile(paths.raw, "utf8");
       const glossary = await readGlossary();
-      const correction = await adapter.run(buildCorrectionPrompt(raw, glossary));
+      const correction = await adapter.run(buildCorrectionPrompt(raw, glossary), {
+        task: "transcript",
+      });
       const resolvedTranscript = resolveTranscript(raw, correction);
       let summaryOutput = await adapter.run(
         buildSummaryPrompt(resolvedTranscript, status.title),
-        { json: true },
+        { json: true, task: "summary" },
       );
       let result = await summarizeCore({
         title: status.title,
@@ -555,7 +563,7 @@ async function executePreparedGeneration(
         try {
           summaryOutput = await adapter.run(
             buildSummaryPrompt(resolvedTranscript, status.title),
-            { json: true },
+            { json: true, task: "summary" },
           );
           result = await summarizeCore({
             title: status.title,
@@ -572,7 +580,9 @@ async function executePreparedGeneration(
     } else if (intent === "transcript_regenerate") {
       const snapshot = prepared.snapshot!;
       const glossary = await readGlossary();
-      const correction = await adapter.run(buildCorrectionPrompt(snapshot.raw!, glossary));
+      const correction = await adapter.run(buildCorrectionPrompt(snapshot.raw!, glossary), {
+        task: "transcript",
+      });
       transcript = resolveTranscript(snapshot.raw!, correction);
       summary = snapshot.summary;
       await commitIntendedRevision(id, prepared, {

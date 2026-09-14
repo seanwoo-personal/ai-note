@@ -6,6 +6,7 @@ import {
   requestBodyErrorResponse,
 } from "@/lib/localRequestGuard";
 import { jsonNoStore, publicErrorResponse } from "@/lib/publicApi";
+import { recordRequestUsage } from "@/lib/accountUsage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -59,6 +60,7 @@ export async function POST(request: Request): Promise<Response> {
     if (typeof payload.api_key !== "string" || payload.api_key.length < 1) {
       return publicErrorResponse("local_service_unavailable", 502);
     }
+    await recordRequestUsage(request, "realtime_session");
     return jsonNoStore({ apiKey: payload.api_key });
   } catch {
     return publicErrorResponse("local_service_unavailable", 502);

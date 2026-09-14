@@ -285,9 +285,9 @@ describe("runSummarize", () => {
 
     expect(run).toHaveBeenCalledTimes(2);
     expect(run.mock.calls[0][0]).toContain("[원문]");
-    expect(run.mock.calls[0][1]).toBeUndefined();
+    expect(run.mock.calls[0][1]).toEqual({ task: "transcript" });
     expect(run.mock.calls[1][0]).toContain("JSON 스키마");
-    expect(run.mock.calls[1][1]).toEqual({ json: true });
+    expect(run.mock.calls[1][1]).toEqual({ json: true, task: "summary" });
     const pair = await readArtifactPair(id);
     expect(pair.state).toBe("stable");
     expect(pair.contentRevision).toMatchObject({
@@ -422,7 +422,7 @@ describe("runSummarize", () => {
     expect(run).toHaveBeenCalledTimes(1);
     expect(run.mock.calls[0][0]).toContain("직접 수정한 현재 전체 스크립트");
     expect(run.mock.calls[0][0]).not.toContain("RAW_SENTINEL_SHOULD_NOT_BE_READ");
-    expect(run.mock.calls[0][1]).toEqual({ json: true });
+    expect(run.mock.calls[0][1]).toEqual({ json: true, task: "summary" });
     expect(await readFile(meetingPaths(id).transcript, "utf8")).toBe(seeded.transcript);
     expect((await readStatus(id))?.contentRevision?.transcript.source).toBe("manual");
   });
@@ -552,7 +552,7 @@ describe("independent transcript and summary generation", () => {
 
     expect(run).toHaveBeenCalledTimes(1);
     expect(run.mock.calls[0][0]).toContain("[원문]");
-    expect(run.mock.calls[0][1]).toBeUndefined();
+    expect(run.mock.calls[0][1]).toEqual({ task: "transcript" });
     expect(await readFile(meetingPaths(id).summary, "utf8")).toBe(seeded.summary);
     const pair = await readArtifactPair(id);
     expect(pair.transcript).toContain("교정으로 추가된 문장");
@@ -623,7 +623,7 @@ describe("independent transcript and summary generation", () => {
     expect(run).toHaveBeenCalledTimes(1);
     expect(run.mock.calls[0][0]).toContain("사용자가 직접 수정한 전체 스크립트");
     expect(run.mock.calls[0][0]).not.toContain("[원문]");
-    expect(run.mock.calls[0][1]).toEqual({ json: true });
+    expect(run.mock.calls[0][1]).toEqual({ json: true, task: "summary" });
     expect(await readFile(meetingPaths(id).transcript, "utf8")).toBe(seeded.transcript);
     const pair = await readArtifactPair(id);
     expect(pair.contentRevision?.transcript.source).toBe("manual");

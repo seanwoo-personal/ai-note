@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 
 import { type Glossary, glossarySchema } from "@/domain/glossary";
 import { atomicWriteFile } from "@/lib/atomicWrite";
-import { localSttGlossaryPath } from "@/lib/config";
+import { glossaryPath } from "@/lib/config";
 
 // Read/write the glossary file (path from config, repo-root glossary.json, env
 // override). app-api is the single writer. Reads are best-effort: any missing
@@ -14,7 +14,7 @@ const EMPTY: Glossary = { terms: [], corrections: [] };
 
 export async function readGlossary(): Promise<Glossary> {
   try {
-    const parsed: unknown = JSON.parse(await readFile(localSttGlossaryPath(), "utf-8"));
+    const parsed: unknown = JSON.parse(await readFile(glossaryPath(), "utf-8"));
     // Backward compat: a bare JSON array is the old flat term list.
     const candidate = Array.isArray(parsed) ? { terms: parsed, corrections: [] } : parsed;
     const result = glossarySchema.safeParse(candidate);
@@ -25,5 +25,5 @@ export async function readGlossary(): Promise<Glossary> {
 }
 
 export async function writeGlossary(glossary: Glossary): Promise<void> {
-  await atomicWriteFile(localSttGlossaryPath(), JSON.stringify(glossary, null, 2) + "\n");
+  await atomicWriteFile(glossaryPath(), JSON.stringify(glossary, null, 2) + "\n");
 }

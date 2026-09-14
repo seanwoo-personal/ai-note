@@ -102,7 +102,7 @@ export function RecorderFinalizeResultView({
       {result.transcription === "failed" && (
         <div>
           <h3 className="text-[14px] font-bold text-ink">전사</h3>
-          <p className="mt-1 text-[13px] text-warn">녹음은 저장됐지만 로컬 전사 요청을 완료하지 못했습니다.</p>
+          <p className="mt-1 text-[13px] text-warn">녹음은 저장됐지만 전사 요청을 완료하지 못했습니다. 잠시 후 다시 시도해 주세요.</p>
         </div>
       )}
       <div className="flex flex-wrap gap-2">

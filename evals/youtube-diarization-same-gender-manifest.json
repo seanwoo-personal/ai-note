@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "description": "비슷한 음역의 여성 출연자 두 명과 화면 밖 질문자를 구분하는 한국어 인터뷰 품질 세트",
+  "silenceMs": 0,
+  "sources": [
+    {
+      "id": "korean-two-women-and-interviewer",
+      "url": "https://www.youtube.com/watch?v=69e5L6c0XG8",
+      "title": "Real-Life Huntrix?! How Sony Jumped on the Deal",
+      "file": "01-ytn-panel-clean.m4a",
+      "language": "ko",
+      "start": "01:56",
+      "end": "02:50",
+      "expectedMinSpeakers": 3,
+      "expectedMaxSpeakers": 3,
+      "expectedMinSupportedSpeakers": 2,
+      "expectedMaxSupportedSpeakers": 3
+    }
+  ]
+}

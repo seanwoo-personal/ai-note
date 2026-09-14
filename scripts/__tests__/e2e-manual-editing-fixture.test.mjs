@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   lstat,
   mkdir,
@@ -101,6 +102,27 @@ describe("manual editing synthetic fixture", () => {
     expect(sentinel.fixtureId).toBe(MANUAL_EDITING_FIXTURE_ID);
     await writeFile(sentinelPath, JSON.stringify({ ...sentinel, fixtureId: "unknown" }));
     await expect(installManualEditingFixture({ env })).rejects.toThrow("sentinel");
+  });
+
+  it("can install the synthetic library inside one account tenant without populating the shared root", async () => {
+    const root = await snapshotRoot();
+    const env = { AI_NOTE_E2E_SNAPSHOT_ROOT: root };
+    const tenantAccountId = "e2e-approved-customer";
+    const tenantRoot = join(
+      root,
+      "data",
+      "tenants",
+      createHash("sha256").update(tenantAccountId).digest("hex"),
+    );
+
+    await installManualEditingFixture({ env, tenantAccountId });
+
+    expect((await readdir(join(root, "data"))).sort()).toEqual(["tenants"]);
+    expect((await readdir(tenantRoot)).sort()).toEqual([
+      ".manual-editing-fixture.json",
+      "library.json",
+      "meetings",
+    ]);
   });
 
   it("maps only the four configured Playwright projects to their own meeting", () => {

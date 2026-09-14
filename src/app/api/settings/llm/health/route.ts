@@ -16,34 +16,14 @@ export async function GET(request: Request) {
   const model = s.model?.trim();
 
   if (s.provider === "ollama" && !model) {
-    return jsonNoStore({
-      configured: true,
-      provider: s.provider,
-      ok: false,
-      detail: "Ollama 모델을 선택해 저장하세요.",
-    });
+    return jsonNoStore({ configured: true, ok: false });
   }
 
   try {
     const adapter = getAdapter(s);
     const health = await adapter.health();
-    return jsonNoStore({
-      configured: true,
-      provider: s.provider,
-      ...(model ? { model } : {}),
-      ...health,
-    });
+    return jsonNoStore({ configured: true, ok: health.ok });
   } catch {
-    return jsonNoStore({
-      configured: true,
-      provider: s.provider,
-      ...(model ? { model } : {}),
-      ok: false,
-      detail: s.provider === "ollama"
-        ? "Ollama 설정을 확인하고 ollama serve를 실행한 뒤 다시 검사하세요."
-        : s.provider === "claude-cli"
-          ? "Claude CLI 설치와 PATH를 확인한 뒤 다시 검사하세요."
-          : "외부 요약 모델 API 키 또는 CLI 설치를 확인한 뒤 다시 검사하세요.",
-    });
+    return jsonNoStore({ configured: true, ok: false });
   }
 }

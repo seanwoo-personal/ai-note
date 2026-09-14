@@ -199,4 +199,105 @@ describe("Soniox real-time TTS", () => {
     await vi.advanceTimersByTimeAsync(28_001);
     expect(onError).toHaveBeenCalledWith("번역 음성 완료 응답이 지연되어 연결을 종료했습니다.");
   });
+
+  it("streams a long translation as sentences and ends the text exactly once", async () => {
+    class FakeWebSocket {
+      static instance: FakeWebSocket | null = null;
+      static readonly OPEN = 1;
+      readyState = FakeWebSocket.OPEN;
+      sent: unknown[] = [];
+      onopen: (() => void) | null = null;
+      onmessage: ((event: { data: string }) => void) | null = null;
+      onerror: (() => void) | null = null;
+      onclose: (() => void) | null = null;
+      constructor() { FakeWebSocket.instance = this; queueMicrotask(() => this.onopen?.()); }
+      send(data: unknown) { this.sent.push(data); }
+      close() { this.readyState = 3; }
+    }
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ ["api" + "Key"]: "temporary-value" }),
+    } as Response)));
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+    const session = await connectSonioxTts({ language: "ko", voice: "Maya", onAudio: vi.fn() });
+    const socket = FakeWebSocket.instance!;
+
+    const long = `${"이것은 충분히 긴 첫 번째 문장입니다. ".repeat(6)}${"그리고 이어지는 두 번째 문장입니다. ".repeat(6)}`.trim();
+    session.speak(long);
+    const frames = socket.sent.slice(1).map((raw) => JSON.parse(String(raw)) as { text?: string; text_end?: boolean });
+
+    // A realtime TTS stream takes text incrementally — that is what `text_end`
+    // is for. Handing it one oversized blob is what long utterances hit.
+    expect(frames.length).toBeGreaterThan(1);
+    expect(frames.filter((frame) => frame.text_end === true)).toHaveLength(1);
+    expect(frames[frames.length - 1].text_end).toBe(true);
+    // The audio must be identical to the single-frame version: same characters.
+    expect(frames.map((frame) => frame.text ?? "").join("")).toBe(long);
+  });
+
+  it("still sends a short translation as one frame", async () => {
+    class FakeWebSocket {
+      static instance: FakeWebSocket | null = null;
+      static readonly OPEN = 1;
+      readyState = FakeWebSocket.OPEN;
+      sent: unknown[] = [];
+      onopen: (() => void) | null = null;
+      onmessage: ((event: { data: string }) => void) | null = null;
+      onerror: (() => void) | null = null;
+      onclose: (() => void) | null = null;
+      constructor() { FakeWebSocket.instance = this; queueMicrotask(() => this.onopen?.()); }
+      send(data: unknown) { this.sent.push(data); }
+      close() { this.readyState = 3; }
+    }
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ ["api" + "Key"]: "temporary-value" }),
+    } as Response)));
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+    const session = await connectSonioxTts({ language: "ko", voice: "Maya", onAudio: vi.fn() });
+    const socket = FakeWebSocket.instance!;
+    const streamId = JSON.parse(String(socket.sent[0])).stream_id;
+
+    session.speak("짧은 문장입니다.");
+    expect(socket.sent.slice(1).map((raw) => JSON.parse(String(raw)))).toEqual([
+      { text: "짧은 문장입니다.", text_end: true, stream_id: streamId },
+    ]);
+  });
+
+  it("reports a provider failure as a generic message plus its numeric code", async () => {
+    class FakeWebSocket {
+      static instance: FakeWebSocket | null = null;
+      static readonly OPEN = 1;
+      readyState = FakeWebSocket.OPEN;
+      sent: unknown[] = [];
+      onopen: (() => void) | null = null;
+      onmessage: ((event: { data: string }) => void) | null = null;
+      onerror: (() => void) | null = null;
+      onclose: (() => void) | null = null;
+      constructor() { FakeWebSocket.instance = this; queueMicrotask(() => this.onopen?.()); }
+      send(data: unknown) { this.sent.push(data); }
+      close() { this.readyState = 3; }
+    }
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ ["api" + "Key"]: "temporary-value" }),
+    } as Response)));
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+    const onError = vi.fn();
+    await connectSonioxTts({ language: "en", voice: "Maya", onAudio: vi.fn(), onError });
+    const socket = FakeWebSocket.instance!;
+    const streamId = JSON.parse(String(socket.sent[0])).stream_id;
+
+    socket.onmessage?.({ data: JSON.stringify({
+      error_code: 408,
+      error_message: "request timeout for account acme-corp",
+      stream_id: streamId,
+    }) });
+
+    // The provider's raw text can carry its own name or account details, so it is
+    // never rendered (ADR 0024). The numeric code keeps the failure diagnosable.
+    const [message] = onError.mock.calls[0] as [string];
+    expect(message).toBe("번역 음성을 만들 수 없습니다. (코드 408)");
+    expect(message).not.toContain("acme-corp");
+  });
 });

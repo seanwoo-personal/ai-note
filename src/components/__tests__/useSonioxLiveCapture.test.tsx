@@ -153,6 +153,43 @@ describe("useSonioxLiveCapture", () => {
     unmount();
   });
 
+  it("retries a Chromium audio-track start failure with basic microphone constraints", async () => {
+    const audioTrack = new FakeTrack();
+    const stream = new FakeMediaStream([audioTrack]) as unknown as MediaStream;
+    const startFailure = new DOMException("Could not start audio source", "NotReadableError");
+    const getUserMedia = vi.fn()
+      .mockRejectedValueOnce(startFailure)
+      .mockResolvedValueOnce(stream);
+    installMediaDevices({ getUserMedia });
+
+    const { result } = renderHook(() => useSonioxLiveCapture());
+    await act(async () => { await result.current.start(START_OPTIONS); });
+
+    expect(getUserMedia).toHaveBeenCalledTimes(2);
+    expect(getUserMedia.mock.calls[0]?.[0]).toEqual({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    });
+    expect(getUserMedia.mock.calls[1]?.[0]).toEqual({ audio: true });
+    expect(result.current.phase).toBe("listening");
+    expect(result.current.error).toBeNull();
+  });
+
+  it("turns a repeated Chromium audio-track start failure into an actionable Korean error", async () => {
+    const startFailure = new DOMException("Could not start audio source", "NotReadableError");
+    const getUserMedia = vi.fn().mockRejectedValue(startFailure);
+    installMediaDevices({ getUserMedia });
+
+    const { result } = renderHook(() => useSonioxLiveCapture());
+    await act(async () => { await result.current.start(START_OPTIONS); });
+
+    expect(getUserMedia).toHaveBeenCalledTimes(2);
+    expect(result.current.phase).toBe("error");
+    expect(result.current.error).toBe(
+      "마이크를 시작하지 못했습니다. 통화·녹음 앱을 종료하고 마이크 권한을 확인한 뒤 다시 시도해 주세요.",
+    );
+    expect(soniox.connect).not.toHaveBeenCalled();
+  });
+
   it("pauses and resumes the live recorder while keeping the same Soniox session open", async () => {
     const track = new FakeTrack();
     installMediaDevices({ getUserMedia: async () => new FakeMediaStream([track]) as unknown as MediaStream });

@@ -237,14 +237,6 @@ export function ChatAnswer({
       {deepError && (
         <div className="flex min-w-0 flex-col items-start gap-2 rounded-[12px] border border-error/30 bg-panel px-4 py-3 text-[13px] leading-relaxed sm:flex-row sm:items-center sm:justify-between">
           <p role="status" className="min-w-0 break-words text-error">{deepError.message}</p>
-          {deepError.recovery === "settings" && (
-            <GuardedLink
-              href="/settings"
-              className="inline-flex min-h-11 w-full shrink-0 items-center justify-center rounded-lg border border-inkFaint px-4 font-semibold text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:w-auto"
-            >
-              요약 모델 확인
-            </GuardedLink>
-          )}
           {deepError.recovery === "search" && (
             <button
               type="button"

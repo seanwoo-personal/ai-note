@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import SettingsPage from "@/app/settings/page";
+import SettingsPage from "@/app/(product)/settings/page";
 import { UserProfileForm } from "@/components/UserProfileForm";
 
 const LOCAL_TIMEZONE = (() => {
@@ -81,23 +81,18 @@ async function fillRequiredProfile(displayName = "Dylan") {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("UserProfileForm", () => {
-  it("renders one Settings main/page heading with the model before the optional profile", async () => {
+  it("keeps customer settings focused on display and profile without exposing model infrastructure", async () => {
     stubProfile();
     render(<SettingsPage />);
 
     expect(screen.getAllByRole("main")).toHaveLength(1);
     expect(screen.getAllByRole("heading", { level: 1, name: "설정" })).toHaveLength(1);
     const profileHeading = screen.getByRole("heading", { level: 2, name: "내 정보" });
-    const modelHeading = screen.getByRole("heading", { level: 2, name: "요약 모델" });
     const profileSection = profileHeading.closest("section");
-    const modelSection = modelHeading.closest("section");
     expect(profileSection).not.toBeNull();
-    expect(modelSection).not.toBeNull();
-    expect(profileSection).not.toBe(modelSection);
-    expect(profileSection?.parentElement).toBe(modelSection?.parentElement);
-    expect(
-      modelSection!.compareDocumentPosition(profileSection!) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    expect(screen.queryByRole("heading", { level: 2, name: "요약 모델" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/OpenRouter|Claude CLI|Ollama|API 키|모델 백엔드|Base URL/))
+      .not.toBeInTheDocument();
     expect(screen.getByText(/내 정보가 없어도 녹음·전사·일반 검색을 사용할 수 있습니다/))
       .toBeInTheDocument();
     await within(profileSection as HTMLElement).findByText(/아직 저장되지 않음/);

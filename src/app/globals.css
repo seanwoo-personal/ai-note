@@ -165,6 +165,37 @@ body {
   color: var(--hej-color-text-primary);
   font-family: var(--font-sans);
   font-weight: 500;
+  overflow-wrap: break-word;
+  word-break: normal;
+  line-break: auto;
+  hyphens: none;
+}
+
+/*
+ * Locale-aware prose wrapping:
+ * - Korean UI copy wraps at word boundaries instead of splitting syllable runs.
+ * - Japanese and Chinese keep their native CJK opportunities while preventing
+ *   punctuation from being stranded at the wrong edge of a line.
+ * - `break-all` remains an explicit component-level escape hatch for opaque
+ *   tokens such as URLs, emails, TOTP secrets, and recovery material.
+ */
+html:lang(ko) body {
+  word-break: keep-all;
+  line-break: strict;
+}
+
+html:lang(ja) body,
+html:lang(zh) body {
+  word-break: normal;
+  line-break: strict;
+}
+
+:where(h1, h2, h3) {
+  text-wrap: balance;
+}
+
+:where(p, li, dd) {
+  text-wrap: pretty;
 }
 
 button,
@@ -187,4 +218,413 @@ textarea {
 
 ::selection {
   background: color-mix(in srgb, var(--hej-color-brand-green) 20%, transparent);
+}
+
+/*
+ * Dedicated Android WebView presentation.
+ *
+ * The native shell adds a stable user-agent marker. The head bootstrap turns
+ * that marker into this attribute before first paint, so ordinary browsers
+ * keep the web dashboard while the APK receives a Material 3-inspired,
+ * touch-first surface. Breakpoints follow Android window size guidance:
+ * compact below 600dp and an unfolded supporting-pane layout from 840dp.
+ */
+html[data-ai-note-android-app="true"] {
+  color-scheme: light;
+  --android-app-page-gutter: 16px;
+  --android-app-surface-radius: 24px;
+}
+
+html[data-ai-note-android-app="true"] body {
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html[data-ai-note-android-app="true"] [data-system-audio-option] {
+  display: none;
+}
+
+html[data-ai-note-android-app="true"] [data-android-app-shell] {
+  min-height: 100dvh;
+  background: var(--hej-color-background-canvas);
+}
+
+html[data-ai-note-android-app="true"] [data-android-navigation-root] {
+  z-index: 40;
+  background: color-mix(in srgb, var(--hej-color-background-navigation) 94%, transparent);
+}
+
+html[data-ai-note-android-app="true"] [data-android-compact-navigation],
+html[data-ai-note-android-app="true"] [data-android-expanded-navigation] {
+  display: none;
+}
+
+html[data-ai-note-android-app="true"] [data-android-navigation-item] {
+  color: var(--hej-color-text-secondary);
+  -webkit-tap-highlight-color: transparent;
+}
+
+html[data-ai-note-android-app="true"] [data-android-navigation-icon] {
+  display: grid;
+  width: 42px;
+  height: 28px;
+  place-items: center;
+  border-radius: 999px;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+html[data-ai-note-android-app="true"] [data-android-navigation-icon] svg {
+  width: 22px;
+  height: 22px;
+}
+
+html[data-ai-note-android-app="true"] [data-android-navigation-label] {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+html[data-ai-note-android-app="true"] [data-android-navigation-item][aria-current="page"] {
+  color: var(--hej-color-text-primary);
+}
+
+html[data-ai-note-android-app="true"] [data-android-navigation-item][aria-current="page"] [data-android-navigation-icon] {
+  color: var(--hej-color-action-primary);
+  background: var(--hej-color-background-subtle);
+}
+
+html[data-ai-note-android-app="true"] .android-app-drawer {
+  display: flex !important;
+}
+
+html[data-ai-note-android-app="true"] #app-content,
+html[data-ai-note-android-app="true"] [data-android-adaptive-workspace],
+html[data-ai-note-android-app="true"] [data-android-pane] {
+  min-width: 0;
+  max-width: 100%;
+}
+
+html[data-ai-note-android-app="true"] main#main {
+  width: 100%;
+  max-width: none;
+  padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+}
+
+html[data-ai-note-android-app="true"] [data-android-home],
+html[data-ai-note-android-app="true"] [data-android-home-primary],
+html[data-ai-note-android-app="true"] [data-android-home-secondary] {
+  min-width: 0;
+}
+
+html[data-ai-note-android-app="true"] [data-android-recorder] {
+  border-radius: var(--android-app-surface-radius);
+  box-shadow: 0 1px 2px rgba(16, 16, 14, 0.05), 0 8px 28px -22px rgba(16, 16, 14, 0.42);
+}
+
+html[data-ai-note-android-app="true"] [data-android-recorder-action] {
+  min-height: 56px;
+  border-radius: 999px;
+}
+
+html[data-ai-note-android-app="true"] main#main > header h1 {
+  font-size: 28px;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+html[data-ai-note-android-app="true"] [data-android-pane="controls"] {
+  border-radius: var(--android-app-surface-radius);
+  box-shadow: 0 1px 2px rgba(16, 16, 14, 0.05), 0 8px 28px -22px rgba(16, 16, 14, 0.42);
+}
+
+html[data-ai-note-android-app="true"] [data-android-pane="controls"] select {
+  min-height: 52px;
+  border-radius: 12px;
+  background: var(--hej-color-background-surface);
+}
+
+html[data-ai-note-android-app="true"] [data-android-primary-action],
+html[data-ai-note-android-app="true"] [data-android-secondary-action],
+html[data-ai-note-android-app="true"] [data-floating-primary] {
+  min-height: 56px;
+  border-radius: 999px;
+  font-size: 15px !important;
+}
+
+html[data-ai-note-android-app="true"] [data-android-pane="transcript"] {
+  min-height: 320px;
+  border-radius: var(--android-app-surface-radius);
+  background: var(--hej-color-background-surface);
+}
+
+html[data-ai-note-android-app="true"] [data-android-pane="transcript"] :where(th, td, p) {
+  overflow-wrap: anywhere;
+}
+
+html[data-ai-note-android-app="true"] [data-floating-primary] {
+  width: min(100%, 480px);
+  justify-content: center;
+}
+
+html[data-ai-note-android-app="true"] [data-floating-primary]:is(:focus-visible, :active) {
+  transform: none;
+}
+
+@media (max-width: 839px) {
+  html[data-ai-note-android-app="true"] [data-android-app-shell] {
+    display: flex;
+    flex-direction: column;
+  }
+
+  html[data-ai-note-android-app="true"] [data-android-navigation-root] {
+    position: sticky;
+    top: 0;
+    width: 100%;
+    border-right: 0;
+  }
+
+  html[data-ai-note-android-app="true"] [data-desktop-navigation] {
+    display: none !important;
+  }
+
+  html[data-ai-note-android-app="true"] [data-android-top-app-bar] {
+    min-height: 64px;
+    border-bottom: 1px solid var(--hej-color-border-default);
+    background: var(--hej-color-background-surface);
+  }
+
+  html[data-ai-note-android-app="true"] [data-android-compact-navigation] {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 60;
+    display: block !important;
+    min-height: 80px;
+    padding: 6px 8px max(6px, env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--hej-color-border-default);
+    background: color-mix(in srgb, var(--hej-color-background-surface) 96%, transparent);
+    box-shadow: 0 -8px 28px -26px rgba(16, 16, 14, 0.5);
+    backdrop-filter: blur(16px);
+  }
+
+  html[data-ai-note-android-app="true"] [data-android-compact-navigation] [data-android-navigation-destinations] {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    align-items: stretch;
+    gap: 2px;
+  }
+
+  html[data-ai-note-android-app="true"] [data-android-compact-navigation] [data-android-navigation-item] {
+    min-height: 66px;
+  }
+
+  html[data-ai-note-android-app="true"] [data-android-quick-actions] {
+    display: none;
+  }
+
+  html[data-ai-note-android-app="true"] [data-android-home-header] > p,
+  html[data-ai-note-android-app="true"] [data-android-home-quick-start] > div:first-child > p,
+  html[data-ai-note-android-app="true"] [data-android-recorder] > div:first-child p {
+    display: none;
+  }
+
+  html[data-ai-note-android-app="true"] [data-android-recorder] > div:first-child {
+    gap: 16px;
+  }
+
+  html[data-ai-note-android-app="true"] [data-android-recorder-action] {
+    width: 100%;
+  }
+}
+
+@media (max-width: 599px) {
+  html[data-ai-note-android-app="true"] main#main {
+    padding-left: var(--android-app-page-gutter);
+    padding-right: var(--android-app-page-gutter);
+    padding-top: 24px;
+  }
+
+  html[data-ai-note-android-app="true"] main#main > header {
+    margin-bottom: 24px;
+  }
+
+  html[data-ai-note-android-app="true"] [data-android-pane="controls"] {
+    position: static !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 20px;
+  }
+
+  html[data-ai-note-android-app="true"] [data-android-pane="controls"] [data-android-secondary-copy] {
+    display: none;
+  }
+
+  html[data-ai-note-android-app="true"] [data-android-pane="controls"] [data-android-primary-action],
+  html[data-ai-note-android-app="true"] [data-android-pane="controls"] [data-android-secondary-action] {
+    width: 100%;
+  }
+
+  html[data-ai-note-android-app="true"] [data-floating-primary] {
+    min-height: 56px;
+  }
+}
+
+@media (min-width: 600px) {
+  html[data-ai-note-android-app="true"] {
+    --android-app-page-gutter: 24px;
+  }
+}
+
+@media (min-width: 840px) {
+  html[data-ai-note-android-app="true"] {
+    --android-app-page-gutter: 28px;
+  }
+
+  html[data-ai-note-android-app="true"] [data-android-app-shell] {
+    display: flex;
+    height: 100dvh;
+    min-height: 0;
+    flex-direction: row;
+    overflow: hidden;
+  }
+
+  html[data-ai-note-android-app="true"] [data-android-navigation-root] {
+    position: relative;
+    width: 104px;
+    height: 100dvh;
+    min-height: 0;
+    overflow: visible;
+    border-right: 1px solid var(--hej-color-border-default);
+    border-bottom: 0;
+  }
+
+  html[data-ai-note-android-app="true"] [data-android-top-app-bar],
+  html[data-ai-note-android-app="true"] [data-desktop-navigation],
+  html[data-ai-note-android-app="true"] [data-android-compact-navigation] {
+    display: none !important;
+  }
+
+  html[data-ai-note-android-app="true"] [data-android-expanded-navigation] {
+    display: block !important;
+    height: 100%;
+    padding: 16px 10px;
+  }
+
+  html[data-ai-note-android-app="true"] [data-android-expanded-navigation] [data-android-navigation-destinations] {
+    display: flex;
+    height: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  html[data-ai-note-android-app="true"] [data-android-expanded-navigation] [data-android-navigation-item] {
+    min-height: 68px;
+    padding: 6px 2px;
+  }
+
+  html[data-ai-note-android-app="true"] [data-android-expanded-navigation] [data-android-navigation-item]:last-child {
+    margin-top: auto;
+  }
+
+  html[data-ai-note-android-app="true"] #app-content {
+    height: 100dvh;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  html[data-ai-note-android-app="true"] main#main {
+    padding-bottom: 40px;
+  }
+
+  html[data-ai-note-android-app="true"] main[data-android-home] {
+    display: grid;
+    width: min(100%, 1280px);
+    margin-inline: auto;
+    padding: 32px;
+    grid-template-columns: minmax(340px, 0.82fr) minmax(0, 1.18fr);
+    align-items: start;
+    gap: 24px;
+  }
+
+  html[data-ai-note-android-app="true"] [data-android-home-header] {
+    grid-column: 1 / -1;
+    margin-bottom: 0;
+  }
+
+  html[data-ai-note-android-app="true"] [data-android-home-primary] {
+    grid-column: 1;
+  }
+
+  html[data-ai-note-android-app="true"] [data-android-home-secondary] {
+    grid-column: 2;
+  }
+
+  html[data-ai-note-android-app="true"] [data-android-quick-actions] {
+    grid-template-columns: 1fr;
+  }
+
+  html[data-ai-note-android-app="true"] [data-android-quick-action] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    align-items: center;
+    column-gap: 16px;
+    border-radius: 20px;
+  }
+
+  html[data-ai-note-android-app="true"] [data-android-quick-action] > p {
+    grid-column: 1;
+  }
+
+  html[data-ai-note-android-app="true"] [data-android-quick-action] > a {
+    min-width: 76px;
+    grid-column: 2;
+    grid-row: 1 / 3;
+    margin-top: 0;
+  }
+
+  html[data-ai-note-android-app="true"] [data-android-recorder] > div:first-child {
+    flex-direction: column;
+  }
+
+  html[data-ai-note-android-app="true"] [data-android-recorder-action] {
+    width: 100%;
+  }
+
+  html[data-ai-note-android-app="true"] [data-android-adaptive-workspace] {
+    display: grid;
+    grid-template-columns: minmax(320px, 0.82fr) minmax(0, 1.38fr);
+    align-items: start;
+    gap: 24px;
+  }
+
+  html[data-ai-note-android-app="true"] [data-android-pane="controls"] {
+    position: sticky !important;
+    top: 80px !important;
+    z-index: 10;
+    max-height: calc(100dvh - 104px) !important;
+    overflow-y: auto !important;
+  }
+
+  html[data-ai-note-android-app="true"] [data-android-pane="controls"] > div:first-child > div:nth-child(2) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  html[data-ai-note-android-app="true"] [data-android-pane="transcript"] {
+    min-height: 560px;
+    max-height: calc(100dvh - 104px);
+  }
+
+  html[data-ai-note-android-app="true"] [data-floating-primary-safe-space] {
+    display: none;
+  }
+
+  html[data-ai-note-android-app="true"] [data-android-full-span] {
+    grid-column: 1 / -1;
+  }
 }

@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "description": "세 사람이 모두 발화하는 일본어 Zoom 대담 첫 60초 구간 검증 세트",
+  "silenceMs": 2000,
+  "sources": [
+    {
+      "id": "japanese-remote-three-speakers-first-minute",
+      "url": "https://www.youtube.com/watch?v=z57Zvpitwg4",
+      "title": "カルカル リモート配信～プロデューサーZOOMトーク",
+      "file": "02-japanese-remote-three-speakers-first-minute.m4a",
+      "language": "ja",
+      "start": "05:00",
+      "end": "06:00",
+      "expectedMinSpeakers": 3,
+      "expectedMaxSpeakers": 3,
+      "expectedMinSupportedSpeakers": 3,
+      "expectedMaxSupportedSpeakers": 3
+    }
+  ]
+}

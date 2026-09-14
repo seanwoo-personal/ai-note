@@ -10,7 +10,7 @@ import { translateUi } from "@/lib/i18n";
 
 // 단어 관리(단어장) editor. Two tabs — 일반 용어(terms) and 교정쌍(corrections) —
 // edited in local state and saved together with one explicit "저장" button (app
-// convention; no autosave). Fed to the LLM correction step, not whisper STT.
+// convention; no autosave). Fed to the LLM transcript-correction step.
 //
 // Load/save are fail-closed: an initial GET failure is a distinct `load_error`, never
 // an empty glossary, so a replace-style save cannot silently wipe the stored file.

@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">헤이홈 AI 노트</string>
+    <string name="load_error_title">AI 노트를 불러오지 못했습니다</string>
+    <string name="load_error_message">인터넷 연결을 확인한 뒤 다시 시도해 주세요.</string>
+    <string name="retry">다시 시도</string>
+    <string name="blocked_link">안전하지 않은 링크를 차단했습니다.</string>
+    <string name="operator_screen_unavailable">안드로이드 앱에서는 고객 로그인만 지원합니다.</string>
+    <string name="external_app_unavailable">이 링크를 열 수 있는 앱이 없습니다.</string>
+    <string name="download_started">파일 다운로드를 시작했습니다.</string>
+    <string name="download_failed">파일을 다운로드하지 못했습니다.</string>
+</resources>

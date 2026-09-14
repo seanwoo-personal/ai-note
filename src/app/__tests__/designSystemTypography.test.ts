@@ -107,4 +107,17 @@ describe("Hejhome typography assets", () => {
     expect(navigation).not.toContain("ring-action");
     expect(navigation).toContain("before:ring-accent");
   });
+
+  it("defines locale-aware wrapping without splitting ordinary Korean UI words", () => {
+    const css = read("src/app/globals.css").toString("utf8");
+    const guide = read("docs/UI_GUIDE.md").toString("utf8");
+
+    expect(css).toContain("overflow-wrap: break-word");
+    expect(css).toContain("hyphens: none");
+    expect(css).toMatch(/html:lang\(ko\)\s+body\s*\{[^}]*word-break:\s*keep-all/su);
+    expect(css).toMatch(/html:lang\((?:ja|zh)\)[^{]*body[^{]*\{[^}]*line-break:\s*strict/su);
+    expect(guide).toContain("단어 중간에서 끊지 않는다");
+    expect(guide).toContain("URL·이메일·인증 키");
+    expect(guide).toContain("수동 `<br>`");
+  });
 });

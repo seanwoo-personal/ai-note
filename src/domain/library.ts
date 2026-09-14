@@ -124,7 +124,7 @@ function addCustomIssue(
   ctx.addIssue({ code: "custom", message, path });
 }
 
-export const libraryDocumentSchema = z
+const libraryDocumentSchema = z
   .object({
     schemaVersion: z.literal(LIBRARY_SCHEMA_VERSION),
     libraryId: uuidSchema,
@@ -376,7 +376,7 @@ const summarizeAttemptSchema = z
     }
   });
 
-export const statusJsonSchema = z
+const statusJsonSchema = z
   .object({
     id: meetingIdSchema,
     title: z.string(),
@@ -433,14 +433,6 @@ export function parseStatusJsonText(text: string, expectedMeetingId?: string): S
     throw new Error("status_json_malformed");
   }
   return parseStatusJson(input, expectedMeetingId);
-}
-
-export function mergeStatusJson(
-  current: StatusJson,
-  patch: Partial<StatusJson> & Record<string, unknown>,
-  expectedMeetingId = current.id,
-): StatusJson {
-  return parseStatusJson({ ...current, ...patch }, expectedMeetingId);
 }
 
 export type MeetingRecordEntryKind =
@@ -581,7 +573,3 @@ export function countMeetingRecords(
   }
   return counts;
 }
-
-// Exported for scanner inventory/contract tests. Every filesystem scanner must
-// produce MeetingRecordObservation and call this exact classifier.
-export const MEETING_RECORD_CLASSIFIER_CONTRACT = "classifyMeetingRecord:v1" as const;

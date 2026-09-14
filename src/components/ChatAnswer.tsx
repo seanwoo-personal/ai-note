@@ -48,7 +48,7 @@ function answerBlocks(segments: ChatResponse["answerSegments"]): AnswerBlock[] {
   return blocks;
 }
 
-export function answerCopyText(answer: ChatResponse): string {
+function answerCopyText(answer: ChatResponse): string {
   const lines = answer.answerSegments.map((segment) => {
     const markers = segment.kind === "claim"
       ? segment.referenceNumbers.map((number) => `[${number}]`).join("")

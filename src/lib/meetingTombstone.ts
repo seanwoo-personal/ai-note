@@ -93,7 +93,7 @@ export function meetingTombstonesRoot(root = defaultDataRoot()): string {
   return join(root, "meeting-tombstones");
 }
 
-export function meetingTombstonePath(meetingId: string, root = defaultDataRoot()): string {
+function meetingTombstonePath(meetingId: string, root = defaultDataRoot()): string {
   return join(meetingTombstonesRoot(root), `${assertSafeId(meetingId)}.json`);
 }
 

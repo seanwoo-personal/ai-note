@@ -45,7 +45,7 @@ function isValidTimezone(timezone: unknown): timezone is string {
   }
 }
 
-export function localUserProfileDefaults(): UserProfileDefaults {
+function localUserProfileDefaults(): UserProfileDefaults {
   try {
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     if (isValidTimezone(timezone)) {

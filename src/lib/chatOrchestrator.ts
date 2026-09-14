@@ -7,7 +7,6 @@ import {
   type ChatHistoryItem,
   type ChatRequest,
   type ChatResponse,
-  type ChatToolCall,
   type ChatToolResult,
   type ChatWarning,
   type ModelAnswerSegment,
@@ -450,12 +449,4 @@ export async function runChat(
   ownWarnings.add("budget_exhausted");
   const snapshot = tools.snapshot();
   return noEvidenceResponse(snapshot, new Set([...snapshot.warnings, ...ownWarnings]));
-}
-
-export function isChatModelEnvelope(input: unknown): input is ModelChatEnvelope {
-  return modelChatEnvelopeSchema.safeParse(input).success;
-}
-
-export function isChatToolCall(input: unknown): input is ChatToolCall {
-  return modelChatEnvelopeSchema.safeParse({ type: "tool_calls", toolCalls: [input] }).success;
 }

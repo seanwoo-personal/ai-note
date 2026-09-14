@@ -1029,11 +1029,3 @@ export function chatToolErrorResult(
     budgetExhausted: code === "budget_exhausted" || code === "aggregate_budget_exhausted",
   });
 }
-
-export function isChatToolName(value: string): value is typeof CHAT_TOOL_NAMES[number] {
-  return (CHAT_TOOL_NAMES as readonly string[]).includes(value);
-}
-
-export function isChatWarning(value: string): value is ChatWarning {
-  return (CHAT_WARNING_CODES as readonly string[]).includes(value);
-}

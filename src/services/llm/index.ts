@@ -30,7 +30,6 @@ export async function getConfiguredAdapter(): Promise<LlmAdapter | null> {
   return settings ? getAdapter(settings) : null;
 }
 
-export { LLM_PROVIDERS } from "@/services/llm/types";
 export type {
   LlmAdapter,
   LlmHealth,

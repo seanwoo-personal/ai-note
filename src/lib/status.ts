@@ -2,14 +2,12 @@ import { constants, existsSync, readFileSync } from "node:fs";
 import {
   lstat,
   open,
-  readdir,
   realpath,
 } from "node:fs/promises";
 import { relative } from "node:path";
 
 import type { MeetingStatus, StatusJson } from "@/domain/meeting";
 import { parseStatusJson } from "@/domain/library";
-import { isSafeId } from "@/lib/meetingId";
 import { startMeetingCleanupSweep } from "@/lib/meetingCleanup";
 import { inspectMeetingTombstone } from "@/lib/meetingTombstone";
 import { dataRoot, meetingPaths, meetingsRoot } from "@/lib/paths";
@@ -227,20 +225,3 @@ export function deriveStatus(id: string, persisted: StatusJson): { status: Statu
   return { status: s, changed };
 }
 
-export async function listMeetingIds(): Promise<string[]> {
-  try {
-    const entries = await readdir(meetingsRoot(), { withFileTypes: true });
-    const candidates = entries
-      .filter((e) => e.isDirectory())
-      .map((e) => e.name)
-      .filter((name) => isSafeId(name) && existsSync(meetingPaths(name).status));
-    const visible: string[] = [];
-    for (const id of candidates) {
-      if ((await inspectMeetingTombstone(id)).state === "none") visible.push(id);
-    }
-    return visible;
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
-    throw err;
-  }
-}

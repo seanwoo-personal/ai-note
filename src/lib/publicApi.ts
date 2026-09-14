@@ -198,7 +198,7 @@ const publicMeetingSchema = z.object({
 
 export type PublicContentOperation = "initial" | "transcript" | "summary";
 
-export function contentOperationForStatus(
+function contentOperationForStatus(
   status: StatusJson,
 ): PublicContentOperation | null {
   const kind = status.summarizeAttempt?.kind;

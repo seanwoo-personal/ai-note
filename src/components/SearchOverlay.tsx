@@ -127,7 +127,7 @@ export interface MeetingSearch {
   replay(replay: NonNullable<ChatResponse["searchReplay"]>): void;
 }
 
-export function useMeetingSearch(): MeetingSearch {
+function useMeetingSearch(): MeetingSearch {
   const libraryState = useOptionalLibrary();
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<SearchFilterDraft>(EMPTY_FILTERS);
@@ -258,7 +258,7 @@ export function useMeetingSearch(): MeetingSearch {
   };
 }
 
-export function SearchPanel({
+function SearchPanel({
   search,
   inputRef,
 }: {

@@ -28,7 +28,7 @@ async function responseMessage(response: Response): Promise<string> {
   return body?.error?.message ?? "요청을 처리하지 못했습니다. 잠시 뒤 다시 시도해 주세요.";
 }
 
-export function LoginLanguageSwitcher() {
+function LoginLanguageSwitcher() {
   const preferences = useOptionalAppPreferences();
   const locale = preferences?.locale === "en" || preferences?.locale === "ko" ? preferences.locale : "ja";
   return (

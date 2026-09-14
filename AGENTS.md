@@ -21,7 +21,7 @@ flowchart LR
 - Next.js 15 (App Router) · TypeScript strict · Tailwind CSS
 - 전사: Soniox `stt-async-v5`와 `stt-rt-v5`; 생성형 AI: OpenRouter 작업별 저비용 모델 체인
 - 테스트: Vitest(+ RTL/jsdom component test) + 고정 버전 Playwright/Chromium synthetic browser 회귀. Chrome DevTools MCP는 선택적 정성 검토 전용이며 자동 gate가 아니다(ADR 0020).
-- 저장: 로컬 파일(`data/meetings/{id}/`) — DB 없음.
+- 저장: 로컬 파일(계정별 `data/tenants/{sha256}/meetings/{id}/`, 레거시 단일 사용자 루트는 `data/meetings/{id}/`) — DB 없음.
 
 ## 설치 (Installation)
 
@@ -51,6 +51,7 @@ flowchart LR
 - **TDD**: 새 기능은 테스트 먼저 작성 → 통과하는 구현.
 - **원본 불가침**: `audio.webm`·`raw.md`·`segments.json`은 생성 후 수정 금지. `transcript.md`·`summary.json`만 재생성·수동 수정 가능한 파생물이다.
 - **원자적·내구 쓰기**: 모든 아티팩트는 temp 파일 → file `fsync` → `rename` → parent-directory `fsync`로 쓴다. `rename`이 논리적 commit 지점이며 결과는 `not_committed | committed_durable | committed_best_effort | committed_durability_pending`으로 구분한다. rename 뒤 sync 실패를 rollback하거나 미커밋으로 오인하지 않는다(ADR 0011).
+- **계정별 데이터 루트**: 고객 데이터는 `data/tenants/{sha256(accountId)}` 아래에만 쓴다. 계정은 세션 쿠키에서만 결정하고(`middleware.ts`가 주입한 `x-vision-account-id`), 스트리밍 `finalize`는 헤더를 무시하고 세션을 재조회해 `runWithAccountTenantData()` 안에서 실행한다. 새 route/worker는 `dataRoot()`·`meetingPaths()`만 사용하고 `process.cwd()/data`를 직접 조합하지 않는다. `data/settings.json`·`data/system/`만 서버 전역이다.
 - **파일 소유권(단일 writer)**: `status.json`=app-api만, `data/library.json`=library repository만, `raw.md`/`segments.json`=Soniox 전사 publisher만, `transcript.md`/`summary.json`=app summarize publisher만, `meeting-tombstones/`=app lifecycle만. 남의 파일을 쓰지 않는다. Workspace/folder/placement는 중앙 registry metadata이며 `data/meetings/{id}/` 경로는 이동하지 않는다. 사용자 지정 제목은 `status.json.titleOverride`, 참석자는 `status.json.review`의 전용 app-api surface가 소유하며 summary editor가 `title`/`topicSlug`/`summary.participants`를 수정하지 않는다(ADR 0008, 0021, 0022).
 - **영구 삭제 fence**: 회의 삭제는 `meeting-tombstones/{id}.json` durable rename을 logical commit으로 삼는다. Tombstone은 live directory보다 우선하며 모든 reader/writer/worker/scanner가 재생성을 fail-closed해야 한다. Malformed/unreadable/symlink marker는 임의 복구하지 말 것. Placement·deterministic trash·late producer orphan은 operation→artifact write lease 순서의 lazy sweep으로 정리하고 tombstone은 영구 보존한다(ADR 0015).
 - **원자 finalize**: request body 전에 hidden `.finalize-{id}` intent를 durable create-exclusive하고, audio+initial status+immutable receipt를 staging에서 완성한 뒤 directory rename으로 publish한다. Published same-ID retry는 body를 읽거나 `audio.webm`을 덮지 않고 receipt 기반 probe/recovery를 수행한다. Placement pending/unavailable은 generic default reconcile에서 defer하며 post-publish remux·placement·dispatch 실패는 artifact commit을 되돌리지 않는다(ADR 0016).

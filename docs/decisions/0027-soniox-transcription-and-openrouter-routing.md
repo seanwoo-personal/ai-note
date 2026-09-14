@@ -18,4 +18,4 @@
 - Python·`uv`·로컬 Whisper 모델·별도 Whisper HTTP 프로세스가 런타임과 설치에서 제거된다.
 - 인터넷 연결은 필수다. 회의 오디오는 Soniox로, 전사 문맥은 활성화된 OpenRouter 모델 제공자로 전송된다.
 - 고객 테스트 배포는 Docker 앱과 HTTPS 터널만 필요하다.
-- 현재 filesystem 데이터는 tenant partition이 아니므로 원격 인스턴스 하나에는 한 고객사만 승인한다(ADR 0026).
+- Filesystem 데이터는 계정별 `data/tenants/{sha256}` 루트로 분리되지만 상용 멀티테넌시는 아니므로 테스트 인스턴스에는 계약된 고객사만 승인한다(ADR 0026, 2026-09-14 갱신).

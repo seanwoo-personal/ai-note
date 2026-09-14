@@ -5,6 +5,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+- **보안**: 스트리밍 `POST /api/meetings/{id}/finalize`가 클라이언트가 보낸 `x-vision-account-id` 헤더로 다른 계정 테넌트에 쓰거나 probe할 수 있던 결함을 닫음. 세션 쿠키만 계정 근거로 사용하고 요청 전체를 `runWithAccountTenantData()` 안에서 실행. 로컬(non-cloud) 모드에서 finalize가 레거시 `data/`에 쓰던 불일치도 함께 해소.
+- **정리**: 미사용 release-notes 화면 모듈(`ReleaseNotes.tsx`, `releaseNotes*.ts`)과 `atomicStream.ts`, 사용처 없는 export·`concurrently` devDependency 제거. 로컬 Whisper venv 흔적과 python gitignore 항목 삭제.
+- **테스트**: finalize 테넌트 경계·guard 헤더 무시·워커 테넌트 순회 회귀 추가. finalizeAtomic의 전사 publisher lease 경합과 E2E 포커스 인벤토리의 지연 마운트 경합 해소.
+- **문서**: 계정별 데이터 루트 계약을 ARCHITECTURE/AGENTS/README/AWS 안내에 통일하고 ADR 0023·0026·0027 갱신 기록 추가. 사라진 `bootstrap.mjs`/`app:*` 명령과 "Google ID token" 서술 제거.
+- 이 항목들은 다음 제품 버전 확정 시 아래 원장에 편입한다. 1.17.0 이후 병합된 Vision 리브랜드·글로벌 미팅 번역·고객 준비 작업도 아직 버전 번호가 없다.
+
 ## Product version ledger
 
 제품 소유자가 지정한 기준에 따라 최초 AI NOTE 오픈소스를 제품 버전 `1.0`으로 정규화합니다. 이후 문서·병합·테스트 전용 커밋이 아니라 사용자에게 전달되는 기능 묶음마다 버전을 올립니다. 현재 제품 버전은 `1.17.0`입니다.

@@ -41,3 +41,7 @@ First-use는 요약 모델 준비를 recorder 앞에서 비차단으로 안내�
 - 반복 검증: repository-owned synthetic Playwright first-run scenario와 `desktop-1440`, `mobile-390`, `mobile-320` evidence.
 
 Ingress·loopback egress/DTO는 ADR [0012](0012-local-ingress-and-fixed-id-service-boundary.md), durable transcription identity와 raw-last completion은 ADR [0014](0014-durable-transcription-dispatch.md), finalize publication/probe는 ADR [0016](0016-atomic-finalize-directory-publication.md), deterministic browser evidence와 Chrome DevTools MCP 경계는 ADR [0020](0020-deterministic-synthetic-browser-verification.md)을 그대로 따른다. 이 결정은 네 ADR을 재작성하거나 대체하지 않는다.
+
+## 갱신 (2026-09-14)
+
+`scripts/bootstrap.mjs`와 `npm run bootstrap/app:start/app:status/app:stop`, `.ai-note-runtime/` background supervisor는 ADR 0027의 Soniox/OpenRouter 전환과 함께 제거됐다. 현재 정본은 `npm ci` → `.env.local` 작성 → `npm run setup` → `npm run dev`(로컬)와 `docker compose up -d --build`(클라우드)이며 `AGENTS.md`·`README.md`가 이를 소유한다. 설치 target 정책, first-run readiness UX, 전사 재시도 계약은 그대로 유효하다.

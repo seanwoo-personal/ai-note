@@ -35,7 +35,14 @@ fixtures/              # 테스트 픽스처(커밋): raw.md, summary happy/fall
 - 로컬 Next 서버는 `127.0.0.1`에만 bind한다. 고객 테스트는 multi-stage Docker 이미지에서 non-root 사용자로 실행하고 host의 `127.0.0.1:3000`에만 publish한다.
 - 외부 접속은 Cloudflare Quick Tunnel의 임시 HTTPS origin을 사용한다. 안정된 도메인을 연결하면 `APP_ORIGIN`을 정확한 HTTPS origin으로 고정한다.
 - `SONIOX_API_KEY`, `OPENROUTER_API_KEY`, `AI_NOTE_SMTP_PASSWORD` 등 외부 자격증명은 gitignored 환경 파일에서만 주입하고 build 시점에는 요구하지 않는다. 비밀번호 복구 메일은 `AI_NOTE_SMTP_*`를 핸들러 안에서 지연 로드하고 TLS 1.2 이상 SMTP만 허용한다. 테스트는 fake provider·fake mail만 사용한다.
-- 원격 테스트는 tenant partition 전 단계이므로 서버 하나에 고객사 한 곳만 승인한다(ADR 0026). Soniox/OpenRouter 전환은 ADR [0027](decisions/0027-soniox-transcription-and-openrouter-routing.md)을 따른다.
+- 승인된 고객 계정마다 데이터 루트를 `data/tenants/{sha256(accountId)}`로 분리한다(아래 "계정별 데이터 루트"). 파일 기반 단일 서버는 고객 테스트용이며 상용 멀티테넌시가 아니다(ADR 0026). Soniox/OpenRouter 전환은 ADR [0027](decisions/0027-soniox-transcription-and-openrouter-routing.md)을 따른다.
+
+## 계정별 데이터 루트 (tenant data root)
+
+- `dataRoot()`는 요청별 `AsyncLocalStorage` 컨텍스트의 테넌트 루트를 우선하고, 컨텍스트가 없을 때만 레거시 `data/`를 돌려준다(`src/lib/tenantDataContext.ts`, `src/lib/paths.ts`). 회의·`library.json`·`glossary.json`·`user-profile.json`·`knowledge/`·`meeting-tombstones/`는 모두 이 루트 아래에 있다. `data/settings.json`(요약 모델 설정, 비밀 없음)과 `data/system/`(계정·세션·사용량·감사)만 서버 전역이다.
+- 계정 식별의 유일한 근거는 세션 쿠키다. `middleware.ts`가 세션에서 `x-vision-account-id`를 **덮어써** 주입하고 `guardLocalApiRequest()`가 그 값으로 컨텍스트를 연다. 스트리밍 업로드인 `POST /api/meetings/{id}/finalize`만 middleware가 헤더를 건드리지 않으므로 guard는 이 경로에서 헤더를 무시하고, route가 세션을 다시 조회해 `runWithAccountTenantData()` 안에서 전체 처리를 실행한다. 세션 없이 계정 헤더만 온 finalize 요청은 401이다. 세션도 헤더도 없는 non-cloud 직접 호출(단위 테스트)만 레거시 루트를 쓴다.
+- 백그라운드 요약 워커는 `data/tenants/*`를 순회하며 각 루트를 자신의 컨텍스트로 감싸 실행하고, 테넌트가 하나라도 있으면 레거시 `data/meetings`는 더 이상 자동 요약하지 않는다. 전사 모니터는 dispatch를 시작한 요청 컨텍스트를 그대로 상속한다.
+- 회귀: `src/app/api/__tests__/finalizeTenantBoundary.test.ts`, `src/lib/__tests__/localRequestGuard.test.ts`(account identity header), `src/lib/__tests__/summarizeWorkerTenants.test.ts`, `src/lib/__tests__/tenantDataContext.test.ts`.
 
 ## 프로세스 & 데이터 흐름
 
@@ -181,7 +188,7 @@ Surviving claim의 meeting은 첫 등장 순서로 `1..N` 번호를 서버가 �
 - Unsafe method는 non-null Origin의 scheme/hostname/port가 request와 exact match해야 한다. `localhost`↔`127.0.0.1` alias 교차도 허용하지 않고 forwarded header/CORS를 신뢰하지 않는다.
 - JSON route는 `application/json` + optional UTF-8 charset, declared/streamed raw-byte cap, schema별 unknown-field 정책을 적용한다.
 - Public meeting DTO는 lifecycle/title/review/progress만 allowlist한다. Absolute path, Soniox 원격 ID/dispatch, attempt, future internal field와 raw fs/provider output은 static error mapper에서 제거한다. 모든 data response는 `Cache-Control:no-store`다.
-- Android USB 개발 연결은 `POST /api/realtime/android-temporary-key`만 로그인 예외로 두며, loopback Host·Origin guard를 그대로 적용한다. 이 경로는 development 서버에서만 single-use Soniox 키를 발급하고 production에서는 항상 404로 닫힌다. 운영 Android 앱은 Google ID token을 검증하는 인증된 `/api/realtime/temporary-key` 경계를 사용한다.
+- Android USB 개발 연결은 `POST /api/realtime/android-temporary-key`만 로그인 예외로 두며, loopback Host·Origin guard를 그대로 적용한다. 이 경로는 development 서버에서만 single-use Soniox 키를 발급하고 production에서는 항상 404로 닫힌다. 운영 Android 앱(WebView)은 웹과 같은 고객 세션 쿠키로 인증된 `/api/realtime/temporary-key` 경계를 사용하며 별도의 Android 전용 서버 분기는 없다.
 
 모든 쓰기는 **temp→file fsync→rename→parent-directory fsync** 순서다. `rename`이 논리적 commit 지점이며 generic FileOps는 `not_committed`, `committed_durable`, `committed_best_effort`(directory sync가 알려진 미지원), `committed_durability_pending`(지원 환경의 일시 sync 실패)을 구분한다. Post-rename 실패는 canonical을 rollback하거나 blind replay하지 않는다. Central registry mutation은 absolute `library.json` path process queue와 `libraryId+revision` 낙관적 token을 함께 사용한다(ADR 0011).
 

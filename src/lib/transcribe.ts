@@ -47,6 +47,13 @@ export function resetTranscriptionMonitorsForTests(): void {
   globalThis.__aiNoteTranscriptionMonitors = { jobs: new Map() };
 }
 
+/** Wait for every in-flight background monitor (they swallow their own errors). */
+export async function awaitTranscriptionMonitorsForTests(): Promise<void> {
+  while (monitors().jobs.size > 0) {
+    await Promise.all(monitors().jobs.values());
+  }
+}
+
 function acceptedDurability(
   durability: "none" | "durable" | "best_effort" | "pending",
 ): "durable" | "best_effort" {

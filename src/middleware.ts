@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
-import { classifyAccountRoute } from "@/lib/accountAccessPolicy";
+import { classifyAccountRoute, isStreamingFinalizePath } from "@/lib/accountAccessPolicy";
 import { resolveRequestSession } from "@/lib/accountSession";
 
 export const runtime = "nodejs";
@@ -43,8 +43,8 @@ export async function middleware(request: NextRequest) {
     // Passing an overridden request through Next middleware clones the request.
     // A raw audio upload is consumed as a stream in the route and must retain
     // sole ownership of its body; the route resolves the authenticated session
-    // again to establish its tenant data context.
-    if (/^\/api\/meetings\/[^/]+\/finalize$/u.test(request.nextUrl.pathname)) {
+    // again to establish its tenant data context and ignores identity headers.
+    if (isStreamingFinalizePath(request.nextUrl.pathname)) {
       return NextResponse.next();
     }
     const headers = new Headers(request.headers);

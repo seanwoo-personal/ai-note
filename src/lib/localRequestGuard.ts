@@ -2,6 +2,7 @@ import {
   publicErrorResponse,
   type PublicErrorCode,
 } from "@/lib/publicApi";
+import { isStreamingFinalizePath } from "@/lib/accountAccessPolicy";
 import { activateAccountTenantData } from "@/lib/tenantDataContext";
 
 export const DATA_SURFACE_INVENTORY = [
@@ -206,6 +207,10 @@ export function validateLocalRequest(
 export function guardLocalApiRequest(request: Request): Response | null {
   const result = validateLocalRequest(request, "api");
   if (!result.ok) return publicErrorResponse(result.code, result.status);
+  // Middleware overwrites this header from the session for every data route
+  // except the streaming finalize upload, where a client-supplied value would
+  // reach the route unchanged. That route derives identity from the session.
+  if (isStreamingFinalizePath(new URL(request.url).pathname)) return null;
   const accountId = request.headers.get("x-vision-account-id");
   if (accountId) {
     try {

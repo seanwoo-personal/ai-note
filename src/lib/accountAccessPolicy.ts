@@ -22,6 +22,16 @@ const PUBLIC_EXACT = new Set([
   "/api/admin/operators/accept",
 ]);
 
+// The raw audio upload is consumed as a stream inside the route, so middleware
+// cannot rewrite its headers (an overridden request is cloned). The route
+// re-resolves the session itself and every layer must ignore identity headers
+// on this path.
+const STREAMING_FINALIZE_PATH = /^\/api\/meetings\/[^/]+\/finalize$/u;
+
+export function isStreamingFinalizePath(pathname: string): boolean {
+  return STREAMING_FINALIZE_PATH.test(pathname);
+}
+
 export function classifyAccountRoute(pathname: string): AccountRouteKind {
   if (
     pathname.startsWith("/_next/")

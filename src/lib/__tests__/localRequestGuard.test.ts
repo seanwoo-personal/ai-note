@@ -355,3 +355,39 @@ describe("data-surface inventory", () => {
     }
   });
 });
+
+describe("account identity header", () => {
+  const ACCOUNT = "181e8f1f-80d5-464d-83c1-e7ad416f90e3";
+
+  it("activates the middleware-injected account tenant for ordinary data routes", async () => {
+    const { accountTenantDataRoot, activeTenantDataRoot, baseDataRoot, runWithTenantDataRoot } =
+      await import("@/lib/tenantDataContext");
+    runWithTenantDataRoot(baseDataRoot(), () => {
+      const denied = guardLocalApiRequest(request("/api/meetings", {
+        headers: { "x-vision-account-id": ACCOUNT },
+      }));
+      expect(denied).toBeNull();
+      expect(activeTenantDataRoot()).toBe(accountTenantDataRoot(ACCOUNT));
+    });
+  });
+
+  it("never trusts the header on the streaming finalize route, which middleware cannot rewrite", async () => {
+    const { activeTenantDataRoot, baseDataRoot, runWithTenantDataRoot } =
+      await import("@/lib/tenantDataContext");
+    runWithTenantDataRoot(baseDataRoot(), () => {
+      const denied = guardLocalApiRequest(request("/api/meetings/meeting-1/finalize", {
+        method: "POST",
+        headers: { origin: BASE, "x-vision-account-id": ACCOUNT },
+      }));
+      expect(denied).toBeNull();
+      expect(activeTenantDataRoot()).toBe(baseDataRoot());
+    });
+  });
+
+  it("rejects a malformed account header instead of falling back to the shared root", () => {
+    const denied = guardLocalApiRequest(request("/api/meetings", {
+      headers: { "x-vision-account-id": "../escape" },
+    }));
+    expect(denied?.status).toBe(401);
+  });
+});

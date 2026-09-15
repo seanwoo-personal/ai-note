@@ -33,3 +33,7 @@
 - 계정·보안: `src/lib/accountStore.ts` · `src/lib/passwordSecurity.ts` · `src/lib/totp.ts` · `src/lib/accountSession.ts`
 - 화면: `src/components/CustomerAccessForms.tsx` · `src/components/AdminAccessForms.tsx` · `src/components/AdminConsole.tsx` · `src/components/AccountSummary.tsx`
 - 회귀: `src/lib/__tests__/accountAuth.test.ts` · `src/lib/__tests__/accountAccessPolicy.test.ts` · `e2e/account-access.spec.ts`
+
+## 갱신 (2026-09-14)
+
+"원격 배포 전에 반드시 교체할 경계" 중 첫 항목은 구현됐다. 회의·라이브러리·검색 인덱스·프로필·단어장은 `data/tenants/{sha256(accountId)}` 루트로 분리되며 모든 데이터 API·페이지가 세션에서 계정을 결정한다(`docs/ARCHITECTURE.md` "계정별 데이터 루트"). 같은 날 스트리밍 `finalize` 경로가 클라이언트가 보낸 `x-vision-account-id` 헤더를 신뢰하던 결함을 닫았다(세션 재조회 + `runWithAccountTenantData`). `data/system/auth.json`의 공유 트랜잭션 저장소 전환, 결제 provider webhook, 조직 권한·감사 로그는 여전히 후속 범위이므로 이 결정의 "상용 멀티테넌시 아님" 결론과 테스트 인스턴스 운영 원칙은 유지한다.

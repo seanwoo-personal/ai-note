@@ -5,7 +5,7 @@ export const REQUIRED_SYNTHETIC_VIEWPORTS = [
   "mobile-320",
 ] as const;
 
-export const SYNTHETIC_BROWSER_SMOKE_REQUIREMENT = "SYNTHETIC-BROWSER-SMOKE";
+const SYNTHETIC_BROWSER_SMOKE_REQUIREMENT = "SYNTHETIC-BROWSER-SMOKE";
 
 interface AnnotationLike {
   type: string;

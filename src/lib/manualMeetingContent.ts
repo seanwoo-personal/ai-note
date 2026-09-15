@@ -33,7 +33,7 @@ import {
   type SummarizePublisherOptions,
 } from "@/lib/summarizePublisher";
 
-export const MAX_MANUAL_TRANSCRIPT_BYTES = 1024 * 1024;
+const MAX_MANUAL_TRANSCRIPT_BYTES = 1024 * 1024;
 
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/u);
 

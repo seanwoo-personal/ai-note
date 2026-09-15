@@ -671,7 +671,7 @@ async function safeMeetingDirectory(root: string, meetingId: string): Promise<"r
  * last, so the summary completion-marker hash plus current summarizeAttempt is
  * sufficient to reject an old card without re-reading every transcript.
  */
-export async function readSearchKnowledgeCard(
+async function readSearchKnowledgeCard(
   meetingId: string,
   root = defaultDataRoot(),
 ): Promise<SearchKnowledgeCardReadResult> {

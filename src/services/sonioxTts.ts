@@ -5,8 +5,8 @@ const TERMINATION_TIMEOUT_MS = 30_000;
 // Soniox documents a provider-side speed range of 0.7–1.3. Product speeds
 // above 1.3 remain available by synthesizing at 1.3 and accelerating the PCM
 // playback locally; the API itself must never receive 1.5 or 2.
-export const MIN_SONIOX_TTS_SPEED = 0.7;
-export const MAX_SONIOX_TTS_SPEED = 1.3;
+const MIN_SONIOX_TTS_SPEED = 0.7;
+const MAX_SONIOX_TTS_SPEED = 1.3;
 export const SONIOX_TTS_SPEED_OPTIONS = [0.8, 1, 1.2, 1.5, 2] as const;
 const MIN_PRODUCT_TTS_SPEED = SONIOX_TTS_SPEED_OPTIONS[0];
 const MAX_PRODUCT_TTS_SPEED = SONIOX_TTS_SPEED_OPTIONS[SONIOX_TTS_SPEED_OPTIONS.length - 1];
@@ -66,7 +66,7 @@ function decodeBase64(value: string): Uint8Array {
 // byte-identical to the input, so short text still travels as one frame.
 const TEXT_CHUNK_MAX_CHARS = 180;
 
-export function chunkTextForSynthesis(text: string): string[] {
+function chunkTextForSynthesis(text: string): string[] {
   if (text.length <= TEXT_CHUNK_MAX_CHARS) return [text];
   const sentences = text.match(/[^.!?。！？]+[.!?。！？]*\s*/gu) ?? [text];
   const chunks: string[] = [];

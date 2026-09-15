@@ -29,7 +29,11 @@ import { jsonNoStore, publicErrorResponse, safeLog } from "@/lib/publicApi";
 import { recordRequestUsage } from "@/lib/accountUsage";
 import { resolveRequestSession } from "@/lib/accountSession";
 import { readStatus, updateStatus } from "@/lib/status";
-import { activateAccountTenantData } from "@/lib/tenantDataContext";
+import {
+  baseDataRoot,
+  runWithAccountTenantData,
+  runWithTenantDataRoot,
+} from "@/lib/tenantDataContext";
 import { enqueueTranscription } from "@/lib/transcribe";
 
 export const runtime = "nodejs";
@@ -197,20 +201,43 @@ function finalizeErrorResponse(error: unknown, id: string): Response {
   return publicErrorResponse("internal_error", 500, { meetingId: id });
 }
 
+type FinalizeIdentity =
+  | { denied: Response }
+  | { denied?: undefined; accountId: string | null };
+
+// Middleware passes this streaming route through without rewriting headers, so
+// the only trusted identity is the session cookie. A bare account header can
+// never be legitimate here. Without any identity the legacy single-user data
+// root remains available for direct (non-cloud) invocation, e.g. unit tests.
+async function resolveFinalizeIdentity(request: Request): Promise<FinalizeIdentity> {
+  const session = await resolveRequestSession(request, "customer");
+  if (session) return { accountId: session.account.id };
+  const forgedHeader = request.headers.get("x-vision-account-id") !== null;
+  if (forgedHeader || process.env.AI_NOTE_DEPLOYMENT_MODE === "cloud") {
+    return { denied: publicErrorResponse("authentication_required", 401) };
+  }
+  return { accountId: null };
+}
+
+type RouteContext = { params: Promise<{ id: string }> };
+
 // The deterministic staging record and immutable receipt make this endpoint a
 // same-ID finalize/probe operation. Once the final directory exists, replacement
 // request bodies are never observed.
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(request: Request, context: RouteContext) {
   const denied = guardLocalApiRequest(request);
   if (denied) return denied;
-  if (
-    process.env.AI_NOTE_DEPLOYMENT_MODE === "cloud"
-    && !request.headers.get("x-vision-account-id")
-  ) {
-    const session = await resolveRequestSession(request, "customer");
-    if (!session) return publicErrorResponse("authentication_required", 401);
-    activateAccountTenantData(session.account.id);
-  }
+  const identity = await resolveFinalizeIdentity(request);
+  if (identity.denied) return identity.denied;
+  // Run the whole upload inside an explicit data context so background work
+  // started here (transcription monitors) inherits the same tenant root and
+  // nothing leaks between requests.
+  return identity.accountId
+    ? runWithAccountTenantData(identity.accountId, () => finalizeInContext(request, context))
+    : runWithTenantDataRoot(baseDataRoot(), () => finalizeInContext(request, context));
+}
+
+async function finalizeInContext(request: Request, { params }: RouteContext): Promise<Response> {
   let id: string;
   try {
     id = assertSafeId((await params).id);

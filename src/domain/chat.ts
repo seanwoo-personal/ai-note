@@ -100,7 +100,7 @@ const nonEmptyMessageSchema = charBoundedString(CHAT_REQUEST_LIMITS.messageChars
   .refine((value) => value.trim().length > 0, "message must not be blank");
 const historyContentSchema = charBoundedString(CHAT_REQUEST_LIMITS.historyItemChars);
 
-export const chatHistoryReferenceSchema = z.object({
+const chatHistoryReferenceSchema = z.object({
   number: z.number().int().min(1).max(20),
   meetingId: safeMeetingIdSchema,
 }).strict();

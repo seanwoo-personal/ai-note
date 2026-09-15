@@ -1,8 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import {
-  constants,
-  type Stats,
-} from "node:fs";
+import { type Stats } from "node:fs";
 import {
   copyFile,
   lstat,
@@ -415,5 +412,3 @@ export async function retryNamespaceDurability(
 ): Promise<"durable" | "best_effort" | "pending"> {
   return (await syncNamespaces(directoryPaths, options)).durability;
 }
-
-export const NO_FOLLOW_OPEN_FLAGS = constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0);

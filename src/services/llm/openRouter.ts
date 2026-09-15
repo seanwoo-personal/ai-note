@@ -99,8 +99,3 @@ export class OpenRouterAdapter implements LlmAdapter {
     }
   }
 }
-
-export const OPENROUTER_MODEL_CHAINS = {
-  budget: BUDGET_MODELS,
-  quality: QUALITY_MODELS,
-} as const;

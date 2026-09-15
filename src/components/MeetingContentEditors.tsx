@@ -11,7 +11,7 @@ import {
 
 import { normalizeManualSummaryBody } from "@/lib/summaryBody";
 
-export const MAX_TRANSCRIPT_BYTES = 1024 * 1024;
+const MAX_TRANSCRIPT_BYTES = 1024 * 1024;
 export const MAX_SUMMARY_PATCH_BYTES = 512 * 1024;
 
 const FIELD_CLASS =

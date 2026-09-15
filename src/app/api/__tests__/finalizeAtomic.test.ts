@@ -20,6 +20,10 @@ import { resetMeetingLifecycleForTests } from "@/lib/meetingLifecycle";
 import { resetMeetingTombstoneStateForTests } from "@/lib/meetingTombstone";
 import { finalizeStagingPaths, libraryPath, meetingPaths } from "@/lib/paths";
 import { resetStatusUpdaterStateForTests } from "@/lib/statusUpdater";
+import {
+  awaitTranscriptionMonitorsForTests,
+  resetTranscriptionMonitorsForTests,
+} from "@/lib/transcribe";
 
 const ORIGIN = "http://127.0.0.1:3000";
 const ctx = (id: string) => ({ params: Promise.resolve({ id }) });
@@ -70,9 +74,13 @@ beforeEach(() => {
   resetMeetingLifecycleForTests();
   resetMeetingTombstoneStateForTests();
   resetStatusUpdaterStateForTests();
+  resetTranscriptionMonitorsForTests();
 });
 
-afterEach(() => {
+afterEach(async () => {
+  // The FAKE Soniox monitor publishes raw/segments under a short meeting lease
+  // after finalize responds; let it settle before the temp directory disappears.
+  await awaitTranscriptionMonitorsForTests();
   process.chdir(originalCwd);
   delete process.env.FAKE_FFMPEG;
   delete process.env.FAKE_SONIOX;
@@ -82,6 +90,7 @@ afterEach(() => {
   resetMeetingLifecycleForTests();
   resetMeetingTombstoneStateForTests();
   resetStatusUpdaterStateForTests();
+  resetTranscriptionMonitorsForTests();
   vi.unstubAllGlobals();
   rmSync(workDir, { recursive: true, force: true });
 });
@@ -339,6 +348,10 @@ describe("atomic finalize and placement", () => {
         throw new Error("placement recovery must use the immutable receipt");
       },
     });
+    // A same-ID retry races the background transcription publisher for the
+    // meeting operation lease; wait for that publication so the retry exercises
+    // placement recovery instead of a transient 409.
+    await awaitTranscriptionMonitorsForTests();
     const recovered = await finalizePOST(retry, ctx(id));
     expect(recovered.status).toBe(200);
     await expect(recovered.json()).resolves.toMatchObject({

@@ -10,7 +10,7 @@ const canonicalUuid = z.string()
   .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u);
 const sha256 = z.string().regex(/^[a-f0-9]{64}$/u);
 
-export const LIBRARY_RECOVERY_PHASES = [
+const LIBRARY_RECOVERY_PHASES = [
   "intent_created",
   "archive_published",
   "publish_published",

@@ -42,3 +42,15 @@ describe("account route policy", () => {
     expect(classifyAccountRoute("/favicon.ico")).toBe("asset");
   });
 });
+
+describe("streaming finalize path", () => {
+  it("matches only the raw audio finalize route that middleware passes through untouched", async () => {
+    const { isStreamingFinalizePath } = await import("@/lib/accountAccessPolicy");
+    expect(isStreamingFinalizePath("/api/meetings/meeting-1/finalize")).toBe(true);
+    expect(isStreamingFinalizePath("/api/meetings/550e8400-e29b-41d4-a716-446655440000/finalize")).toBe(true);
+    expect(isStreamingFinalizePath("/api/meetings/meeting-1/finalize/extra")).toBe(false);
+    expect(isStreamingFinalizePath("/api/meetings/meeting-1")).toBe(false);
+    expect(isStreamingFinalizePath("/api/meetings")).toBe(false);
+    expect(isStreamingFinalizePath("/api/meetings/a/b/finalize")).toBe(false);
+  });
+});

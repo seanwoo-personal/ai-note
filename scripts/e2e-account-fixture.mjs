@@ -7,8 +7,8 @@ import {
   resolveE2eSnapshotRoot,
 } from "./e2e-harness.mjs";
 
-export const E2E_CUSTOMER_EMAIL = "customer@example.jp";
-export const E2E_CUSTOMER_PASSWORD = "CustomerPass!2026";
+const E2E_CUSTOMER_EMAIL = "customer@example.jp";
+const E2E_CUSTOMER_PASSWORD = "CustomerPass!2026";
 
 export const E2E_CUSTOMER_ID = "e2e-approved-customer";
 const SESSION_TOKEN = "e2e-customer-session-token-with-sufficient-entropy-2026";

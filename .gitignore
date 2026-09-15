@@ -25,14 +25,8 @@ data/
 # user's personal glossary (may hold private domain terms); ship glossary.example.json only
 glossary.json
 
-# python whisper venv + caches + downloaded models
-.venv/
-whisper/.venv/
-__pycache__/
-*.pyc
+# local tool caches
 .cache/
-**/huggingface/
-**/mlx_models/
 
 # audio artifacts (never commit real recordings)
 *.webm

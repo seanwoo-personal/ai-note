@@ -6,7 +6,7 @@ import type { Glossary } from "@/domain/glossary";
 // fixes STT errors without changing meaning; the summary step emits one JSON object
 // that summarizeCore validates against summarySchema.
 
-export const SUMMARY_SCHEMA_HINT =
+const SUMMARY_SCHEMA_HINT =
   '{"title":"회의 제목(한국어)","topicSlug":"english-kebab-core-topic","oneLine":"한 줄 요약","purpose":"이 회의의 목적/안건","participants":["이름"],"highlights":["핵심 논의 불릿"],"discussion":["논의 상세 불릿"],"decisions":["결정사항"],"actionItems":[{"owner":"담당자","task":"할 일","due":"기한"}],"risks":["리스크/이슈"],"followups":["후속 확인/티켓 제안"]}';
 
 // Canonical correction-rule strings. Kept as named constants so the drift-guard
@@ -21,11 +21,11 @@ export const CORRECTION_RULES = {
 } as const;
 
 // terms → comma-joined string; corrections → "from→to, from→to" string.
-export function formatTerms(terms: string[]): string {
+function formatTerms(terms: string[]): string {
   return terms.join(", ");
 }
 
-export function formatCorrections(corrections: { from: string; to: string }[]): string {
+function formatCorrections(corrections: { from: string; to: string }[]): string {
   return corrections.map((c) => `${c.from}→${c.to}`).join(", ");
 }
 

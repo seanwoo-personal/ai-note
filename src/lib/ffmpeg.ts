@@ -23,7 +23,7 @@ const FFMPEG_NOT_FOUND =
   "Windows: `choco install ffmpeg` (or download from ffmpeg.org). " +
   "It is required to remux the recording.";
 
-export function ffmpegPath(): string {
+function ffmpegPath(): string {
   const fromEnv = process.env.FFMPEG_PATH;
   if (fromEnv && existsSync(fromEnv)) return fromEnv;
   for (const candidate of FFMPEG_CANDIDATES) {

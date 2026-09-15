@@ -3,7 +3,7 @@ import { z } from "zod";
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/u);
 const stringList = z.array(z.string());
 
-export const actionItemSearchMetadataSchema = z.object({
+const actionItemSearchMetadataSchema = z.object({
   owner: z.string(),
   task: z.string(),
   due: z.string(),
@@ -24,7 +24,7 @@ export const knowledgeCardSchema = z.object({
   mentionedPeople: stringList,
 }).strict();
 
-export const corpusCardProjectionSchema = z.object({
+const corpusCardProjectionSchema = z.object({
   meetingId: z.string().min(1),
   oneLine: z.string(),
   purpose: z.string(),
@@ -38,9 +38,9 @@ export const corpusMapSchema = z.object({
   cards: z.array(corpusCardProjectionSchema),
 }).strict();
 
-export const KNOWLEDGE_INDEX_READ_MODES = ["missing", "ready", "stale", "corrupt", "io_error"] as const;
-export const KNOWLEDGE_INDEX_STATES = ["ready", "partial", "unavailable"] as const;
-export const KNOWLEDGE_INDEX_REASONS = ["missing", "stale", "corrupt", "io_error"] as const;
+const KNOWLEDGE_INDEX_READ_MODES = ["missing", "ready", "stale", "corrupt", "io_error"] as const;
+const KNOWLEDGE_INDEX_STATES = ["ready", "partial", "unavailable"] as const;
+const KNOWLEDGE_INDEX_REASONS = ["missing", "stale", "corrupt", "io_error"] as const;
 
 export const knowledgeIndexStatusSchema = z.object({
   internalMode: z.enum(KNOWLEDGE_INDEX_READ_MODES),

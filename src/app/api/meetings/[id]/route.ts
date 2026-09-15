@@ -58,7 +58,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 // DELETE /api/meetings/[id] — permanently remove the whole meeting folder. Refused
 // while a summarize holds the lock (it would re-create status.json under us).
 // Deletion is rename-then-rm: the folder is first renamed to a "."-prefixed trash
-// name (isSafeId rejects leading dots → listMeetingIds excludes it) so a slow or
+// name (isSafeId rejects leading dots → library scanners exclude it) so a slow or
 // partial rm never leaves a half-deleted meeting visible in the list.
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const denied = guardLocalApiRequest(request);

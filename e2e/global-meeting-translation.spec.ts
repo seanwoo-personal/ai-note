@@ -441,6 +441,15 @@ async function auditFocusedControl(page: Page) {
   });
 }
 
+// The desktop rail mounts the account summary (with its 로그아웃 button) only
+// after /api/auth/session resolves. The focus inventory is a one-shot DOM
+// snapshot, so wait for that late control before auditing or Tab can reach an
+// uninventoried button.
+async function awaitShellControls(page: Page, projectName: string) {
+  if (projectName !== "desktop-1440") return;
+  await expect(page.getByRole("button", { name: "로그아웃" })).toBeVisible();
+}
+
 async function auditStateFocus(page: Page, state: string) {
   const scrollState = await page.evaluate(() => ({
     windowX: window.scrollX,
@@ -910,6 +919,7 @@ test.describe("Global Meeting translation — real browser", () => {
       await page.goto(LIVE_URL);
       await page.evaluate((nextTheme) => { document.documentElement.dataset.theme = nextTheme; }, theme);
       await expect(page.getByTestId("global-meeting-controls")).toBeVisible();
+      await awaitShellControls(page, testInfo.project.name);
 
       const states: Array<Awaited<ReturnType<typeof auditStateFocus>> | Awaited<ReturnType<typeof auditFloatingPrimaryFocus>>> = [];
       await inFlowStart(page).scrollIntoViewIfNeeded();

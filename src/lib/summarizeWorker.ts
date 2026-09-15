@@ -67,6 +67,20 @@ export async function resolveLatestSummarizable(): Promise<string | null> {
   return (await findSummarizeCandidates())[0] ?? null;
 }
 
+// One poll pass: every account tenant root is visited inside its own data
+// context. The legacy single-user root is only scanned while no tenant exists.
+export async function runSummarizeTick(): Promise<void> {
+  const tenantRoots = await listTenantDataRoots();
+  const roots = tenantRoots.length > 0 ? tenantRoots : [baseDataRoot()];
+  for (const root of roots) {
+    await runWithTenantDataRoot(root, async () => {
+      for (const id of await findSummarizeCandidates()) {
+        await runSummarize(id);
+      }
+    });
+  }
+}
+
 // Guards against overlapping ticks when a summarize outlasts the interval.
 let running = false;
 
@@ -74,15 +88,7 @@ async function tick(): Promise<void> {
   if (running) return;
   running = true;
   try {
-    const tenantRoots = await listTenantDataRoots();
-    const roots = tenantRoots.length > 0 ? tenantRoots : [baseDataRoot()];
-    for (const root of roots) {
-      await runWithTenantDataRoot(root, async () => {
-        for (const id of await findSummarizeCandidates()) {
-          await runSummarize(id);
-        }
-      });
-    }
+    await runSummarizeTick();
   } catch {
     // Never let a poll error escape the interval and kill the timer.
   } finally {

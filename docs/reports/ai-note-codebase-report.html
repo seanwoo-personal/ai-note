@@ -1,0 +1,643 @@
+<title>AI NOTE 코드베이스 지도</title>
+<meta name="description" content="Vision AI 미팅 에이전트(AI NOTE) 저장소의 코드 구조·아키텍처, 코드 컨벤션, 파일 기반 데이터 아키텍처를 한 장으로 정리한 인수인계 보고서">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&family=Noto+Serif+KR:wght@600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --page: #FAF8F4; --panel: #FFFFFF; --soft: #F0EBE3; --chrome: #F4EFE8;
+    --ink: #2A2420; --ink-soft: #6B6158; --ink-faint: #8C8177;
+    --accent: #5B4A42; --accent-ink: #FAF8F4; --line: #E8E1D7; --line-strong: #D6CCBF;
+    --ok: #3F7A55; --ok-bg: #E4F0E7; --warn: #B4791F; --warn-bg: #FBF0DA; --err: #C0392B; --err-bg: #F8E3E0;
+    --code-bg: #F4EFE8; --shadow: 0 1px 2px rgba(42,36,32,.04), 0 8px 28px -12px rgba(42,36,32,.18);
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --page: #1C1815; --panel: #241F1B; --soft: #2C2622; --chrome: #221D19;
+      --ink: #F1EBE3; --ink-soft: #BDB2A6; --ink-faint: #8E8377;
+      --accent: #D9C3B2; --accent-ink: #1C1815; --line: #3A322C; --line-strong: #4A403A;
+      --ok: #7FC095; --ok-bg: #22352A; --warn: #E0AE58; --warn-bg: #3C2F18; --err: #EF8A7E; --err-bg: #43231F;
+      --code-bg: #2C2622; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 28px -12px rgba(0,0,0,.6);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --page: #1C1815; --panel: #241F1B; --soft: #2C2622; --chrome: #221D19;
+    --ink: #F1EBE3; --ink-soft: #BDB2A6; --ink-faint: #8E8377;
+    --accent: #D9C3B2; --accent-ink: #1C1815; --line: #3A322C; --line-strong: #4A403A;
+    --ok: #7FC095; --ok-bg: #22352A; --warn: #E0AE58; --warn-bg: #3C2F18; --err: #EF8A7E; --err-bg: #43231F;
+    --code-bg: #2C2622; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 28px -12px rgba(0,0,0,.6);
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--page); color: var(--ink);
+    font-family: "Noto Sans KR", Pretendard, -apple-system, "Apple SD Gothic Neo", system-ui, sans-serif;
+    font-size: 15px; line-height: 1.65; word-break: keep-all; overflow-wrap: break-word;
+    padding-block: 0 64px; padding-inline: 16px;
+  }
+  @media (min-width: 640px) { body { padding-inline: 24px; } }
+  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  code, pre, .mono { font-family: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace; }
+  code { background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; font-size: .88em; overflow-wrap: anywhere; }
+  pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; margin: 0; }
+  pre code { background: none; border: 0; padding: 0; font-size: inherit; }
+  h1, h2, h3, h4 { text-wrap: balance; line-height: 1.25; margin: 0; }
+  h1 { font-family: "Noto Serif KR", "Noto Sans KR", serif; font-weight: 700; font-size: clamp(28px, 4vw, 40px); letter-spacing: -.018em; }
+  h2 { font-size: 24px; font-weight: 800; letter-spacing: -.018em; }
+  h3 { font-size: 17px; font-weight: 700; }
+  h4 { font-size: 14px; font-weight: 700; color: var(--ink-soft); }
+  p { margin: 0; }
+  .eyebrow { font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-soft); font-weight: 700; }
+  .shell { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: 1fr; gap: 32px; }
+  @media (min-width: 980px) { .shell { grid-template-columns: 220px minmax(0, 1fr); align-items: start; } }
+  header.masthead { max-width: 1180px; margin: 0 auto; padding-block: 40px 28px; border-bottom: 1px solid var(--line); display: grid; gap: 14px; }
+  .masthead .meta { display: flex; flex-wrap: wrap; gap: 8px 18px; color: var(--ink-soft); font-size: 13px; }
+  .masthead .meta span b { color: var(--ink); font-weight: 600; }
+  nav.toc { position: sticky; top: 16px; display: none; }
+  @media (min-width: 980px) { nav.toc { display: block; } }
+  nav.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  nav.toc a { display: block; padding: 6px 10px; border-radius: 6px; color: var(--ink-soft); text-decoration: none; font-size: 13px; }
+  nav.toc a:hover { background: var(--soft); color: var(--ink); }
+  nav.toc .sub a { padding-left: 22px; font-size: 12.5px; }
+  main { min-width: 0; display: grid; gap: 56px; padding-top: 32px; }
+  section { display: grid; gap: 20px; scroll-margin-top: 16px; }
+  section > .lead { color: var(--ink-soft); max-width: 68ch; }
+  .prose { max-width: 70ch; display: grid; gap: 10px; }
+  .grid-2 { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  .grid-3 { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; display: grid; gap: 10px; align-content: start; }
+  .panel.lift { box-shadow: var(--shadow); }
+  .stat { display: grid; gap: 4px; }
+  .stat .n { font-size: 30px; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .stat .l { color: var(--ink-soft); font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+  th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+  th { background: var(--chrome); color: var(--ink-soft); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; font-weight: 700; white-space: nowrap; }
+  tr:last-child td { border-bottom: 0; }
+  td code { white-space: nowrap; }
+  .pill { display: inline-block; border-radius: 999px; padding: 1px 9px; font-size: 11.5px; font-weight: 700; letter-spacing: .02em; border: 1px solid transparent; white-space: nowrap; }
+  .pill.ok { background: var(--ok-bg); color: var(--ok); }
+  .pill.warn { background: var(--warn-bg); color: var(--warn); }
+  .pill.err { background: var(--err-bg); color: var(--err); }
+  .pill.neutral { background: var(--soft); color: var(--ink-soft); border-color: var(--line); }
+  .pill.accent { background: var(--accent); color: var(--accent-ink); }
+  ul.clean { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+  ul.clean li::marker { color: var(--ink-faint); }
+  .rule-list { display: grid; gap: 10px; }
+  .rule { display: grid; grid-template-columns: 24px minmax(0,1fr); gap: 10px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+  .rule .k { font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; font-size: 13px; padding-top: 2px; }
+  .rule .t { font-weight: 700; }
+  .rule .d { color: var(--ink-soft); font-size: 13.5px; margin-top: 2px; }
+  .diagram { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; overflow-x: auto; }
+  .diagram pre.mermaid { background: none; border: 0; padding: 0; text-align: center; }
+  .diagram figcaption { color: var(--ink-soft); font-size: 12.5px; margin-top: 8px; }
+  figure { margin: 0; }
+  .tree { font-size: 12.5px; line-height: 1.6; }
+  .tree .c { color: var(--ink-soft); }
+  .tree .w { color: var(--warn); }
+  .tree .o { color: var(--ok); }
+  .callout { border-left: 3px solid var(--accent); background: var(--chrome); padding: 12px 16px; border-radius: 0 10px 10px 0; color: var(--ink); }
+  .callout.warn { border-left-color: var(--warn); background: var(--warn-bg); }
+  .callout.err { border-left-color: var(--err); background: var(--err-bg); }
+  .kv { display: grid; grid-template-columns: max-content minmax(0,1fr); gap: 6px 14px; font-size: 13.5px; }
+  .kv dt { color: var(--ink-soft); font-weight: 600; }
+  .kv dd { margin: 0; }
+  .diff { display: grid; gap: 6px; font-size: 13.5px; }
+  .diff .row { display: grid; grid-template-columns: 22px minmax(0,1fr); gap: 8px; align-items: start; }
+  .diff .sym { font-family: "IBM Plex Mono", monospace; font-weight: 700; text-align: center; border-radius: 4px; }
+  .diff .add .sym { color: var(--ok); background: var(--ok-bg); }
+  .diff .del .sym { color: var(--err); background: var(--err-bg); }
+  .diff .mod .sym { color: var(--warn); background: var(--warn-bg); }
+  footer { max-width: 1180px; margin: 48px auto 0; color: var(--ink-soft); font-size: 12.5px; border-top: 1px solid var(--line); padding-top: 16px; }
+  @media (prefers-reduced-motion: no-preference) { nav.toc a { transition: background .15s ease; } }
+</style>
+
+<header class="masthead">
+  <p class="eyebrow">Vision AI 미팅 에이전트 · 저장소 인수인계 보고서</p>
+  <h1>AI NOTE 코드베이스 지도</h1>
+  <p style="color:var(--ink-soft);max-width:72ch">회의 녹음 → 클라우드 전사 → 교정·요약 → 열람·내보내기 흐름을 가진 Next.js 15 앱의 <b>코드 구조와 아키텍처</b>, <b>코드 컨벤션</b>, <b>파일 기반 데이터 아키텍처</b>를 새 작업자가 한 번에 읽도록 정리했습니다. 2026-09-14 정리 작업(보안 수정·미사용 코드 제거·문서 통일) 결과를 반영합니다.</p>
+  <div class="meta">
+    <span>기준 커밋 <b>f1701c2</b> + 워킹트리 변경</span>
+    <span>브랜치 <b>main</b> · push 대상 <b>origin</b>만</span>
+    <span>Node <b>≥ 20</b> · 로컬 <b>22.23.1</b></span>
+    <span>제품 버전 원장 <b>1.17.0</b> (Unreleased 항목 있음)</span>
+  </div>
+</header>
+
+<div class="shell">
+<nav class="toc" aria-label="목차">
+  <ol>
+    <li><a href="#summary">0. 한눈에 보기</a></li>
+    <li><a href="#architecture">1. 코드 구조 · 아키텍처</a></li>
+    <li class="sub"><a href="#layers">계층과 디렉터리</a></li>
+    <li class="sub"><a href="#request">요청 경계와 테넌트</a></li>
+    <li class="sub"><a href="#pipeline">회의 파이프라인</a></li>
+    <li class="sub"><a href="#routes">API 라우트 인벤토리</a></li>
+    <li class="sub"><a href="#client">클라이언트 셸</a></li>
+    <li><a href="#conventions">2. 코드 컨벤션</a></li>
+    <li><a href="#data">3. 데이터(DB) 아키텍처</a></li>
+    <li class="sub"><a href="#data-layout">디렉터리 레이아웃</a></li>
+    <li class="sub"><a href="#data-schemas">스키마</a></li>
+    <li class="sub"><a href="#data-durability">쓰기·잠금·내구성</a></li>
+    <li><a href="#cleanup">4. 이번 정리 내역</a></li>
+    <li><a href="#next">5. 남은 과제</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<section id="summary">
+  <p class="eyebrow">0</p>
+  <h2>한눈에 보기</h2>
+  <div class="grid-3">
+    <div class="panel"><div class="stat"><span class="n">54</span><span class="l">API 라우트 (모두 Node 런타임, guard 우선)</span></div></div>
+    <div class="panel"><div class="stat"><span class="n">17</span><span class="l">페이지 라우트 · (auth) 10 + (product) 7</span></div></div>
+    <div class="panel"><div class="stat"><span class="n">≈45k / 32k</span><span class="l">src 구현 LOC / 테스트 LOC</span></div></div>
+    <div class="panel"><div class="stat"><span class="n">151 · 1,562</span><span class="l">Vitest 파일 · 테스트 수 (정리 후)</span></div></div>
+    <div class="panel"><div class="stat"><span class="n">104</span><span class="l">Playwright 시나리오×뷰포트 (2 의도적 skip)</span></div></div>
+    <div class="panel"><div class="stat"><span class="n">0</span><span class="l">DB. 모든 상태는 <code>data/</code> 파일 + rename 커밋</span></div></div>
+  </div>
+  <div class="grid-2">
+    <div class="panel">
+      <h3>한 줄 정의</h3>
+      <p>승인형 고객 계정 뒤에 있는 회의 웹앱. 브라우저 녹음(마이크·탭 오디오) → Soniox 비동기/실시간 전사 → OpenRouter 작업별 모델 체인으로 교정·요약·번역 → 열람·수동 수정·검색·내보내기. Android 앱은 같은 웹을 감싼 WebView 셸.</p>
+    </div>
+    <div class="panel">
+      <h3>가장 먼저 알아야 할 5가지</h3>
+      <ul class="clean">
+        <li><b>원본 불가침</b>: <code>audio.webm</code>·<code>raw.md</code>·<code>segments.json</code>은 생성 후 수정 금지.</li>
+        <li><b>단일 writer</b>: 파일마다 쓰는 모듈이 하나. 남의 파일을 쓰지 않는다.</li>
+        <li><b>rename이 커밋</b>: temp → fsync → rename → 부모 디렉터리 fsync. 결과는 4가지 durability 상태.</li>
+        <li><b>계정별 데이터 루트</b>: 고객 데이터는 <code>data/tenants/{sha256(accountId)}</code>. 계정은 세션 쿠키에서만 결정.</li>
+        <li><b>TDD + FAKE</b>: 테스트 먼저, 외부 서비스는 <code>FAKE_SONIOX</code>/<code>FAKE_LLM</code>/<code>FAKE_FFMPEG</code>로만.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="architecture">
+  <p class="eyebrow">1</p>
+  <h2>코드 구조 · 전체 아키텍처</h2>
+  <p class="lead">Next.js 15 App Router 단일 앱. UI·API·백그라운드 워커가 한 프로세스에서 돌고, 외부 의존은 Soniox(전사·TTS)와 OpenRouter(생성형)뿐이다. 계층은 위에서 아래로만 의존한다.</p>
+
+  <h3 id="layers">계층과 디렉터리</h3>
+  <figure class="diagram">
+<pre class="mermaid">
+flowchart TB
+  subgraph Client["브라우저 · Android WebView"]
+    UI["src/components<br/>Recorder · LibraryProvider · MeetingDetailView · Global Meeting"]
+  end
+  subgraph Edge["src/middleware.ts"]
+    MW["세션 쿠키 검사 → x-vision-account-id 주입<br/>(finalize 스트림은 헤더 미수정·통과)"]
+  end
+  subgraph App["src/app"]
+    P["(auth) · (product) 페이지 RSC"]
+    R["api/** route.ts — Node runtime · force-dynamic"]
+  end
+  subgraph Lib["src/lib — 애플리케이션 규칙"]
+    G["localRequestGuard · tenantDataContext · paths"]
+    L["meetingLifecycle · artifactLease · statusUpdater · library"]
+    PUB["finalizeRecord · summarizePublisher · transcribe · knowledgeIndexRepository"]
+    W["summarizeWorker (instrumentation.ts가 기동)"]
+  end
+  subgraph Domain["src/domain — 순수 타입·FSM·zod"]
+    D["meeting · library · summarySchema · knowledge · chat"]
+  end
+  subgraph Services["src/services — 외부 래퍼"]
+    S1["sonioxAsync · sonioxRealtime · sonioxTts"]
+    S2["llm/openRouter (+ claudeCli·codexCli·ollama·fake)"]
+    S3["passwordRecoveryEmail (SMTP)"]
+  end
+  FS[("data/ — 파일 저장소")]
+  UI --> MW --> P & R
+  P & R --> G --> L --> PUB --> FS
+  W --> PUB
+  PUB --> S1 & S2
+  R --> S3
+  Lib --> D
+</pre>
+    <figcaption>의존 방향: app → lib → domain / services. domain은 무의존, services는 외부 HTTPS 호출만 소유하고 파일을 쓰지 않는다.</figcaption>
+  </figure>
+
+  <div class="table-wrap"><table>
+    <thead><tr><th>디렉터리</th><th>소유 책임</th><th>대표 모듈</th><th>규모</th></tr></thead>
+    <tbody>
+      <tr><td><code>src/app/</code></td><td>페이지·레이아웃·API 핸들러. 비즈니스 규칙을 두지 않고 lib에 위임</td><td><code>(product)/meetings/[id]/page.tsx</code>, <code>api/meetings/[id]/finalize/route.ts</code>, <code>layout.tsx</code></td><td>75 파일 (+23 테스트)</td></tr>
+      <tr><td><code>src/components/</code></td><td>클라이언트 UI. 세션·라이브러리 provider가 layout 수명으로 상태 소유</td><td><code>RecorderSessionProvider</code>, <code>LibraryProvider</code>, <code>MeetingDetailView</code>, <code>TestProductMeetingPanel</code>(글로벌 미팅), <code>AppDialog</code></td><td>48 (+34)</td></tr>
+      <tr><td><code>src/lib/</code></td><td>파일 I/O·잠금·발행·검색·계정. 앱의 실제 규칙이 사는 곳</td><td><code>durableFileOps</code>, <code>finalizeRecord</code>, <code>summarizePublisher</code>, <code>library</code>, <code>accountStore</code>, <code>tenantDataContext</code></td><td>83 (+63)</td></tr>
+      <tr><td><code>src/domain/</code></td><td>순수 타입·zod 스키마·FSM·순수 reducer/planner. 파일시스템을 열지 않음</td><td><code>meeting.ts</code>, <code>library.ts</code>, <code>summarySchema.ts</code>, <code>libraryRecoveryPlanner.ts</code></td><td>12 (+10)</td></tr>
+      <tr><td><code>src/services/</code></td><td>외부 서비스 래퍼. timeout·redirect 거부·opaque error 강제</td><td><code>sonioxAsync.ts</code>, <code>sonioxRealtime.ts</code>, <code>llm/openRouter.ts</code></td><td>13 (+12)</td></tr>
+      <tr><td><code>e2e/</code> · <code>scripts/</code></td><td>격리 Playwright 시나리오·runner, 설치 닥터, 링크 검사, 고객 가이드 생성기</td><td><code>run-e2e.mjs</code>, <code>e2e-server.mjs</code>, <code>setup.mjs</code>, <code>check-links.mjs</code></td><td>8 spec · 18 스크립트</td></tr>
+      <tr><td><code>android-app/</code></td><td>Kotlin WebView 셸. 신뢰 HTTPS 출처만, <code>/admin</code> 차단, 마이크 권한 중계</td><td><code>MainActivity.kt</code>, <code>TrustedUrlPolicy.kt</code>, <code>WebPermissionPolicy.kt</code></td><td>27 파일 · 9 단위 테스트</td></tr>
+      <tr><td><code>docs/</code> · <code>evals/</code></td><td>정본 계약(ARCHITECTURE/UI_GUIDE/PRD), ADR 0001–0027, 화자 분리 평가 manifest</td><td><code>docs/decisions/</code>, <code>evals/youtube-diarization-*.json</code></td><td>66 문서</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3 id="request">요청 경계와 계정별 테넌트</h3>
+  <div class="grid-2">
+    <figure class="diagram">
+<pre class="mermaid">
+sequenceDiagram
+  participant B as 브라우저
+  participant M as middleware
+  participant R as route.ts
+  participant G as guardLocalApiRequest
+  participant T as tenantDataContext
+  B->>M: 요청 + vision_customer_session 쿠키
+  M->>M: classifyAccountRoute → public/asset/customer/admin
+  alt 세션 없음
+    M-->>B: API 401 · 페이지 → /login
+  else 일반 데이터 라우트
+    M->>R: 헤더 x-vision-account-id = 세션 계정 (덮어쓰기)
+    R->>G: Host·Origin·Fetch Metadata 검증
+    G->>T: activateAccountTenantData(header)
+  else POST /api/meetings/{id}/finalize (스트림)
+    M->>R: 헤더 미수정 통과 (body 소유권 유지)
+    R->>G: 검증 (이 경로는 헤더 무시)
+    R->>R: resolveRequestSession(쿠키) → 없으면 401
+    R->>T: runWithAccountTenantData(session.id, 전체 처리)
+  end
+</pre>
+      <figcaption>계정 식별의 유일한 근거는 세션 쿠키. 2026-09-14 수정 전에는 finalize가 클라이언트 헤더를 신뢰했다.</figcaption>
+    </figure>
+    <div class="panel">
+      <h3>경계 규칙 요약</h3>
+      <dl class="kv">
+        <dt>Host</dt><dd>raw exact <code>127.0.0.1|localhost</code> + 포트. 클라우드는 HTTPS 터널 뒤 <code>APP_ORIGIN</code></dd>
+        <dt>Unsafe method</dt><dd>Origin이 요청 origin과 exact match. alias 교차·forwarded header 불신</dd>
+        <dt>Fetch Metadata</dt><dd>API는 <code>same-origin</code>만, 페이지 직접 탐색만 <code>none</code> 허용</dd>
+        <dt>JSON</dt><dd>exact content-type + raw byte cap + unknown-field 정책</dd>
+        <dt>Public DTO</dt><dd>path·job/dispatch ID·provider 원문·fs 오류 비노출. 모든 데이터 응답 <code>no-store</code></dd>
+        <dt>세션 쿠키</dt><dd><code>vision_customer_session</code> / <code>vision_admin_session</code> 분리, HttpOnly·Lax·Secure</dd>
+        <dt>테넌트 루트</dt><dd><code>data/tenants/{sha256(accountId)}</code>. 컨텍스트 없을 때만 레거시 <code>data/</code></dd>
+        <dt>전역 파일</dt><dd><code>data/settings.json</code>(요약 모델), <code>data/system/</code>(계정)</dd>
+      </dl>
+    </div>
+  </div>
+
+  <h3 id="pipeline">회의 파이프라인 (녹음 → 전사 → 교정·요약 → 파생 편집)</h3>
+  <figure class="diagram">
+<pre class="mermaid">
+flowchart LR
+  REC["Recorder<br/>MediaRecorder · Blob 보존"] -->|"POST finalize (stream)"| FIN["finalizeRecord<br/>intent → staging → dir rename"]
+  FIN -->|audio.webm · status.json · receipt| DIR[("data/…/meetings/{id}/")]
+  FIN -->|dispatch commit| TR["transcribe<br/>Soniox stt-async-v5"]
+  TR -->|"segments.json 먼저 · raw.md 마지막"| DIR
+  DIR -->|raw.md 존재| WK["summarizeWorker (5s poll, 테넌트별)"]
+  WK -->|initial| SUM["summarizeCore<br/>교정(budget chain) → 요약(quality chain)"]
+  SUM -->|full pair| PUB["summarizePublisher<br/>.summarize-{attempt}/ staging → transcript.md → summary.json"]
+  PUB --> DIR
+  PUB -->|fresh summary만| IDX["knowledgeIndexRepository<br/>knowledge-card.json · corpus-map.json"]
+  DIR --> VIEW["MeetingDetailView<br/>2탭 열람 · 수동 편집 · 재생성 · 내보내기"]
+  VIEW -->|"PATCH transcript / summary<br/>POST regenerate"| PUB
+  IDX --> SEARCH["GET /api/search · SearchOverlay"]
+</pre>
+    <figcaption>같은 회의의 쓰기는 <code>meetingLifecycle</code> operation lease로 직렬화된다. transcript 변경은 summary를 지우지 않고 <code>summaryOutdated</code>만 파생한다.</figcaption>
+  </figure>
+
+  <div class="grid-2">
+    <div class="panel">
+      <h3>실시간 경로 (글로벌 미팅 · 음성 입력)</h3>
+      <p><code>/live</code>는 서버가 60초 single-use Soniox 임시 키만 발급(<code>/api/realtime/temporary-key</code>)하고 브라우저가 WebSocket으로 <code>stt-rt-v5</code>에 직접 연결한다. 연결 상태는 <code>sonioxConnectionStore</code>가 소켓 이벤트로만 파생(폴링 아님). 번역·TTS는 <code>/api/translate</code>와 <code>sonioxTts</code>. 종료 시 대화록·회의록을 같은 finalize/publisher 계약으로 저장한다.</p>
+    </div>
+    <div class="panel">
+      <h3>백그라운드 작업</h3>
+      <ul class="clean">
+        <li><b>요약 워커</b>: <code>instrumentation.ts</code>가 기동, <code>runSummarizeTick()</code>이 <code>data/tenants/*</code>를 각 컨텍스트로 순회. <code>AI_NOTE_DISABLE_WORKER=1</code>로 비활성.</li>
+        <li><b>전사 모니터</b>: dispatch를 시작한 요청 컨텍스트를 상속. 재시작 뒤엔 상세 조회가 <code>resumeTranscription</code>으로 재개.</li>
+        <li><b>정리 sweep</b>: guarded 접근이 lazy start. tombstone·<code>.trash-{id}</code>·late orphan만 수거.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3 id="routes">API 라우트 인벤토리 (54)</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>그룹</th><th>라우트</th><th>메모</th></tr></thead>
+    <tbody>
+      <tr><td>고객 인증</td><td><code>auth/login</code> <code>auth/register</code> <code>auth/session</code> <code>auth/logout</code> <code>auth/password/forgot</code> <code>auth/password/change</code></td><td>forgot은 enumeration-safe 202 + 이메일별 rate limit. 임시 비밀번호는 30분·1회용</td></tr>
+      <tr><td>운영자</td><td><code>admin/bootstrap</code> <code>admin/login</code> <code>admin/logout</code> <code>admin/mfa-reset</code> <code>admin/operators/invite</code> <code>admin/operators/accept</code> <code>admin/customers/[id]</code> <code>admin/overview</code></td><td>공개 가입 없음. 최초 1회 bootstrap, 24h 1회용 초대, TOTP+복구 코드</td></tr>
+      <tr><td>회의</td><td><code>meetings</code> <code>meetings/[id]</code> <code>[id]/finalize</code> <code>[id]/audio</code> <code>[id]/content</code> <code>[id]/transcript</code> <code>[id]/transcript/regenerate</code> <code>[id]/summary</code> <code>[id]/summarize</code> <code>[id]/title</code> <code>[id]/review</code> <code>[id]/location</code> <code>[id]/export</code> <code>[id]/reveal</code> <code>[id]/session</code></td><td>guard → safe ID → tombstone fence → lease 순서 고정. audio는 Range 206/416</td></tr>
+      <tr><td>라이브러리</td><td><code>library</code> <code>library/rebuild</code> <code>library/reveal</code> <code>workspaces</code> <code>workspaces/[id]</code> <code>folders</code> <code>folders/[id]</code> <code>folders/[id]/parent</code> <code>folders/[id]/delete-preview</code> <code>organization-pending</code></td><td>mutation token <code>libraryId+revision</code>. 삭제는 preview→commit, artifact 보존</td></tr>
+      <tr><td>생성·전사</td><td><code>summarize</code> <code>transcribe</code> <code>summary-work</code> <code>translate</code></td><td>202 + durable attempt. FAKE 스텁으로 테스트</td></tr>
+      <tr><td>지식·검색·챗</td><td><code>search</code> <code>knowledge/reindex</code> <code>chat</code></td><td>chat UI는 <code>MEETING_ASSISTANT_ENABLED=false</code>로 dormant(ADR 0019), 라우트는 보존</td></tr>
+      <tr><td>설정·실시간</td><td><code>settings/llm</code> <code>settings/llm/health</code> <code>settings/llm/models</code> <code>settings/profile</code> <code>glossary</code> <code>realtime/temporary-key</code> <code>realtime/android-temporary-key</code></td><td>settings/llm은 고객 세션에 404. android 키는 production 404</td></tr>
+    </tbody>
+  </table></div>
+  <p class="callout">라우트 목록은 <code>DATA_SURFACE_INVENTORY</code>(<code>src/lib/localRequestGuard.ts</code>)가 정본이며, 테스트가 디스크의 모든 <code>route.ts</code>와 일치하는지·guard가 <code>await params</code>보다 앞서는지 검사한다. 라우트를 추가하면 인벤토리에도 등록해야 한다.</p>
+
+  <h3 id="client">클라이언트 셸</h3>
+  <div class="grid-3">
+    <div class="panel"><h4>Layout 수명 provider</h4><p><code>RecorderSessionProvider</code>가 녹음 lifecycle·Blob·navigation guard를, <code>LibraryProvider</code>가 registry 버전·bounded page cache(±2, 최대 5 page/500 entity)·generation epoch를 소유. route 컴포넌트는 view일 뿐.</p></div>
+    <div class="panel"><h4>Modal · navigation</h4><p><code>AppDialog</code>/<code>AppDrawer</code>만 native <code>&lt;dialog&gt;</code> top layer와 scroll lock을 소유. 모든 이동은 <code>GuardedLink</code>/<code>useGuardedRouter</code>를 지나 unsaved 녹음·편집을 보호.</p></div>
+    <div class="panel"><h4>i18n · 브랜드</h4><p>기본 <code>ja</code>, 표시 순서 <code>ja → en → ko</code>(<code>appPreferences.ts</code>). 카탈로그는 <code>src/lib/i18n/catalogs/*.json</code>(1,151 키). 브랜드 문자열은 <code>brand.ts</code> 단일 소스, 번역 제외.</p></div>
+  </div>
+</section>
+
+<section id="conventions">
+  <p class="eyebrow">2</p>
+  <h2>코드 컨벤션</h2>
+  <p class="lead">규칙의 우선순위는 <b>AGENTS.md → 아키텍처·ADR → 테스트로 고정된 계약 → 구현</b>이다. 아래는 코드에 실제로 강제되는 것(린트·테스트)과 문서로 합의된 것을 구분해 정리했다.</p>
+
+  <div class="grid-2">
+    <div class="panel">
+      <h3>도구로 강제되는 것</h3>
+      <dl class="kv">
+        <dt>TypeScript</dt><dd><code>strict</code>, <code>noEmit</code>, ES2022, <code>moduleResolution: bundler</code>, alias <code>@/* → src/*</code></dd>
+        <dt>ESLint</dt><dd>flat config, <code>typescript-eslint</code> recommended (미사용 변수 오류). <code>eslint .</code>만 사용, <code>next lint</code> 금지</dd>
+        <dt>Vitest</dt><dd>jsdom 기본, Node가 필요한 파일은 첫 줄 <code>// @vitest-environment node</code>. <code>globals: true</code>, RTL + jest-dom</dd>
+        <dt>Playwright</dt><dd>exact 1.61.1 고정. <code>npm run test:e2e</code>만 정본(임시 snapshot·FAKE·scrubbed env). <code>retries: 0</code>, <code>workers: 1</code></dd>
+        <dt>CI</dt><dd>Node 20: lint → typecheck → test → check:links → build. Node 22: doctor → E2E</dd>
+        <dt>커밋</dt><dd>Conventional Commits (<code>feat:</code> <code>fix:</code> <code>docs:</code> <code>refactor:</code> <code>chore:</code>). husky pre-push</dd>
+      </dl>
+    </div>
+    <div class="panel">
+      <h3>파일·이름 규칙</h3>
+      <ul class="clean">
+        <li>컴포넌트 <code>PascalCase.tsx</code>, hook <code>useX.ts</code>, lib/domain <code>camelCase.ts</code>. 테스트는 같은 폴더의 <code>__tests__/</code>에 co-locate.</li>
+        <li>테스트 전용 훅은 <code>resetXForTests()</code>/<code>awaitXForTests()</code> 접미사로 export. 프로덕션 코드가 호출하지 않는다.</li>
+        <li>내부에서만 쓰는 심볼은 export하지 않는다(2026-09 knip 정리 기준). 예외: throw되는 Error 클래스.</li>
+        <li>주석은 “왜”를 쓴다. 파일 머리에 모듈의 소유권과 불변식을 한 문단으로 둔다.</li>
+        <li>사용자 문구·문서는 한국어, 식별자·타입·로그 코드는 영어. 화면 문구에 provider·모델명 금지(ADR 0024).</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>API 라우트 작성 패턴</h3>
+  <div class="grid-2">
+<pre><code>// src/app/api/&lt;surface&gt;/route.ts
+export const runtime = "nodejs";          // edge 금지
+export const dynamic = "force-dynamic";   // data/ 읽는 라우트
+
+export async function POST(request: Request, { params }: RouteContext) {
+  const denied = guardLocalApiRequest(request);  // 1. 가장 먼저
+  if (denied) return denied;
+  const id = assertSafeId((await params).id);    // 2. params는 guard 뒤
+  const fenced = await meetingFenceResponse(id); // 3. tombstone fence
+  if (fenced) return fenced;
+  const body = await parseBoundedJsonBody(request, 8 * 1024); // 4. bounded JSON
+  const op = await tryAcquireMeetingOperation(id, "…");       // 5. lease
+  if (!op) return publicErrorResponse("meeting_conflict", 409);
+  try {
+    // … lib 호출. status.json은 updateStatus(id, op.ownerToken, …)
+    return jsonNoStore(toPublicMeeting(status));   // 6. allowlist DTO
+  } finally { op.release(); }
+}</code></pre>
+    <div class="rule-list">
+      <div class="rule"><span class="k">R1</span><div><div class="t">guard 먼저, side effect는 나중</div><div class="d">params·body·fs·network·spawn보다 <code>guardLocalApiRequest(request)</code>가 앞선다. 테스트가 소스 순서를 검사한다.</div></div></div>
+      <div class="rule"><span class="k">R2</span><div><div class="t">top-level <code>process.env</code> 금지</div><div class="d">키·모드는 핸들러 안에서 지연 조회. <code>next build</code>는 시크릿·data 없이 통과해야 한다(build-green).</div></div></div>
+      <div class="rule"><span class="k">R3</span><div><div class="t">오류는 static envelope</div><div class="d"><code>publicErrorResponse(code, status)</code>의 <code>{error:{code,message}}</code>만. raw Error·path·provider 본문을 응답·로그에 넣지 않는다(<code>safeLog</code>).</div></div></div>
+      <div class="rule"><span class="k">R4</span><div><div class="t">경로는 <code>paths.ts</code>만</div><div class="d"><code>meetingPaths(id)</code>·<code>libraryPath()</code>·<code>dataRoot()</code>를 쓰고 <code>process.cwd()/data</code>를 직접 조합하지 않는다. 테넌트 루트가 자동 적용된다.</div></div></div>
+      <div class="rule"><span class="k">R5</span><div><div class="t">잠금 순서 준수</div><div class="d"><code>meeting operation → artifact RW lease → status queue → library queue</code>. 거꾸로 잡지 않는다. read lease 안에서 mutation 금지.</div></div></div>
+    </div>
+  </div>
+
+  <h3>테스트 컨벤션</h3>
+  <div class="grid-3">
+    <div class="panel"><h4>TDD</h4><p>새 기능·버그 수정은 실패하는 테스트부터. 실패한 테스트를 완화·삭제하기 전에 원인과 재현을 먼저 확인한다.</p></div>
+    <div class="panel"><h4>격리</h4><p>파일 I/O 테스트는 <code>mkdtemp</code> + <code>process.chdir</code>로 임시 cwd를 잡고 <code>resetXForTests()</code>로 모듈 상태를 초기화한다. 외부 호출은 <code>FAKE_SONIOX=1</code> <code>FAKE_LLM=1</code> <code>FAKE_FFMPEG=1</code>.</p></div>
+    <div class="panel"><h4>계약 테스트</h4><p>라우트 인벤토리, 프롬프트 문구 드리프트, i18n 카탈로그 정렬, 고객 가이드의 provider명 부재처럼 “문서와 코드가 같은가”를 테스트로 고정한다.</p></div>
+  </div>
+
+  <h3>UI 컨벤션 (docs/UI_GUIDE.md 요약)</h3>
+  <div class="grid-2">
+    <div class="panel">
+      <ul class="clean">
+        <li>웜 베이지/브라운 팔레트(<code>#FAF8F4</code> 바탕, <code>#2A2420</code> 잉크, <code>#5B4A42</code> 액센트). 보라/그라데이션/글래스/글로우 금지.</li>
+        <li>상태는 색만이 아니라 아이콘+텍스트. 소형 텍스트에 <code>#9A8F84</code> 금지(대비).</li>
+        <li>독립 컨트롤은 44×44px 이상, <code>focus-visible</code> ring 분리. 같은 action group은 높이·radius·간격 통일.</li>
+        <li>한국어 <code>word-break: keep-all</code>, 일본어 <code>line-break: strict</code>. URL·키·이메일만 <code>break-all</code>.</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <ul class="clean">
+        <li>모달은 <code>AppDialog</code>/<code>AppDrawer</code>만. 파괴적 동작은 색 외에 “버리기/영구 삭제” 텍스트 필수, 취소가 initial focus.</li>
+        <li>오류 문장 순서: 무엇이 실패했는지 → 입력이 보존됐는지 → 다음 행동. raw path·ID·provider 출력 금지.</li>
+        <li>Android는 <code>data-ai-note-android-app</code> 속성으로 분기, 창 폭 기준 compact/medium/expanded(Material 3 Adaptive).</li>
+        <li>320 / 390 / 1440 뷰포트에서 가로 오버플로 0을 E2E로 검증.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="data">
+  <p class="eyebrow">3</p>
+  <h2>데이터(DB) 아키텍처</h2>
+  <p class="lead">데이터베이스는 없다. 모든 영속 상태는 <code>data/</code> 아래 JSON·Markdown·오디오 파일이며, <b>rename이 트랜잭션 커밋</b>이고 <b>파일마다 단일 writer</b>가 있다. 이 절은 “테이블”에 해당하는 파일과 그 관계를 DB 문서처럼 정리한 것이다.</p>
+
+  <h3 id="data-layout">디렉터리 레이아웃</h3>
+  <div class="grid-2">
+    <div class="panel">
+<pre class="tree"><code>data/                                <span class="c"># gitignored · Docker 볼륨 ai-note-data</span>
+├── settings.json                    <span class="c"># 전역 · LLM provider/model (비밀 없음)</span>
+├── system/                          <span class="c"># 전역 · 계정 제어</span>
+│   ├── auth.json                    <span class="c">#   accounts · sessions · invitations · usage · audit</span>
+│   └── server-secret                <span class="c">#   TOTP 비밀키 암호화 키</span>
+├── tenants/{sha256(accountId)}/     <span class="o"># 계정별 루트 (아래 구조 반복)</span>
+│   ├── library.json                 <span class="c">#   workspace/folder/placement registry v1</span>
+│   ├── glossary.json                <span class="c">#   {terms[], corrections[{from,to}]}</span>
+│   ├── user-profile.json            <span class="c">#   optional 개인화 v1</span>
+│   ├── knowledge/corpus-map.json    <span class="c">#   bounded 검색 projection (재생성 가능)</span>
+│   ├── meeting-tombstones/{id}.json <span class="c">#   영구 delete fence {id, deletedAt}</span>
+│   └── meetings/{id}/
+│       ├── status.json              <span class="c">#   lifecycle · dispatch · attempt · contentRevision</span>
+│       ├── audio.webm               <span class="w">#   원본 · 불변</span>
+│       ├── play.webm                <span class="c">#   ffmpeg remux (재생용)</span>
+│       ├── .finalize-receipt.json   <span class="c">#   immutable metadata · audio sha256 (probe 근거)</span>
+│       ├── segments.json            <span class="w">#   원본 · 불변 (Soniox 토큰→세그먼트)</span>
+│       ├── raw.md                   <span class="w">#   원본 · 불변 · 전사 completion marker</span>
+│       ├── transcript.md            <span class="c">#   파생 · 교정본 (T)</span>
+│       ├── summary.json             <span class="c">#   파생 · 요약 (S) · pair completion marker</span>
+│       ├── knowledge-card.json      <span class="c">#   검색 파생물 (source sha256 포함)</span>
+│       └── .summarize-{attemptId}/  <span class="c">#   pair 발행 staging (manifest · backup)</span>
+├── meetings/ · library.json · …     <span class="c"># 레거시 단일 사용자 루트 (컨텍스트 없을 때만)</span>
+└── meetings/.finalize-{id}/         <span class="c"># finalize staging (intent → audio → status)</span></code></pre>
+    </div>
+    <div class="panel">
+      <h3>단일 writer 소유권</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>파일</th><th>Writer</th></tr></thead>
+        <tbody>
+          <tr><td><code>status.json</code></td><td>app-api (<code>statusUpdater</code>, owner token 필요)</td></tr>
+          <tr><td><code>audio.webm</code> · <code>play.webm</code> · receipt</td><td><code>finalizeRecord</code> publisher</td></tr>
+          <tr><td><code>raw.md</code> · <code>segments.json</code></td><td>Soniox 전사 publisher (<code>transcribe.ts</code>)</td></tr>
+          <tr><td><code>transcript.md</code> + <code>summary.json</code></td><td><code>summarizePublisher</code>만, 항상 pair로</td></tr>
+          <tr><td><code>library.json</code></td><td>library repository (<code>lib/library.ts</code>) 프로세스 queue</td></tr>
+          <tr><td><code>meeting-tombstones/</code></td><td><code>meetingTombstone.ts</code> (app lifecycle)</td></tr>
+          <tr><td><code>knowledge-card.json</code> · <code>corpus-map.json</code></td><td><code>knowledgeIndexRepository</code></td></tr>
+          <tr><td><code>glossary.json</code> · <code>user-profile.json</code> · <code>settings.json</code></td><td>각 settings app-api</td></tr>
+          <tr><td><code>system/auth.json</code></td><td><code>accountStore</code> (root별 mutation queue)</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <h3 id="data-schemas">스키마와 관계</h3>
+  <figure class="diagram">
+<pre class="mermaid">
+erDiagram
+  ACCOUNT ||--o{ SESSION : "issues"
+  ACCOUNT ||--o{ USAGE : "records"
+  ACCOUNT ||--o| TENANT_ROOT : "sha256(id)"
+  TENANT_ROOT ||--|| LIBRARY : "library.json"
+  TENANT_ROOT ||--o{ MEETING : "meetings/{id}/"
+  TENANT_ROOT ||--o{ TOMBSTONE : "meeting-tombstones/"
+  LIBRARY ||--|{ WORKSPACE : "workspaces[]"
+  WORKSPACE ||--o{ FOLDER : "folders[] (depth ≤ 3)"
+  MEETING ||--o| PLACEMENT : "placements[] (≤ 1)"
+  PLACEMENT }o--|| WORKSPACE : "workspaceId"
+  PLACEMENT }o--o| FOLDER : "folderId | null"
+  MEETING ||--|| STATUS : "status.json"
+  MEETING ||--o| PAIR : "transcript.md + summary.json"
+  MEETING ||--o| KNOWLEDGE_CARD : "knowledge-card.json"
+  TOMBSTONE ||--|| MEETING : "fences (우선)"
+  ACCOUNT { string id PK "uuid"  string role "customer|operator|super_admin"  string email  string access "pending_approval|payment_required|active|blocked"  string billingStatus "unpaid|paid|overdue"  string plan "jpy|usd|null" }
+  SESSION { string tokenHash  string kind "customer|admin"  string expiresAt }
+  LIBRARY { string libraryId  int revision  string defaultWorkspaceId }
+  STATUS { string id PK  string status "recorded→transcribing→transcribed→summarizing→summarized"  string titleOverride  json transcriptionDispatch  json summarizeAttempt  json contentRevision }
+  PAIR { string transcriptSha256  string summarySha256  string basedOnTranscriptSha256 }
+</pre>
+    <figcaption>관계는 외래 키가 아니라 ID 문자열과 파일 존재로 표현된다. placement가 바뀌어도 <code>meetings/{id}/</code>는 이동하지 않는다.</figcaption>
+  </figure>
+
+  <div class="grid-2">
+    <figure class="diagram">
+<pre class="mermaid">
+stateDiagram-v2
+  [*] --> recording : 클라이언트 임시
+  recording --> recorded : finalize publish
+  recorded --> transcribing : dispatch commit
+  transcribing --> transcribed : raw.md (completion marker)
+  transcribed --> summarizing : summarizeAttempt commit
+  summarizing --> summarized : summary.json (completion marker)
+  summarized --> summarized : transcript/summary 재생성 · 수동 저장
+  note right of transcribing : 실패 → error{action:"retry_transcription"} · 상태 유지
+  note right of summarizing : 실패 → error{action:"retry_summary"}
+</pre>
+      <figcaption><code>status.status</code> FSM. 오류는 상태를 되돌리지 않고 <code>error{message,action}</code>만 세운다.</figcaption>
+    </figure>
+    <div class="panel">
+      <h3>핵심 문서 필드</h3>
+      <dl class="kv">
+        <dt><code>status.json</code></dt><dd><code>id</code>·<code>title</code>·<code>titleOverride?</code>·<code>status</code>·<code>error</code>·<code>startedAt/endedAt/durationMs</code>·<code>review.participants[]</code>·<code>transcriptionDispatch{dispatchId,state,remote*}</code>·<code>placementResolution{state,receiptHash}</code>·<code>summarizeAttempt{attemptId,kind,intendedContentRevision}</code>·<code>contentRevision{transcript,summary}</code>. 알 수 없는 top-level 필드는 보존. 디렉터리 ID ≠ status ID이면 corrupt.</dd>
+        <dt><code>summary.json</code></dt><dd><code>{title, topicSlug, oneLine, purpose, participants[], highlights[], discussion[], decisions[], actionItems[{owner,task,due}], risks[], followups[], body?}</code>. <code>body</code>가 있으면 편집 가능한 structured 필드는 모두 비어 있어야 함(dual truth 거부). <code>participants</code>는 항상 <code>[]</code>(참석자는 <code>status.review</code>).</dd>
+        <dt><code>library.json</code> v1</dt><dd><code>{schemaVersion:1, libraryId, revision, defaultWorkspaceId, workspaces[], folders[], placements[]}</code>. read mode <code>missing|ready|corrupt|unsupported_version|io_error</code>. corrupt에서만 fingerprint 확인형 rebuild.</dd>
+        <dt><code>auth.json</code></dt><dd><code>{version:1, accounts[], sessions[], invitations[], usage[], audit[]}</code>. 비밀번호 scrypt, TOTP 비밀키 암호화, 복구 코드 해시.</dd>
+        <dt><code>tombstone</code></dt><dd>strict <code>{id, deletedAt}</code>. malformed/symlink는 <code>delete_state_ambiguous</code>로 fail-closed, 자동 복구 금지.</dd>
+      </dl>
+    </div>
+  </div>
+
+  <h3 id="data-durability">쓰기 · 잠금 · 내구성</h3>
+  <div class="grid-3">
+    <div class="panel">
+      <h4>커밋 프로토콜</h4>
+      <p><code>durableFileOps</code>: temp 작성 → 파일 fsync → <b>rename(커밋)</b> → 부모 디렉터리 fsync. 결과 4상태 <code>not_committed</code> / <code>committed_durable</code> / <code>committed_best_effort</code>(디렉터리 sync 미지원 환경) / <code>committed_durability_pending</code>(일시 실패). rename 뒤 실패는 rollback하지 않는다.</p>
+    </div>
+    <div class="panel">
+      <h4>다단계 발행</h4>
+      <p><b>finalize</b>: hidden <code>.finalize-{id}/</code>에 intent(create-exclusive) → audio → status+receipt → 디렉터리 rename이 publish. <b>pair</b>: <code>.summarize-{attempt}/</code> manifest <code>prepared → preimage_durable → transcript_published → summary_published</code>. <b>전사</b>: segments 먼저, raw 마지막. <b>삭제</b>: tombstone rename이 logical delete, 물리 정리는 나중.</p>
+    </div>
+    <div class="panel">
+      <h4>잠금 계층</h4>
+      <p>① <code>meetingLifecycle</code> operation(회의당 exclusive, owner token) → ② <code>artifactLease</code> read/write(pair 소비자는 read, publisher·delete·cleanup은 write) → ③ status queue → ④ library queue(absolute path 기준 process-global) · corpus queue. 역순 획득 금지. 원격 폴링 중에는 lease를 잡지 않는다.</p>
+    </div>
+  </div>
+  <div class="grid-2">
+    <div class="panel">
+      <h4>파생 최신성 (freshness)</h4>
+      <p><code>contentRevision.summary.basedOnTranscriptSha256 !== contentRevision.transcript.sha256</code>이면 <code>summaryOutdated</code>. 저장 필드가 아니라 파생 값이다. 검색 카드·챗봇 근거는 outdated summary에 credit을 주지 않는다. revision 없는 legacy pair는 virtual fresh로 읽고 read가 write를 유발하지 않는다.</p>
+    </div>
+    <div class="panel">
+      <h4>복구 원칙</h4>
+      <p>재시작 뒤 attempt만 남으면 첫 pair read가 <code>summarize_reconcile</code>로 completed/resume/restore/interrupted/ambiguous를 판정한다. 모순된 hash·manifest는 덮어쓰지 않는다. corrupt registry는 원본을 private archive로 보존한 채 새 <code>libraryId</code>를 발급하고 클라이언트 generation epoch를 올린다. 백업은 <code>data/</code> 볼륨 전체를 대상으로 한다.</p>
+    </div>
+  </div>
+  <p class="callout warn"><b>운영 금지 목록</b>: <code>docker compose down -v</code>, <code>data/</code>·tombstone·볼륨 삭제, 회의 디렉터리 이동, 운영자·고객 계정 초기화, <code>git reset --hard</code>/<code>git clean</code>/force push. 모두 명시적 승인이 있을 때만.</p>
+</section>
+
+<section id="cleanup">
+  <p class="eyebrow">4</p>
+  <h2>이번 정리 내역 (2026-09-14)</h2>
+  <p class="lead">커밋하지 않은 워킹트리 변경이다. lint·typecheck·단위 테스트·build·링크 검사·E2E를 정리 뒤 다시 실행했다.</p>
+  <div class="grid-2">
+    <div class="panel lift">
+      <h3><span class="pill err">보안</span> finalize 테넌트 경계</h3>
+      <p><code>POST /api/meetings/{id}/finalize</code>는 middleware가 헤더를 건드리지 않는 유일한 스트리밍 경로였는데, guard가 클라이언트가 보낸 <code>x-vision-account-id</code>를 형식 검사만 하고 테넌트로 열었고 route는 cloud 모드에서 헤더가 있으면 세션을 재조회하지 않았다. 로그인한 고객이 다른 계정 UUID로 그 계정 루트에 회의를 쓰거나 probe할 수 있었고, 로컬 모드에서는 finalize만 레거시 <code>data/</code>에 써 목록과 어긋났다.</p>
+      <div class="diff">
+        <div class="row mod"><span class="sym">~</span><span><code>accountAccessPolicy.ts</code> <code>isStreamingFinalizePath()</code> 공유 helper</span></div>
+        <div class="row mod"><span class="sym">~</span><span><code>localRequestGuard.ts</code> finalize 경로에서 계정 헤더 무시</span></div>
+        <div class="row mod"><span class="sym">~</span><span><code>finalize/route.ts</code> 세션만 신뢰, 헤더만 있으면 401, 전체 처리를 <code>runWithAccountTenantData()</code>로 감싸 컨텍스트 누수 차단</span></div>
+        <div class="row add"><span class="sym">+</span><span><code>finalizeTenantBoundary.test.ts</code> 위조 헤더 401 · 세션 우선 · 로컬 모드 테넌트 · 백그라운드 전사가 같은 루트 유지</span></div>
+        <div class="row add"><span class="sym">+</span><span>guard·policy 테스트 5건, <code>summarizeWorkerTenants.test.ts</code> 3건(<code>runSummarizeTick</code> export)</span></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h3><span class="pill warn">flake</span> 경합 2건</h3>
+      <div class="diff">
+        <div class="row mod"><span class="sym">~</span><span><code>finalizeAtomic.test.ts</code>: 같은 ID 재시도가 FAKE 전사 publisher의 <code>transcribe_publish</code> lease와 경쟁해 409. <code>awaitTranscriptionMonitorsForTests()</code> 훅으로 발행 완료를 기다림.</span></div>
+        <div class="row mod"><span class="sym">~</span><span><code>global-meeting-translation.spec.ts</code>: 포커스 인벤토리 스냅샷 뒤에 <code>/api/auth/session</code> 응답으로 로그아웃 버튼이 늦게 마운트. desktop에서 그 버튼이 보일 때까지 대기.</span></div>
+      </div>
+      <h3 style="margin-top:8px"><span class="pill neutral">삭제</span> 미사용 코드</h3>
+      <div class="diff">
+        <div class="row del"><span class="sym">−</span><span><code>components/ReleaseNotes.tsx</code>, <code>lib/releaseNotes.ts</code>, <code>lib/releaseNotes.server.ts</code> + 테스트 2 (릴리즈 노트 화면은 <code>/settings</code>로 redirect만 남아 있었음)</span></div>
+        <div class="row del"><span class="sym">−</span><span><code>lib/atomicStream.ts</code> (사용처 없음), <code>concurrently</code> devDependency, 로컬 <code>whisper/.venv</code> 잔재와 python gitignore 항목</span></div>
+        <div class="row del"><span class="sym">−</span><span>사용처 없는 함수·상수 9개: <code>mergeStatusJson</code> <code>MEETING_RECORD_CLASSIFIER_CONTRACT</code> <code>OPENROUTER_MODEL_CHAINS</code> <code>listMeetingIds</code> <code>isChat*</code>×4 <code>NO_FOLLOW_OPEN_FLAGS</code></span></div>
+        <div class="row mod"><span class="sym">~</span><span>내부에서만 쓰는 심볼 27개 <code>export</code> 해제 (knip 기준). exported type 69개는 무해하여 유지.</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="panel">
+    <h3><span class="pill accent">문서</span> 구현과 어긋난 서술 통일</h3>
+    <ul class="clean">
+      <li><b>멀티테넌시</b>: README·ARCHITECTURE·ADR 0026·0027이 “계정별 분리 없음”이라 하고 PRD·AWS 안내는 “분리됨”이라 했다. 코드는 후자이므로 ARCHITECTURE에 “계정별 데이터 루트” 절을 추가하고 AGENTS.md CRITICAL에 규칙을 넣었다. “상용 멀티테넌시 아님·테스트 인스턴스에는 계약 고객사만” 원칙은 유지.</li>
+      <li><b>설치 정본</b>: ADR 0023과 scripts/CLAUDE.md가 참조하던 <code>scripts/bootstrap.mjs</code>·<code>npm run app:*</code>는 존재하지 않는다. 갱신 기록을 남기고 실제 스크립트 목록으로 교체.</li>
+      <li><b>Android</b>: ARCHITECTURE의 “Google ID token 검증” 문구는 코드에 없다. 세션 쿠키 기반으로 정정.</li>
+      <li><b>CHANGELOG</b>: Unreleased 절 추가. 1.17.0 이후 리브랜드·글로벌 번역 작업의 버전 번호는 소유자 결정 사항.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="next">
+  <p class="eyebrow">5</p>
+  <h2>남은 과제 (우선순위)</h2>
+  <div class="rule-list">
+    <div class="rule"><span class="k">1</span><div><div class="t">배포 주소 복구 · 고정 도메인</div><div class="d">Android APK와 고객에게 전달된 Quick Tunnel 주소가 DNS에서 사라졌다. <code>aws login</code> 재인증 → 서버 tunnel 로그 확인 → 도메인 확정(후보 note.goqual.com 미확정) → 이름 있는 Cloudflare Tunnel → <code>APP_ORIGIN</code> → 자동 재시작·외부 감시 → APK 재빌드. 모두 승인 뒤 실행.</div></div></div>
+    <div class="rule"><span class="k">2</span><div><div class="t">서버 코드 갱신</div><div class="d">GitHub push는 배포가 아니다. 서버에서 로컬 변경 유무를 먼저 보고한 뒤 <code>git pull --ff-only && docker compose up -d --build</code>. <code>.env.production</code>의 키·SMTP·<code>APP_ORIGIN</code> 존재 여부만 확인.</div></div></div>
+    <div class="rule"><span class="k">3</span><div><div class="t">비밀번호 복구 메일</div><div class="d">SES 발신 인증과 <code>no-reply@goqual.com</code> SMTP 자격증명. 코드에 하드코딩하지 않는다.</div></div></div>
+    <div class="rule"><span class="k">4</span><div><div class="t">레거시 루트 fail-closed</div><div class="d"><code>paths.ts</code>의 <code>dataRoot()</code>는 컨텍스트가 없으면 조용히 <code>data/</code>로 떨어진다. 인증된 경로에서는 오류로 만드는 편이 안전하지만 단위 테스트 다수가 이 fallback에 의존하므로 별도 작업으로 분리.</div></div></div>
+    <div class="rule"><span class="k">5</span><div><div class="t">서버의 레거시 <code>data/meetings</code> 처리</div><div class="d">테넌트 분리 이전에 만들어진 회의가 볼륨에 남아 있을 수 있다. 어느 고객에게 귀속할지는 소유자 결정 후 이동 스크립트로 처리(회의 디렉터리 이동은 승인 사항).</div></div></div>
+    <div class="rule"><span class="k">6</span><div><div class="t">i18n 카탈로그 다이어트</div><div class="d">1,151 키 중 Whisper 시절 문구·릴리즈 노트 문장이 남아 있다. 카탈로그는 DOM 텍스트 기반 MutationObserver 번역에도 쓰이므로 코드 grep만으로 지우지 말고 화면 스냅샷 기준으로 정리.</div></div></div>
+    <div class="rule"><span class="k">7</span><div><div class="t">legacy LLM adapter 정리 여부</div><div class="d"><code>claude-cli</code>·<code>codex-cli</code>·<code>ollama</code> adapter는 로컬 저장 설정 호환용으로 보존 중(문서 명시). 고객 배포에서 제거할지는 제품 결정.</div></div></div>
+  </div>
+</section>
+
+</main>
+</div>
+
+<footer>
+  생성: 2026-09-14 · 저장 위치 <code>docs/reports/ai-note-codebase-report.html</code> · 정본 계약은 <code>AGENTS.md</code>, <code>docs/ARCHITECTURE.md</code>, <code>docs/UI_GUIDE.md</code>, <code>docs/decisions/</code>. 이 보고서는 요약이며 충돌 시 정본이 우선한다.
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.15.0/mermaid.min.js" integrity="sha384-yQ4mmBBT+vhTAwjFH0toJXNYJ6O4usWnt6EPIdWwrRvx2V/n5lXuDZQwQFeSFydF" crossorigin="anonymous"></script>
+<script>
+  (function () {
+    if (!window.mermaid) return;
+    var dark = document.documentElement.getAttribute("data-theme") === "dark"
+      || (!document.documentElement.getAttribute("data-theme") && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    window.mermaid.initialize({
+      startOnLoad: true,
+      securityLevel: "loose",
+      theme: "base",
+      fontFamily: "Noto Sans KR, sans-serif",
+      themeVariables: dark ? {
+        background: "#241F1B", primaryColor: "#2C2622", primaryTextColor: "#F1EBE3", primaryBorderColor: "#4A403A",
+        lineColor: "#BDB2A6", secondaryColor: "#221D19", tertiaryColor: "#2C2622", textColor: "#F1EBE3", fontSize: "13px"
+      } : {
+        background: "#FFFFFF", primaryColor: "#F4EFE8", primaryTextColor: "#2A2420", primaryBorderColor: "#D6CCBF",
+        lineColor: "#6B6158", secondaryColor: "#FAF8F4", tertiaryColor: "#F0EBE3", textColor: "#2A2420", fontSize: "13px"
+      }
+    });
+  })();
+</script>

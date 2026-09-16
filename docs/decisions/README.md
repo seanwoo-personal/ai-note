@@ -41,3 +41,4 @@ $EDITOR docs/decisions/0024-내-결정.md   # 5칸 채우고 아래 목록에 �
 | [0025](0025-vision-customer-brand-and-split-system-rows.md) | Vision 고객사 브랜드(로케일 불변·로고 미사용)와 이벤트 기반 실시간 연결 상태의 3행 분리 | 채택됨 |
 | [0026](0026-local-account-gate-before-hosted-multitenancy.md) | 승인형 계정 게이트와 원격 멀티테넌시 경계 | 채택됨 |
 | [0027](0027-soniox-transcription-and-openrouter-routing.md) | Soniox 전사와 OpenRouter 작업별 라우팅 | 채택됨 |
+| [0028](0028-shared-interpreter-room.md) | 공유 링크로 여는 1:1 통역 회의실과 게스트 세션 경계 | 채택됨 |

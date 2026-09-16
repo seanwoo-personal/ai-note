@@ -54,3 +54,16 @@ describe("streaming finalize path", () => {
     expect(isStreamingFinalizePath("/api/meetings/a/b/finalize")).toBe(false);
   });
 });
+
+describe("interpreter room surfaces", () => {
+  it("keeps the join page and join API public while room APIs accept host or guest sessions", () => {
+    expect(classifyAccountRoute("/join/abc123")).toBe("public");
+    expect(classifyAccountRoute("/api/rooms/join/abc123")).toBe("public");
+    expect(classifyAccountRoute("/api/rooms")).toBe("customer");
+    expect(classifyAccountRoute("/api/rooms/room-1")).toBe("room");
+    expect(classifyAccountRoute("/api/rooms/room-1/events")).toBe("room");
+    expect(classifyAccountRoute("/api/realtime/temporary-key")).toBe("room");
+    expect(classifyAccountRoute("/api/translate")).toBe("room");
+    expect(classifyAccountRoute("/rooms/room-1")).toBe("customer");
+  });
+});

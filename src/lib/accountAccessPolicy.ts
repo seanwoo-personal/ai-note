@@ -1,4 +1,11 @@
-export type AccountRouteKind = "asset" | "public" | "customer" | "admin";
+// "room": a shared interpreter-room surface that accepts either a customer
+// session (host) or a guest session bound to that room (ADR 0028).
+export type AccountRouteKind = "asset" | "public" | "customer" | "admin" | "room";
+
+const PUBLIC_PREFIXES = ["/join/", "/api/rooms/join/"];
+
+// Shared APIs a guest may call with its room session; usage is charged to the host.
+const ROOM_SHARED_API = new Set(["/api/realtime/temporary-key", "/api/translate"]);
 
 const PUBLIC_EXACT = new Set([
   "/login",
@@ -41,8 +48,10 @@ export function classifyAccountRoute(pathname: string): AccountRouteKind {
     || /\.[A-Za-z0-9]{2,8}$/u.test(pathname)
   ) return "asset";
   if (PUBLIC_EXACT.has(pathname)) return "public";
+  if (PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix))) return "public";
   if (pathname === "/admin" || pathname.startsWith("/admin/") || pathname.startsWith("/api/admin/")) {
     return "admin";
   }
+  if (pathname.startsWith("/api/rooms/") || ROOM_SHARED_API.has(pathname)) return "room";
   return "customer";
 }

@@ -672,6 +672,7 @@ function NavigationContents({
             <span>위치 저장 대기</span><span>{library.counts.organizationPendingCount}</span>
           </GuardedLink>
         )}
+        <NavigationRow href="/rooms" active={pathname.startsWith("/rooms")} label={t("통역 회의실")} onNavigationCommitted={onNavigationCommitted} />
         <NavigationRow href="/glossary" active={pathname.startsWith("/glossary")} label={t("단어 관리")} onNavigationCommitted={onNavigationCommitted} />
         <NavigationRow href="/settings" active={pathname === "/settings"} label={t("설정")} onNavigationCommitted={onNavigationCommitted} />
       </div>
@@ -706,6 +707,7 @@ function FallbackNavigation({
       <SearchTrigger onOpenSearch={onOpenSearch} />
       <NavigationRow href="/" active={pathname === "/"} label={t("모든 내용")} onNavigationCommitted={onNavigationCommitted} />
       <div className="mt-auto">
+        <NavigationRow href="/rooms" active={pathname.startsWith("/rooms")} label={t("통역 회의실")} onNavigationCommitted={onNavigationCommitted} />
         <NavigationRow href="/glossary" active={pathname.startsWith("/glossary")} label={t("단어 관리")} onNavigationCommitted={onNavigationCommitted} />
         <NavigationRow href="/settings" active={pathname === "/settings"} label={t("설정")} onNavigationCommitted={onNavigationCommitted} />
         <AppPreferencesControls />

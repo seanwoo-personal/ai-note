@@ -80,6 +80,9 @@ flowchart LR
 | `meeting-tombstones/{id}.json` | **app lifecycle만** | 영구 logical-delete fence. 물리 cleanup 후에도 보존 |
 | `data/meetings/{id}/knowledge-card.json` | knowledge index repository | meeting별 검색 파생물. source summary/transcript SHA-256 포함, 삭제 후 재생성 가능 |
 | `data/knowledge/corpus-map.json` | knowledge index repository | card의 bounded summary projection만 모은 전체 검색 파생물, 삭제 후 재생성 가능 |
+| `room.json` + `room-events.jsonl` | **room store만** | 통역 회의실 메타·이벤트 로그(ADR 0028). 종료 후 pair는 summarize publisher가 발행 |
+| `summary.{lang}.md` | room export | 게스트가 고른 언어의 회의록 번역 캐시. 재생성 가능 |
+| `data/system/room-access.json` | **guest session store만** | 초대 토큰 해시 인덱스와 게스트 세션(전역) |
 
 ## 회의 지식 인덱스 계약
 
@@ -181,6 +184,17 @@ Surviving claim의 meeting은 첫 등장 순서로 `1..N` 번호를 서버가 �
 - `data/user-profile.json`, meeting별 `knowledge-card.json`, `data/knowledge/corpus-map.json`은 gitignored local 파생/설정 데이터다. 프로필은 LLM provider 설정과 별도 writer를 가지며 API key를 포함하지 않는다. 단순 `GET /api/search`는 LLM이나 외부 network를 호출하지 않는다.
 - Chat UI는 완결 4 turn만 현재 browser tab의 React memory에 보존하고 새로고침 뒤 복원하지 않는다. Server는 요청의 bounded `history`를 prompt context로만 사용하며 chat session/file/database를 만들지 않는다.
 - `POST /api/chat`는 새 provider나 직접 유료 API 호출을 만들지 않고 사용자가 저장한 `LlmAdapter`를 재사용한다. Ollama egress는 explicit loopback HTTP만 허용한다. Claude/Codex 선택 시 앱은 로컬 CLI process에 bounded 질문/history/tool evidence를 전달하며, CLI가 사용하는 provider-side 처리는 사용자가 로그인한 CLI의 정책 경계에 속한다. 앱은 provider credential, raw prompt/tool trace, 대화 기록을 별도 저장하지 않는다.
+
+## 공유 통역 회의실 (ADR 0028)
+
+- 회의실은 호스트 테넌트의 회의 하나다. `room.json`(모드·참가자·초대 토큰 해시·scrypt 비밀번호 해시·`endedAt`·`guestExpiresAt`)과 append-only `room-events.jsonl`(`utterance|translation|attribution|participant|ended`, `seq` 단조 증가, `O_APPEND`+fsync)은 `src/lib/roomStore.ts`만 쓴다. 손상 줄 이후는 읽지 않고 `events_corrupt`로 fail-closed한다. 종료 시 `saveGlobalMeetingSession()`이 기존 pair 발행 계약으로 `transcript.md`/`summary.json`을 만들고, 게스트가 고른 언어의 회의록 번역은 `summary.{lang}.md` 파생 캐시다.
+- 게스트 접근은 `data/system/room-access.json`(전역, `src/lib/guestSession.ts` 단일 writer)의 invite 인덱스(토큰 해시→호스트 계정·회의)와 게스트 세션(해시, 회의 하나에 고정, 만료)으로만 이뤄진다. 쿠키 이름은 `vision_guest_session`. `middleware.ts`는 `room` kind 경로(`/api/rooms/{id}/**`, `/api/realtime/temporary-key`, `/api/translate`)에서 고객 세션이 없으면 게스트 세션을 찾아 `x-vision-account-id`(호스트)·`x-vision-account-role=guest`·`x-vision-guest-room`을 **덮어써** 주입하고, 고객 요청에서는 guest-room 헤더를 제거한다. 라우트는 `resolveRoomRequest()`로 신원·tombstone fence·회의실 read·게스트 창 검사를 고정 순서로 수행하며 게스트가 다른 회의실 ID를 부르면 404다.
+- 입장(`POST /api/rooms/join/{token}`)은 public이지만 이름+비밀번호+언어가 모두 필요하고, 미존재·만료·오답은 같은 401이며 초대별 5회/10분 rate limit(429)를 둔다. 초대 회전은 새 토큰·비밀번호를 만들고 기존 게스트 세션을 폐기한다. 사용량(`realtime_session`·`translation`)은 게스트 요청도 호스트 계정에 집계한다.
+- 각 참가자 기기의 실시간 세션은 두 좌석 언어 사이 `two_way` 번역을 켜고, 문장이 끝나면 원문과 live 번역을 `liveTranslation`으로 함께 보낸다. 서버는 그 번역을 즉시 `translation` 이벤트로 발행하고, live 번역이 없는 언어(언어 혼용·제3 언어)만 요약 모델로 20초 제한 안에 번역한다.
+- 다운로드(`GET /api/rooms/{id}/export?kind=transcript|minutes&language=…&format=md|docx|html`)는 같은 plain text 본문에서 Markdown 첨부, Word(`docx` 라이브러리), 인쇄용 HTML(브라우저 "PDF로 저장"·미리보기 겸용)을 만든다. `GET /api/rooms/join/{token}`은 미존재·만료 토큰에 404, 유효 토큰에 `{state:"form"}` 또는 현재 좌석 `{state:"session",…}`을 돌려주며, 재입장 POST는 게스트 좌석 이름·언어를 교체하고 participant 이벤트로 양쪽 화면을 갱신한다.
+- 실시간 동기화는 `GET /api/rooms/{id}/events` SSE다. `Last-Event-ID`(또는 `?after=`) 이후를 로그에서 재전송한 뒤 프로세스 내 hub(`roomEventHub.ts`)의 live 이벤트를 밀고 15초 heartbeat를 보낸다. 발화(`POST …/utterances`)는 서버가 `attributeUtterance()`(`src/domain/room.ts`)로 화자를 확정해 append하고, 다른 참가자 언어 번역을 요청 컨텍스트 안에서 백그라운드로 실행해 `translation` 이벤트로 발행한다. 같은 `utteranceId` 재전송은 중복으로 수용한다.
+- 수명: 종료 시각+24시간에 게스트 링크·세션이 만료되고, 종료하지 않은 회의실은 생성+72시간에 닫힌 것으로 본다(`isGuestAccessOpen`). 만료 항목은 `sweepRoomAccess()`로 정리하며 회의 자체는 삭제하지 않는다.
+- 회귀: `src/domain/__tests__/room.test.ts`, `src/lib/__tests__/{roomStore,guestSession,roomView}.test.ts`, `src/__tests__/middleware.guest.test.ts`, `src/app/api/__tests__/rooms.routes.test.ts`, `src/components/__tests__/InterpreterRoomEntry.test.tsx`, `e2e/interpreter-room.spec.ts`.
 
 ## Local-only ingress·public boundary
 

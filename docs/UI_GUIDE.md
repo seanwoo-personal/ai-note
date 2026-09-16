@@ -205,6 +205,17 @@
 - 세 viewport에서 tab-local action이 warning/body/editor보다 앞서는 DOM 순서, 최소 44px target, read/edit mutual exclusion, summary heading text 삭제와 exact save, confirmed-copy 안내, discard의 **계속 수정** focus, cancel 뒤 original restoration, transcript 저장 뒤 outdated와 summary 저장 뒤 fresh 전환, horizontal overflow 0을 assertion으로 남긴다.
 - Evidence는 성공 screenshot, assertion 결과, console error, viewport/fixture manifest를 `test-results/` 또는 execute local journal에 남긴다. 실제 실행 결과가 생성되기 전에는 이 문서가 pass를 선언하지 않는다.
 
+### 통역 회의실 (ADR 0028)
+
+- **진입**: 라이브러리 rail의 `통역 회의실`(단어 관리 앞) → `/rooms` 만들기 화면. 제목(선택), 회의 방식 radio(`화상회의` 기본 / `같은 방`), `내 언어` select(ja→en→ko→zh가 아니라 도메인 순서 `ko, en, ja, zh`를 라벨로 표시). 만들기 뒤 `/rooms/{id}`로 이동하며 링크·비밀번호는 sessionStorage에만 잠시 보관한다.
+- **회의실 헤더**: eyebrow `통역 회의실` → 제목 → 모드 chip·연결 chip(`연결 중… / 실시간 연결됨 / 다시 연결하는 중… / 연결 종료`, SSE 이벤트에서만 파생)·종료 chip → 참가자 2칸(나 / 상대, 이름과 언어, 미입장 안내). 호스트 action은 `초대하기`(3줄 클립보드 복사, polite status) · `새 비밀번호`(확인 dialog, 취소 initial focus) · `회의 종료`(확인 dialog). `초대 정보 보기` disclosure는 주소·비밀번호·유효 기간을 `pre`로 보여 복사 실패를 대비한다.
+- **대화 목록**: 단일 열 `ol`, 내 발화 행은 `bg-soft`, 상대 발화 행은 `bg-bg`. 행 순서는 화자 chip(낮은 신뢰도는 점선 warn 테두리)·언어 label → primary 본문(내 원문 또는 상대 발화의 내 언어 번역) → 내 발화면 `상대에게 이렇게 전달됨 · {번역}`, 상대 발화면 `원문 보기` disclosure. 번역 대기는 `번역 중…` 텍스트 하나만. `같은 방` 모드에서는 행 오른쪽에 `내 말로 바꾸기 / 상대 말로 바꾸기` 32px 보조 토글.
+- **입력**: `말하기 시작 / 말하기 중지` 토글(`aria-pressed`) 하나. 상태 문구는 `role="status"` 한 곳(`듣는 중 · 말이 끝나면 자동으로 기록됩니다.` 또는 오류). `같은 방`의 게스트는 입력 대신 안내 문장만 본다.
+- **초대 모달**: 생성 직후와 `초대하기`에서 `상대를 초대하기` dialog가 열린다. 주소·비밀번호·유효 기간을 `dl`로 보이고 `복사하기`(initial focus)가 세 줄을 클립보드에 넣으며 결과는 dialog 안 polite status 한 곳에 표시한다.
+- **종료 후**: 안내 문장 → `회의록 언어`·`파일 형식`(Word .docx 기본 / PDF=인쇄 화면 새 탭 / Markdown) select → `회의록 미리보기`·`회의록 내려받기`·`대화록 미리보기`·`대화록 내려받기`. 미리보기는 `AppDialog`에 plain text를 `pre`로 보이고 닫기 버튼이 initial focus다. PDF 안내 문장은 브라우저 "PDF로 저장"을 명시한다. 호스트는 종료 뒤 일반 회의 상세로 이어질 수 있고 게스트는 24시간 안에 같은 링크로 재입장한다.
+- **게스트 입장(`/join/{token}`)**: 최소 셸(워드마크 + 우측 화면 언어 전환기 ja→en→ko). 이름·비밀번호·내 언어 → `입장`. 이름·비밀번호가 비면 버튼 disabled. 비밀번호 오류는 `링크 또는 비밀번호가 올바르지 않거나 만료되었습니다.` 하나, rate limit는 별도 문구. 존재하지 않거나 만료된 링크는 폼 대신 `잘못된 접근입니다` 안내 화면(`role="alert"`)이다. 살아 있는 좌석이 있으면 `같은 이름으로 계속 / 다른 이름으로 입장`을 먼저 묻는다.
+- 320/390/1440에서 헤더 action·참가자 칸·다운로드 행이 wrap하고 가로 오버플로가 없어야 한다(`e2e/interpreter-room.spec.ts`).
+
 ### 단어 관리(단어장)
 - **2탭**(각 탭 카운트 표기): **일반 용어** / **교정쌍**. 상단 1줄 설명(브랜드명 미포함).
 - 일반 용어: 쉼표(`,`/`，`)·개행으로 일괄 추가(**공백 분리 금지** — "프로덕트 로드맵" 같은 다어절 용어 보존), 제거 가능한 chip(`aria-label="용어 삭제: {term}"`).

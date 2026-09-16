@@ -50,6 +50,7 @@ export type PublicErrorCode =
   | "transcription_failed"
   | "local_service_unavailable"
   | "cloud_service_unavailable"
+  | "too_many_attempts"
   | "internal_error";
 
 const PUBLIC_ERROR_MESSAGES: Record<PublicErrorCode, string> = {
@@ -94,6 +95,7 @@ const PUBLIC_ERROR_MESSAGES: Record<PublicErrorCode, string> = {
   transcription_failed: "전사를 완료하지 못했습니다. 잠시 후 다시 시도하거나 운영자에게 문의해 주세요",
   local_service_unavailable: "요청한 기능을 사용할 수 없습니다",
   cloud_service_unavailable: "전사 기능을 사용할 수 없습니다",
+  too_many_attempts: "요청이 너무 많습니다. 잠시 뒤 다시 시도해 주세요",
   internal_error: "요청을 처리하지 못했습니다",
 };
 

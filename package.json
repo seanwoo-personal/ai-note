@@ -27,6 +27,7 @@
     "prepare": "husky || true"
   },
   "dependencies": {
+    "docx": "^9.7.1",
     "next": "^15.5.20",
     "nodemailer": "^9.0.5",
     "react": "^18.3.1",

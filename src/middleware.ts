@@ -2,7 +2,8 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 import { classifyAccountRoute, isStreamingFinalizePath } from "@/lib/accountAccessPolicy";
-import { resolveRequestSession } from "@/lib/accountSession";
+import { cookieValue, resolveRequestSession } from "@/lib/accountSession";
+import { GUEST_SESSION_COOKIE, resolveGuestSession } from "@/lib/guestSession";
 
 export const runtime = "nodejs";
 
@@ -21,6 +22,19 @@ export async function middleware(request: NextRequest) {
 
   const sessionKind = kind === "admin" ? "admin" : "customer";
   const session = await resolveRequestSession(request, sessionKind);
+  if (!session && kind === "room") {
+    // A guest carries no account. Its room session pins the host tenant and the
+    // single meeting it may touch; every x-vision-* header is rewritten so a
+    // client cannot smuggle its own values.
+    const guest = await resolveGuestSession(cookieValue(request, GUEST_SESSION_COOKIE));
+    if (guest) {
+      const headers = new Headers(request.headers);
+      headers.set("x-vision-account-id", guest.hostAccountId);
+      headers.set("x-vision-account-role", "guest");
+      headers.set("x-vision-guest-room", guest.meetingId);
+      return NextResponse.next({ request: { headers } });
+    }
+  }
   if (session) {
     if (sessionKind === "customer" && session.account.passwordChangeRequired) {
       const allowedDuringPasswordChange = request.nextUrl.pathname === "/password/change"
@@ -50,6 +64,7 @@ export async function middleware(request: NextRequest) {
     const headers = new Headers(request.headers);
     headers.set("x-vision-account-id", session.account.id);
     headers.set("x-vision-account-role", session.account.role);
+    headers.delete("x-vision-guest-room");
     return NextResponse.next({ request: { headers } });
   }
 

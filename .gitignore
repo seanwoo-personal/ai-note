@@ -38,3 +38,6 @@ glossary.json
 # but DO commit tiny test fixtures
 !fixtures/**
 .DS_Store
+
+# local dev-server launch config for the desktop app preview
+/.claude/launch.json

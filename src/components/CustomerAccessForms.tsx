@@ -5,15 +5,9 @@ import { useState, type FormEvent } from "react";
 
 import { AccessCard, inputClass, primaryButtonClass, secondaryButtonClass } from "@/components/AccessShell";
 import { useOptionalAppPreferences } from "@/components/AppPreferences";
-import type { AppLocale } from "@/lib/appPreferences";
+import { LocaleSwitcher, type DisplayLocale } from "@/components/LocaleSwitcher";
 
-const LOGIN_LANGUAGES = [
-  { locale: "ja", label: "日本語" },
-  { locale: "en", label: "English" },
-  { locale: "ko", label: "한국어" },
-] as const satisfies ReadonlyArray<{ locale: AppLocale; label: string }>;
-
-const LOGIN_LANGUAGE_GROUP_LABEL: Record<(typeof LOGIN_LANGUAGES)[number]["locale"], string> = {
+const LOGIN_LANGUAGE_GROUP_LABEL: Record<DisplayLocale, string> = {
   ko: "로그인 화면 언어",
   en: "Login screen language",
   ja: "ログイン画面の言語",
@@ -29,33 +23,7 @@ async function responseMessage(response: Response): Promise<string> {
 }
 
 function LoginLanguageSwitcher() {
-  const preferences = useOptionalAppPreferences();
-  const locale = preferences?.locale === "en" || preferences?.locale === "ko" ? preferences.locale : "ja";
-  return (
-    <div className="mb-6 flex justify-end">
-      <div
-        role="group"
-        aria-label={LOGIN_LANGUAGE_GROUP_LABEL[locale]}
-        data-i18n-user-attributes
-        className="inline-flex min-h-11 items-center rounded-lg border border-line bg-bg p-1"
-      >
-        {LOGIN_LANGUAGES.map((language) => {
-          const selected = locale === language.locale;
-          return (
-            <button
-              key={language.locale}
-              type="button"
-              aria-pressed={selected}
-              onClick={() => preferences?.setLocale(language.locale)}
-              className={`min-h-9 rounded-md px-3 text-[12px] font-semibold transition-colors ${selected ? "bg-panel text-accent shadow-sm" : "text-inkSoft hover:text-ink"}`}
-            >
-              <span data-i18n-user-content>{language.label}</span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
+  return <LocaleSwitcher groupLabel={LOGIN_LANGUAGE_GROUP_LABEL} />;
 }
 
 export function CustomerLoginForm({ nextPath = "/" }: { nextPath?: string }) {

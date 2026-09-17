@@ -3,7 +3,7 @@ plugins {
 }
 
 val aiNoteUrl = providers.gradleProperty("AI_NOTE_URL")
-  .orElse("https://lecture-interpreted-considerable-experience.trycloudflare.com")
+  .orElse("https://note.seanwoo.dev")
   .get()
 
 android {
@@ -13,8 +13,8 @@ android {
         applicationId = "com.hejhome.ainote"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.3"
+        versionCode = 5
+        versionName = "1.4"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "AI_NOTE_URL", "\"${aiNoteUrl.replace("\"", "\\\"")}\"")
     }

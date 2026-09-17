@@ -7,7 +7,7 @@
 - 앱 이름: `헤이홈 AI 노트`
 - application ID: `com.hejhome.ainote`
 - 최소 Android: 8.0(API 26)
-- 기본 서버: 현재 AWS 테스트 인스턴스의 HTTPS Quick Tunnel
+- 기본 서버: 고정 주소 `https://note.seanwoo.dev`(이름 있는 Cloudflare Tunnel)
 - 로컬 파일 접근과 HTTP 평문 통신은 차단한다.
 - WebView 내부 이동은 빌드 시 지정한 서버와 동일한 HTTPS 출처만 허용한다.
 - 마이크는 해당 출처가 오디오 캡처를 요청한 경우에만 Android 권한을 거쳐 허용한다.
@@ -19,10 +19,10 @@
 현재 검증된 전달본:
 
 ```text
-dist/hejhome-ai-note-android-1.3-test.apk
+dist/hejhome-ai-note-android-1.4-debug.apk
 ```
 
-이 APK는 고객 테스트용 서명으로 설치 가능하며 WebView 원격 디버깅이 꺼져 있다. Google Play 배포 전에는 조직이 관리하는 운영용 서명 키와 고정 도메인으로 다시 빌드해야 한다.
+이 APK는 고정 주소 `https://note.seanwoo.dev`를 바라보는 디버그 서명 빌드다. 이전 테스트 APK와 서명이 다르면 기기에서 기존 앱을 먼저 삭제해야 설치된다. Google Play 배포 전에는 조직이 관리하는 운영용 서명 키와 고정 도메인으로 다시 빌드해야 한다.
 
 안드로이드 기기에서 APK를 내려받아 열고, 브라우저 또는 파일 앱의 `출처를 알 수 없는 앱 설치` 권한을 한 번 허용하면 설치할 수 있다. 최초 녹음 시 표시되는 마이크 권한도 허용해야 한다.
 
@@ -53,11 +53,9 @@ android run --debug --apks=app/build/outputs/apk/debug/app-debug.apk
 
 ## 서버 주소 변경
 
-Quick Tunnel 주소가 바뀌면 새 HTTPS 주소를 Gradle 속성으로 전달해 다시 빌드한다.
+기본 주소는 `app/build.gradle.kts`의 `AI_NOTE_URL` 기본값이다. 다른 서버를 가리키는 빌드가 필요하면 Gradle 속성으로 넘긴다.
 
 ```bash
 ./gradlew clean assembleDebug \
-  -PAI_NOTE_URL=https://새로운-테스트-주소.trycloudflare.com
+  -PAI_NOTE_URL=https://다른-주소.example
 ```
-
-운영 배포에서는 Quick Tunnel 대신 고정 도메인을 사용하고 같은 방식으로 APK를 다시 생성한다.

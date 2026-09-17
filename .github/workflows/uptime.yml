@@ -1,0 +1,33 @@
+name: Uptime
+
+# External availability check for the customer test instance. GitHub notifies
+# the repository owner by email when a scheduled run fails, so a dead tunnel or
+# a crashed container is noticed without any extra monitoring account.
+# Adjust TARGET_URL when the stable domain changes.
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  TARGET_URL: https://note.seanwoo.dev/login
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Login page answers 200 within 20 seconds
+        run: |
+          for attempt in 1 2 3; do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$TARGET_URL" || echo "000")
+            echo "attempt $attempt: HTTP $code"
+            if [ "$code" = "200" ]; then exit 0; fi
+            sleep 20
+          done
+          echo "::error::$TARGET_URL did not answer 200 after 3 attempts (last: $code)"
+          exit 1

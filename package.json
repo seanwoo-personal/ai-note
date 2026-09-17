@@ -30,6 +30,7 @@
     "docx": "^9.7.1",
     "next": "^15.5.20",
     "nodemailer": "^9.0.5",
+    "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "zod": "^4.4.3"
@@ -46,6 +47,7 @@
     "@testing-library/react": "^16.3.2",
     "@types/node": "^20.19.43",
     "@types/nodemailer": "^8.0.1",
+    "@types/qrcode": "^1.5.5",
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "^6.0.3",

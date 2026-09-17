@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import QRCode from "qrcode";
 import { useEffect, useState, type FormEvent } from "react";
 
 import { AccessCard, inputClass, primaryButtonClass, secondaryButtonClass } from "@/components/AccessShell";
@@ -17,21 +18,42 @@ async function errorMessage(response: Response): Promise<string> {
   return body?.error?.message ?? "요청을 처리하지 못했습니다.";
 }
 
+/** The otpauth URI as an inline SVG data URL; null until rendered or when encoding fails. */
+function useTotpQrCode(totpUri: string): string | null {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    QRCode.toString(totpUri, { type: "svg", errorCorrectionLevel: "M", margin: 1 })
+      .then((svg) => { if (!cancelled) setSrc(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`); })
+      .catch(() => { if (!cancelled) setSrc(null); });
+    return () => { cancelled = true; };
+  }, [totpUri]);
+  return src;
+}
+
 function SecurityMaterial({ result, localOnly = false }: { result: SetupResult; localOnly?: boolean }) {
+  const qrSrc = useTotpQrCode(result.totpUri);
   return (
     <AccessCard>
       <p className="text-[12px] font-semibold text-accent">2단계 인증 등록</p>
       <h2 className="mt-2 text-[24px] font-bold">이 정보는 지금 한 번만 보여드려요</h2>
-      <p className="mt-3 text-[14px] leading-6 text-inkSoft">인증 앱에 설정 키를 추가한 뒤 복구 코드를 안전한 암호 관리 도구에 보관해 주세요.</p>
+      <p className="mt-3 text-[14px] leading-6 text-inkSoft">인증 앱으로 QR 코드를 스캔한 뒤 복구 코드를 안전한 암호 관리 도구에 보관해 주세요. 스캔이 어려우면 설정 키를 직접 입력할 수 있어요.</p>
       <dl className="mt-6 space-y-4">
         <div><dt className="text-[12px] font-semibold text-inkSoft">운영자 이메일</dt><dd className="mt-1 break-all rounded-lg bg-bg p-3 font-mono text-[13px]">{result.email}</dd></div>
-        <div><dt className="text-[12px] font-semibold text-inkSoft">인증 앱 설정 키</dt><dd className="mt-1 break-all rounded-lg bg-bg p-3 font-mono text-[13px]">{result.totpSecret}</dd></div>
-        <div><dt className="text-[12px] font-semibold text-inkSoft">인증 앱 주소</dt><dd className="mt-1 max-h-24 overflow-auto break-all rounded-lg bg-bg p-3 font-mono text-[11px]">{result.totpUri}</dd></div>
+        <div>
+          <dt className="text-[12px] font-semibold text-inkSoft">인증 앱 QR 코드</dt>
+          <dd className="mt-1 flex justify-center rounded-lg bg-bg p-3">
+            {qrSrc
+              ? <img src={qrSrc} alt="인증 앱 QR 코드" width={192} height={192} className="h-48 w-48 rounded bg-white p-2" />
+              : <span className="text-[13px] text-inkSoft">QR 코드를 만드는 중…</span>}
+          </dd>
+        </div>
+        <div><dt className="text-[12px] font-semibold text-inkSoft">인증 앱 설정 키 (직접 입력용)</dt><dd className="mt-1 break-all rounded-lg bg-bg p-3 font-mono text-[13px]">{result.totpSecret}</dd></div>
         <div><dt className="text-[12px] font-semibold text-inkSoft">일회용 복구 코드</dt><dd className="mt-1 grid grid-cols-2 gap-2 rounded-lg bg-bg p-3 font-mono text-[12px]">{result.recoveryCodes.map((code) => <span key={code}>{code}</span>)}</dd></div>
       </dl>
       {localOnly ? (
         <div className="mt-6 rounded-lg bg-bg p-4 text-[13px] leading-6 text-inkSoft">
-          기존 인증 앱 항목은 모두 삭제하고 지금 발급된 설정 키 하나만 시간 기반 인증으로 등록하세요. 저장을 마치면 이 로컬 탭을 닫고 공개 HTTPS 운영자 로그인 화면으로 돌아가세요.
+          기존 인증 앱 항목은 모두 삭제하고 지금 발급된 QR 코드 하나만 시간 기반 인증으로 등록하세요. 저장을 마치면 이 로컬 탭을 닫고 공개 HTTPS 운영자 로그인 화면으로 돌아가세요.
         </div>
       ) : (
         <Link href="/admin/login" className={`${primaryButtonClass} mt-6`}>운영자 로그인으로 이동</Link>
@@ -89,7 +111,7 @@ export function AdminLoginForm({ nextPath = "/admin" }: { nextPath?: string }) {
 }
 
 export function AdminSetupForm() {
-  const [canBootstrap, setCanBootstrap] = useState<boolean | null>(null);
+  const [availability, setAvailability] = useState<"checking" | "open" | "done" | "remote">("checking");
   const [result, setResult] = useState<SetupResult | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -97,15 +119,23 @@ export function AdminSetupForm() {
   useEffect(() => {
     void fetch("/api/admin/bootstrap", { cache: "no-store" })
       .then(async (response) => {
-        const body = await response.json() as { canBootstrap?: boolean };
-        setCanBootstrap(response.ok && body.canBootstrap === true);
+        const body = await response.json().catch(() => null) as { canBootstrap?: boolean; error?: { code?: string } } | null;
+        if (response.ok) setAvailability(body?.canBootstrap === true ? "open" : "done");
+        else setAvailability(response.status === 403 && body?.error?.code === "invalid_host" ? "remote" : "done");
       })
-      .catch(() => setCanBootstrap(false));
+      .catch(() => setAvailability("done"));
   }, []);
 
   if (result) return <SecurityMaterial result={result} localOnly />;
-  if (canBootstrap === null) return <AccessCard><p className="text-[14px] text-inkSoft">설정 가능 여부를 확인하는 중…</p></AccessCard>;
-  if (!canBootstrap) return (
+  if (availability === "checking") return <AccessCard><p className="text-[14px] text-inkSoft">설정 가능 여부를 확인하는 중…</p></AccessCard>;
+  if (availability === "remote") return (
+    <AccessCard>
+      <h2 className="text-[24px] font-bold">이 화면은 서버 로컬에서만 열려요</h2>
+      <p className="mt-3 text-[14px] leading-6 text-inkSoft">최초 운영자는 공개 주소가 아니라 서버의 127.0.0.1 주소로 접속했을 때만 만들 수 있어요. 서버에 SSH 포트 포워딩으로 연결한 뒤 같은 경로를 다시 열어 주세요.</p>
+      <Link href="/admin/login" className={`${secondaryButtonClass} mt-6 w-full`}>운영자 로그인</Link>
+    </AccessCard>
+  );
+  if (availability === "done") return (
     <AccessCard>
       <h2 className="text-[24px] font-bold">최초 운영자 설정이 완료되어 있어요</h2>
       <p className="mt-3 text-[14px] leading-6 text-inkSoft">새 운영자는 최고 운영자가 운영자 화면에서 일회용 초대 링크로 발급합니다.</p>

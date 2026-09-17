@@ -191,6 +191,32 @@ export async function joinRoomGuest(
   return updated;
 }
 
+/** Same-room mode: bind a Soniox diarization label to a seat after the "say one sentence" step. */
+export async function registerParticipantSpeakerLabel(
+  id: string,
+  role: RoomDocument["participants"][number]["role"],
+  speakerLabel: string,
+  options: { now?: string } = {},
+): Promise<RoomDocument> {
+  const room = await requireRoom(id);
+  if (room.endedAt !== null) throw new RoomStoreError("room_ended");
+  if (!room.participants.some((item) => item.role === role)) throw new RoomStoreError("invalid_input");
+  const label = speakerLabel.trim();
+  if (label.length === 0 || label.length > 16) throw new RoomStoreError("invalid_input");
+  const updated: RoomDocument = {
+    ...room,
+    participants: room.participants.map((item) => {
+      if (item.role === role) return { ...item, speakerLabel: label };
+      // One label belongs to one seat; a label re-registered elsewhere moves.
+      return item.speakerLabel === label ? { ...item, speakerLabel: null } : item;
+    }),
+  };
+  await writeRoom(updated);
+  const seat = updated.participants.find((item) => item.role === role)!;
+  await appendRoomEvent(id, { type: "participant", role, name: seat.name, language: seat.language, state: "registered" }, { now: options.now, room: updated });
+  return updated;
+}
+
 export async function rotateRoomInvite(id: string, options: { hostAccountId?: string; now?: string } = {}): Promise<{ room: RoomDocument; invite: RoomInvite }> {
   const now = options.now ?? new Date().toISOString();
   const room = await requireRoom(id);

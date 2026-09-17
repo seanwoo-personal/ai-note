@@ -104,7 +104,7 @@ export const roomEventSchema = z.discriminatedUnion("type", [
     role: z.enum(ROOM_ROLES),
     name: z.string().min(1).max(40),
     language: z.enum(ROOM_LANGUAGES),
-    state: z.enum(["joined", "left", "language_changed"]),
+    state: z.enum(["joined", "left", "language_changed", "registered"]),
   }).strict(),
   z.object({
     ...eventBase,

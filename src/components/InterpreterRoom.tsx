@@ -76,6 +76,9 @@ export function InterpreterRoom({ roomId, role }: InterpreterRoomProps) {
   const [downloadLanguage, setDownloadLanguage] = useState<RoomLanguage>("ja");
   const [downloadFormat, setDownloadFormat] = useState<"md" | "docx" | "html">("docx");
   const [preview, setPreview] = useState<{ kind: "transcript" | "minutes"; state: "loading" | "ready" | "error"; text: string } | null>(null);
+  const [registering, setRegistering] = useState<RoomRole | null>(null);
+  const [registerStatus, setRegisterStatus] = useState<string | null>(null);
+  const registeringRef = useRef<RoomRole | null>(null);
   const capture = useSonioxLiveCapture();
   const clientIdRef = useRef<string>("");
   const lastEndpointRef = useRef(0);
@@ -169,6 +172,18 @@ export function InterpreterRoom({ roomId, role }: InterpreterRoomProps) {
       originalLengthsRef.current[key] = endpoint.originalFinal.length;
       translationLengthsRef.current[key] = endpoint.translationFinal.length;
       if (!original) continue;
+      const registerRole = registeringRef.current;
+      if (registerRole && endpoint.speaker) {
+        registeringRef.current = null;
+        setRegistering(null);
+        void fetch(`/api/rooms/${roomId}/participants/${registerRole}/speaker-label`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ speakerLabel: endpoint.speaker }),
+        }).then((response) => {
+          setRegisterStatus(response.ok ? t("목소리를 등록했습니다.") : t("목소리를 등록하지 못했습니다. 다시 시도해 주세요."));
+        }).catch(() => setRegisterStatus(t("목소리를 등록하지 못했습니다. 다시 시도해 주세요.")));
+      }
       const sourceLanguage = endpoint.originalLanguage ?? me?.language ?? "ko";
       // Two-way live translation targets the other participant's language when I
       // spoke mine, and mine when they spoke theirs. A code-switched utterance is
@@ -285,6 +300,13 @@ export function InterpreterRoom({ roomId, role }: InterpreterRoomProps) {
     }
   }, [roomId, t]);
 
+  const beginRegistration = useCallback((target: RoomRole) => {
+    setRegisterStatus(null);
+    registeringRef.current = target;
+    setRegistering(target);
+    if (capture.phase !== "listening" && capture.phase !== "connecting" && capture.phase !== "requesting") startCapture();
+  }, [capture.phase, startCapture]);
+
   const exportHref = useCallback((kind: "transcript" | "minutes", format: "md" | "docx" | "html", language: RoomLanguage) =>
     `/api/rooms/${roomId}/export?kind=${kind}&language=${language}&format=${format}`, [roomId]);
 
@@ -361,6 +383,32 @@ export function InterpreterRoom({ roomId, role }: InterpreterRoomProps) {
         </ul>
         {inviteStatus && <p role="status" aria-live="polite" className="text-[13px] text-inkSoft">{inviteStatus}</p>}
       </header>
+
+      {room.mode === "same_room" && role === "host" && !ended && (
+        <section className="grid gap-2 rounded-xl border border-line bg-panel p-4" aria-label={t("목소리 등록")}>
+          <p className="text-[13px] font-semibold text-ink">{t("목소리 등록")}</p>
+          <p className="text-[13px] text-inkSoft">{t("같은 방에서는 각자 한 문장을 말해 목소리를 등록하면 두 사람이 같은 언어로 말해도 화자를 구분합니다.")}</p>
+          <div className="flex flex-wrap gap-2">
+            {[me, other].filter((participant): participant is NonNullable<typeof participant> => participant !== null).map((participant) => (
+              <button
+                key={participant.role}
+                type="button"
+                onClick={() => beginRegistration(participant.role)}
+                disabled={registering !== null}
+                aria-pressed={registering === participant.role}
+                className={`min-h-11 rounded-lg border px-4 text-[13px] font-semibold ${participant.registered ? "border-line bg-soft text-inkSoft" : "border-line bg-panel text-ink hover:bg-soft"} disabled:opacity-60`}
+              >
+                {registering === participant.role
+                  ? t("{name} 님이 한 문장을 말해 주세요…", { name: participant.name })
+                  : participant.registered
+                    ? t("{name} 등록됨 · 다시 등록", { name: participant.name })
+                    : t("{name} 목소리 등록", { name: participant.name })}
+              </button>
+            ))}
+          </div>
+          {registerStatus && <p role="status" aria-live="polite" className="text-[12px] text-inkSoft">{registerStatus}</p>}
+        </section>
+      )}
 
       <section className="flex min-h-0 flex-1 flex-col gap-3" aria-label={t("대화")}>
         <ol ref={listRef} className="flex max-h-[60dvh] flex-1 flex-col gap-3 overflow-y-auto rounded-xl border border-line bg-panel p-4">

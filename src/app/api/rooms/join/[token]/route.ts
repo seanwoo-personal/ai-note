@@ -110,7 +110,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
     const view = await publicRoom(request, seated, identity);
     return jsonWithGuestCookie(request, {
       id: invite.meetingId,
-      room: { ...view, me: { role: "guest", name: parsed.data.name, language: parsed.data.language } },
+      room: { ...view, me: { role: "guest", name: parsed.data.name, language: parsed.data.language, registered: false } },
     }, session);
   });
 }

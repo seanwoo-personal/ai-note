@@ -28,6 +28,8 @@ export interface PublicRoomParticipant {
   role: RoomRole;
   name: string;
   language: RoomLanguage;
+  /** Same-room mode: a diarization label has been bound to this seat. */
+  registered: boolean;
 }
 
 export interface PublicRoom {
@@ -79,11 +81,13 @@ export async function resolveRoomRequest(
 }
 
 export async function publicRoom(request: Request, room: RoomDocument, identity: RoomRequestIdentity): Promise<PublicRoom> {
-  const participants = room.participants.map((item) => ({ role: item.role, name: item.name, language: item.language }));
+  const participants = room.participants.map((item) => ({
+    role: item.role, name: item.name, language: item.language, registered: item.speakerLabel !== null,
+  }));
   let me = participants.find((item) => item.role === identity.role) ?? participants[0];
   if (identity.role === "guest") {
     const details = await resolveGuestDetails(request);
-    if (details) me = { role: "guest", name: details.name, language: details.language as RoomLanguage };
+    if (details) me = { role: "guest", name: details.name, language: details.language as RoomLanguage, registered: me.registered };
   }
   return {
     id: room.id,

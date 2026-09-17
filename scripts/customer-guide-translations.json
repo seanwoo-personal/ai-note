@@ -284,7 +284,18 @@
     "영상이나 음원 하나가 끝나고 다른 콘텐츠를 재생하기 전에 글로벌 미팅 화면의 ‘새 영상·음원’을 누릅니다. 지금까지의 대화 기록은 유지하고, 새 콘텐츠의 화자 문맥만 다시 시작해 앞 영상의 목소리 정보가 다음 영상에 섞이지 않도록 합니다. 같은 회의가 계속되는 동안에는 누르지 않아도 됩니다.": "After one video or audio source ends, select ‘New video or audio’ on the Global Meeting screen before playing different content. The conversation recorded so far remains, while only the speaker context starts fresh so voices from the previous video do not carry into the next one. You do not need to use it while the same meeting continues.",
     "새 영상·음원": "New video or audio",
     "유튜브나 브라우저 회의 음성을 더 선명하게 받으려면 어떻게 하나요?": "How can I capture clearer audio from YouTube or a browser meeting?",
-    "글로벌 미팅을 시작하기 전에 입력 소스에서 ‘브라우저 탭 오디오’를 선택하고, Chrome 공유 창에서 재생 중인 영상이나 회의 탭과 오디오 공유를 켭니다. 스피커 소리를 마이크로 다시 받지 않고 탭의 원본 음성을 직접 입력하므로 전사와 화자 구분이 더 안정적입니다. 대면 회의에서는 ‘마이크’를 사용합니다.": "Before starting a Global Meeting, choose ‘Browser tab audio’ under Audio source. In the Chrome sharing window, select the video or meeting tab and enable audio sharing. The original tab audio is captured directly instead of being picked up again through the microphone, which makes transcription and speaker detection more stable. Use ‘Microphone’ for in-person meetings."
+    "글로벌 미팅을 시작하기 전에 입력 소스에서 ‘브라우저 탭 오디오’를 선택하고, Chrome 공유 창에서 재생 중인 영상이나 회의 탭과 오디오 공유를 켭니다. 스피커 소리를 마이크로 다시 받지 않고 탭의 원본 음성을 직접 입력하므로 전사와 화자 구분이 더 안정적입니다. 대면 회의에서는 ‘마이크’를 사용합니다.": "Before starting a Global Meeting, choose ‘Browser tab audio’ under Audio source. In the Chrome sharing window, select the video or meeting tab and enable audio sharing. The original tab audio is captured directly instead of being picked up again through the microphone, which makes transcription and speaker detection more stable. Use ‘Microphone’ for in-person meetings.",
+    "각자 자기 화면에서 보는 통역 회의실": "An interpreter room each side sees on their own screen",
+    "링크와 비밀번호로 상대방을 초대하면 두 사람이 각자 자기 기기에서 같은 대화를 자기 언어로 봅니다. 내가 한 말이 상대에게 어떻게 전달됐는지 확인하고, 상대의 말은 내 언어로 읽습니다. 음성은 화상회의나 같은 방에서 그대로 주고받습니다.": "Invite the other person with a link and password, and both of you follow the same conversation in your own language on your own device. You see how your words reached them, and read their words in your language. Voice stays in the video call or the room itself.",
+    "초대 링크와 비밀번호 한 번에 복사": "Copy the invite link and password in one click",
+    "문장이 끝나면 바로 양쪽 화면에 원문과 번역 표시": "Original and translation appear on both screens as each sentence ends",
+    "화상회의 모드와 같은 방 모드": "Video-call mode and same-room mode",
+    "회의 종료 뒤 24시간 동안 상대도 회의록을 원하는 언어로 내려받기": "For 24 hours after the meeting, the other person can download the minutes in their chosen language",
+    "상대방은 계정 없이 이름과 비밀번호만으로 입장하며, 회의록은 Word·PDF·Markdown으로 받을 수 있습니다.": "The other person enters with just a name and the password, no account needed, and the minutes come as Word, PDF, or Markdown.",
+    "통역 회의실": "Interpreter room",
+    "초대 링크·비밀번호, 참가자별 언어 화면, 실시간 번역, 회의록 다운로드": "Invite link and password, per-participant language view, live translation, minutes download",
+    "상대방과 각자 화면으로 같은 회의 진행": "Run the same meeting with the other person on separate screens",
+    "상대 링크는 회의 종료 뒤 24시간 유효": "The guest link stays valid for 24 hours after the meeting ends"
   },
   "ja": {
     "현재 배포는 승인된 계정마다 업무 데이터를 분리하는 고객 테스트 환경입니다. 자동 결제 수납, 회사 단위 세분화 권한, 캘린더 연동과 공유 동시 편집은 현재 제품 범위에 포함되지 않습니다. 고객 테스트에서 우선순위를 확인한 뒤 필요한 기능부터 확장할 수 있습니다.": "現在の環境は、承認済みアカウントごとに業務データを分離するお客様向けテスト環境です。自動決済、会社単位の詳細な権限、カレンダー連携、リアルタイム共同編集は現在の範囲に含まれていません。お客様テストで確認した優先順位に沿って、必要な機能から拡張できます。",
@@ -571,6 +582,17 @@
     "영상이나 음원 하나가 끝나고 다른 콘텐츠를 재생하기 전에 글로벌 미팅 화면의 ‘새 영상·음원’을 누릅니다. 지금까지의 대화 기록은 유지하고, 새 콘텐츠의 화자 문맥만 다시 시작해 앞 영상의 목소리 정보가 다음 영상에 섞이지 않도록 합니다. 같은 회의가 계속되는 동안에는 누르지 않아도 됩니다.": "一つの動画や音声が終わり、別のコンテンツを再生する前に、グローバルミーティング画面の「新しい動画・音声」を押してください。これまでの会話記録は残したまま、話者識別の文脈だけを新しく開始し、前の動画の音声情報が次の動画に混ざるのを防ぎます。同じ会議が続いている間は押す必要はありません。",
     "새 영상·음원": "新しい動画・音声",
     "유튜브나 브라우저 회의 음성을 더 선명하게 받으려면 어떻게 하나요?": "YouTubeやブラウザ会議の音声をより明瞭に取り込むにはどうすればよいですか？",
-    "글로벌 미팅을 시작하기 전에 입력 소스에서 ‘브라우저 탭 오디오’를 선택하고, Chrome 공유 창에서 재생 중인 영상이나 회의 탭과 오디오 공유를 켭니다. 스피커 소리를 마이크로 다시 받지 않고 탭의 원본 음성을 직접 입력하므로 전사와 화자 구분이 더 안정적입니다. 대면 회의에서는 ‘마이크’를 사용합니다.": "グローバルミーティングを開始する前に、入力ソースで「ブラウザタブの音声」を選択し、Chromeの共有画面で再生中の動画または会議タブを選んで音声共有をオンにします。スピーカーの音をマイクで拾い直さず、タブの元音声を直接入力するため、文字起こしと話者識別がより安定します。対面会議では「マイク」を使用してください。"
+    "글로벌 미팅을 시작하기 전에 입력 소스에서 ‘브라우저 탭 오디오’를 선택하고, Chrome 공유 창에서 재생 중인 영상이나 회의 탭과 오디오 공유를 켭니다. 스피커 소리를 마이크로 다시 받지 않고 탭의 원본 음성을 직접 입력하므로 전사와 화자 구분이 더 안정적입니다. 대면 회의에서는 ‘마이크’를 사용합니다.": "グローバルミーティングを開始する前に、入力ソースで「ブラウザタブの音声」を選択し、Chromeの共有画面で再生中の動画または会議タブを選んで音声共有をオンにします。スピーカーの音をマイクで拾い直さず、タブの元音声を直接入力するため、文字起こしと話者識別がより安定します。対面会議では「マイク」を使用してください。",
+    "각자 자기 화면에서 보는 통역 회의실": "それぞれの画面で見る通訳ルーム",
+    "링크와 비밀번호로 상대방을 초대하면 두 사람이 각자 자기 기기에서 같은 대화를 자기 언어로 봅니다. 내가 한 말이 상대에게 어떻게 전달됐는지 확인하고, 상대의 말은 내 언어로 읽습니다. 음성은 화상회의나 같은 방에서 그대로 주고받습니다.": "リンクとパスワードで相手を招待すると、2人がそれぞれの端末で同じ会話を自分の言語で見られます。自分の発言が相手にどう伝わったかを確認し、相手の発言は自分の言語で読めます。音声はビデオ会議や同じ部屋でそのままやり取りします。",
+    "초대 링크와 비밀번호 한 번에 복사": "招待リンクとパスワードをワンクリックでコピー",
+    "문장이 끝나면 바로 양쪽 화면에 원문과 번역 표시": "文が終わるとすぐ両方の画面に原文と翻訳を表示",
+    "화상회의 모드와 같은 방 모드": "ビデオ会議モードと同じ部屋モード",
+    "회의 종료 뒤 24시간 동안 상대도 회의록을 원하는 언어로 내려받기": "会議終了後24時間は相手も希望の言語で議事録をダウンロード可能",
+    "상대방은 계정 없이 이름과 비밀번호만으로 입장하며, 회의록은 Word·PDF·Markdown으로 받을 수 있습니다.": "相手はアカウントなしで名前とパスワードだけで入室でき、議事録はWord・PDF・Markdownで受け取れます。",
+    "통역 회의실": "通訳ルーム",
+    "초대 링크·비밀번호, 참가자별 언어 화면, 실시간 번역, 회의록 다운로드": "招待リンク・パスワード、参加者ごとの言語画面、リアルタイム翻訳、議事録ダウンロード",
+    "상대방과 각자 화면으로 같은 회의 진행": "相手とそれぞれの画面で同じ会議を進行",
+    "상대 링크는 회의 종료 뒤 24시간 유효": "相手のリンクは会議終了後24時間有効"
   }
 }

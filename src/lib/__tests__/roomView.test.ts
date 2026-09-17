@@ -16,7 +16,9 @@ describe("room view reducer", () => {
     state = applyRoomEvent(state, { seq: 4, at: "2026-09-15T01:00:03.000Z", type: "attribution", utteranceId: "u1", speaker: "guest" });
     state = applyRoomEvent(state, { seq: 5, at: "2026-09-15T01:00:04.000Z", type: "ended", endedAt: "2026-09-15T01:00:04.000Z" });
 
-    expect(state.participants).toEqual([host, guest]);
+    expect(state.participants).toEqual([{ ...host }, { ...guest, registered: false }]);
+    const registered = applyRoomEvent(state, { seq: 6, at: "2026-09-15T01:00:05.000Z", type: "participant", role: "guest", name: "Alex", language: "en", state: "registered" });
+    expect(registered.participants.find((item) => item.role === "guest")?.registered).toBe(true);
     expect(state.utterances).toEqual([expect.objectContaining({ utteranceId: "u1", speaker: "guest", corrected: true, translations: { en: "Hello" } })]);
     expect(state.endedAt).toBe("2026-09-15T01:00:04.000Z");
     expect(state.lastSeq).toBe(5);

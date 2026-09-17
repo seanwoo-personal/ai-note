@@ -1229,5 +1229,10 @@
   "대화록 미리보기": "Preview transcript",
   "PDF는 인쇄 화면이 새 탭에 열리며 브라우저의 'PDF로 저장'으로 내려받습니다.": "For PDF, a print view opens in a new tab; save it with the browser's \"Save as PDF\".",
   "불러오는 중…": "Loading…",
-  "미리보기를 불러오지 못했습니다. 잠시 뒤 다시 시도해 주세요.": "Could not load the preview. Try again in a moment."
+  "미리보기를 불러오지 못했습니다. 잠시 뒤 다시 시도해 주세요.": "Could not load the preview. Try again in a moment.",
+  "같은 방에서는 각자 한 문장을 말해 목소리를 등록하면 두 사람이 같은 언어로 말해도 화자를 구분합니다.": "In the same room, each of you says one sentence to register your voice; then speakers are told apart even when both speak the same language.",
+  "{name} 님이 한 문장을 말해 주세요…": "{name}, please say one sentence…",
+  "{name} 등록됨 · 다시 등록": "{name} registered · register again",
+  "목소리를 등록했습니다.": "Voice registered.",
+  "목소리를 등록하지 못했습니다. 다시 시도해 주세요.": "Could not register the voice. Try again."
 }

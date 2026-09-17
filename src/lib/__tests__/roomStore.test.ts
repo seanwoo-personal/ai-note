@@ -185,6 +185,23 @@ describe("room store", () => {
     await expect(resolveGuestSession(session.token)).resolves.toBeNull();
   });
 
+  it("binds a diarization label to a seat, moves a label re-registered elsewhere, and refuses after the end", async () => {
+    const created = await inHost(() => createRoom({ hostAccountId: HOST, mode: "same_room", host: { name: "A", language: "ko" }, now: NOW }));
+    const id = created.room.id;
+    await inHost(() => joinRoomGuest(id, { name: "Alex", language: "en", now: NOW }));
+    const { registerParticipantSpeakerLabel } = await import("@/lib/roomStore");
+    const first = await inHost(() => registerParticipantSpeakerLabel(id, "host", "1", { now: NOW }));
+    expect(first.participants.map((item) => [item.role, item.speakerLabel])).toEqual([["host", "1"], ["guest", null]]);
+    const second = await inHost(() => registerParticipantSpeakerLabel(id, "guest", "2", { now: NOW }));
+    expect(second.participants.map((item) => [item.role, item.speakerLabel])).toEqual([["host", "1"], ["guest", "2"]]);
+    const moved = await inHost(() => registerParticipantSpeakerLabel(id, "guest", "1", { now: NOW }));
+    expect(moved.participants.map((item) => [item.role, item.speakerLabel])).toEqual([["host", null], ["guest", "1"]]);
+    const { events } = await inHost(() => readRoomEvents(id));
+    expect(events.filter((event) => event.type === "participant" && event.state === "registered")).toHaveLength(3);
+    await inHost(() => endRoom(id, { now: "2026-09-15T02:00:00.000Z" }));
+    await expect(inHost(() => registerParticipantSpeakerLabel(id, "host", "3"))).rejects.toMatchObject({ code: "room_ended" });
+  });
+
   it("fails closed on a corrupt room document", async () => {
     const created = await inHost(() => createRoom({ hostAccountId: HOST, mode: "remote", host: { name: "A", language: "ko" }, now: NOW }));
     await writeFile(roomPaths(created.room.id, accountTenantDataRoot(HOST)).room, "{\"schemaVersion\":1}");

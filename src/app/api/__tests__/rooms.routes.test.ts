@@ -400,6 +400,37 @@ describe("interpreter room routes", () => {
     expect(bad.status).toBe(400);
   });
 
+  it("lets only the host of a shared room register a seat's voice label, which then drives attribution", async () => {
+    const { id, token, password } = await createRoom("same_room");
+    const joined = await joinAsGuest(token, password, "Alex", "en");
+    const guest = { cookie: cookieFrom(joined), meetingId: id };
+    const { POST: registerPOST } = await import("@/app/api/rooms/[id]/participants/[role]/speaker-label/route");
+    const registerCtx = (role: string) => ({ params: Promise.resolve({ id, role }) });
+    const byGuest = await runWithAccountTenantData(HOST, () => registerPOST(guestRequest(`/api/rooms/${id}/participants/guest/speaker-label`, guest, {
+      method: "POST", json: { speakerLabel: "2" },
+    }), registerCtx("guest")));
+    expect(byGuest.status).toBe(404);
+    const registered = await runWithAccountTenantData(HOST, () => registerPOST(hostRequest(`/api/rooms/${id}/participants/guest/speaker-label`, {
+      method: "POST", json: { speakerLabel: "2" },
+    }), registerCtx("guest")));
+    expect(registered.status).toBe(200);
+    await expect(registered.json()).resolves.toMatchObject({ ok: true, participants: [{ role: "host", registered: false }, { role: "guest", registered: true }] });
+    const badRole = await runWithAccountTenantData(HOST, () => registerPOST(hostRequest(`/api/rooms/${id}/participants/robot/speaker-label`, {
+      method: "POST", json: { speakerLabel: "2" },
+    }), registerCtx("robot")));
+    expect(badRole.status).toBe(400);
+    // A French sentence (neither seat's language) with the guest's label now attributes to the guest.
+    const said = await runWithAccountTenantData(HOST, () => utterancePOST(hostRequest(`/api/rooms/${id}/utterances`, {
+      method: "POST", json: { utteranceId: "u-fr", original: "Bonjour à tous", sourceLanguage: "fr", speakerLabel: "2" },
+    }), ctx(id)));
+    await expect(said.json()).resolves.toMatchObject({ speaker: "guest", rule: "registered_label", confidence: "high" });
+    const remote = await createRoom("remote");
+    const remoteRegister = await runWithAccountTenantData(HOST, () => registerPOST(hostRequest(`/api/rooms/${remote.id}/participants/host/speaker-label`, {
+      method: "POST", json: { speakerLabel: "1" },
+    }), { params: Promise.resolve({ id: remote.id, role: "host" }) }));
+    expect(remoteRegister.status).toBe(400);
+  });
+
   it("rotating the invite invalidates the old link and existing guest sessions", async () => {
     const { id, token, password } = await createRoom();
     const joined = await joinAsGuest(token, password);

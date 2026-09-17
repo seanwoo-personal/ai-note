@@ -54,6 +54,7 @@ export const DATA_SURFACE_INVENTORY = [
   "/api/rooms/[id]/events",
   "/api/rooms/[id]/export",
   "/api/rooms/[id]/invite/rotate",
+  "/api/rooms/[id]/participants/[role]/speaker-label",
   "/api/rooms/[id]/utterances",
   "/api/rooms/[id]/utterances/[utteranceId]/speaker",
   "/api/realtime/android-temporary-key",

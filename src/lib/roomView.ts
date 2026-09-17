@@ -8,6 +8,7 @@ export interface RoomViewParticipant {
   role: RoomRole;
   name: string;
   language: RoomLanguage;
+  registered?: boolean;
 }
 
 export interface RoomViewUtterance {
@@ -64,7 +65,9 @@ export function applyRoomEvent(state: RoomViewState, event: RoomEvent): RoomView
       return next;
     case "participant": {
       const others = state.participants.filter((item) => item.role !== event.role);
-      next.participants = [...others, { role: event.role, name: event.name, language: event.language }]
+      const previous = state.participants.find((item) => item.role === event.role);
+      const registered = event.state === "registered" ? true : event.state === "joined" ? previous?.registered ?? false : previous?.registered;
+      next.participants = [...others, { role: event.role, name: event.name, language: event.language, registered }]
         .sort((left, right) => (left.role === "host" ? -1 : 1) - (right.role === "host" ? -1 : 1));
       return next;
     }

@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **테스트**: finalize 테넌트 경계·guard 헤더 무시·워커 테넌트 순회 회귀 추가. finalizeAtomic의 전사 publisher lease 경합과 E2E 포커스 인벤토리의 지연 마운트 경합 해소.
 - **문서**: 계정별 데이터 루트 계약을 ARCHITECTURE/AGENTS/README/AWS 안내에 통일하고 ADR 0023·0026·0027 갱신 기록 추가. 사라진 `bootstrap.mjs`/`app:*` 명령과 "Google ID token" 서술 제거.
 - **기능**: 공유 통역 회의실 1:1(ADR 0028) — 호스트가 링크+자동 비밀번호로 게스트를 초대하고 각자 자기 언어 관점으로 같은 대화를 보는 화면(`/rooms`, `/rooms/{id}`, `/join/{token}`), SSE 동기화, 서버 화자 귀속, 종료 시 회의록 발행, 종료 후 24시간 게스트 다운로드(회의록 언어 선택), 초대 회전·rate limit, 실시간 세션의 양방향 live 번역 즉시 반영, 초대 모달·복사, 게스트 화면 언어 전환, 재입장 시 이름 변경, 잘못된 링크 안내 화면, Word/PDF(인쇄)/Markdown 형식 선택과 미리보기(`docx` 의존성 추가). `같은 방` 모드의 등록 문장 UI는 후속.
+- **배포**: compose의 tunnel 서비스가 `CLOUDFLARE_TUNNEL_ARGS`로 이름 있는 Cloudflare Tunnel을 지원(기본은 Quick Tunnel). 자격증명은 외부 볼륨 `ai-note-cloudflared`에만 둠. 테스트 서버는 `note.seanwoo.dev` 고정 주소로 전환.
 - 이 항목들은 다음 제품 버전 확정 시 아래 원장에 편입한다. 1.17.0 이후 병합된 Vision 리브랜드·글로벌 미팅 번역·고객 준비 작업도 아직 버전 번호가 없다.
 
 ## Product version ledger

@@ -33,7 +33,7 @@ fixtures/              # 테스트 픽스처(커밋): raw.md, summary happy/fall
 
 - Clone 뒤 `npm ci`와 `.env.example` 복사, `npm run setup`, `npm run dev`가 로컬 정본이다. Setup은 Node·ffmpeg를 검사하고 provider 키 파일을 안내한다. Python·`uv`·로컬 STT 모델은 필요하지 않다.
 - 로컬 Next 서버는 `127.0.0.1`에만 bind한다. 고객 테스트는 multi-stage Docker 이미지에서 non-root 사용자로 실행하고 host의 `127.0.0.1:3000`에만 publish한다.
-- 외부 접속은 Cloudflare Quick Tunnel의 임시 HTTPS origin을 사용한다. 안정된 도메인을 연결하면 `APP_ORIGIN`을 정확한 HTTPS origin으로 고정한다.
+- 외부 접속은 Cloudflare Tunnel이다. 기본은 Quick Tunnel의 임시 HTTPS origin이고, 고정 도메인은 이름 있는 터널(`CLOUDFLARE_TUNNEL_ARGS="run <name>"`, 자격증명은 `ai-note-cloudflared` 볼륨)로 붙이며 `APP_ORIGIN`을 정확한 HTTPS origin으로 고정한다(docs/AWS_DEPLOYMENT.md §8).
 - `SONIOX_API_KEY`, `OPENROUTER_API_KEY`, `AI_NOTE_SMTP_PASSWORD` 등 외부 자격증명은 gitignored 환경 파일에서만 주입하고 build 시점에는 요구하지 않는다. 비밀번호 복구 메일은 `AI_NOTE_SMTP_*`를 핸들러 안에서 지연 로드하고 TLS 1.2 이상 SMTP만 허용한다. 테스트는 fake provider·fake mail만 사용한다.
 - 승인된 고객 계정마다 데이터 루트를 `data/tenants/{sha256(accountId)}`로 분리한다(아래 "계정별 데이터 루트"). 파일 기반 단일 서버는 고객 테스트용이며 상용 멀티테넌시가 아니다(ADR 0026). Soniox/OpenRouter 전환은 ADR [0027](decisions/0027-soniox-transcription-and-openrouter-routing.md)을 따른다.
 

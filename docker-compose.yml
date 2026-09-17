@@ -16,10 +16,18 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  # External HTTPS ingress. With no CLOUDFLARE_TUNNEL_ARGS this runs a Quick
+  # Tunnel (random trycloudflare.com URL, testing only). For a stable domain,
+  # create a named tunnel once (docs/AWS_DEPLOYMENT.md §8) and set
+  # CLOUDFLARE_TUNNEL_ARGS="run <tunnel-name>" in the project-level .env; the
+  # tunnel certificate, credentials, and ingress config live in the
+  # ai-note-cloudflared volume and never in this repository.
   tunnel:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
-    command: tunnel --no-autoupdate --url http://app:3000
+    command: tunnel --no-autoupdate ${CLOUDFLARE_TUNNEL_ARGS:---url http://app:3000}
+    volumes:
+      - ai-note-cloudflared:/home/nonroot/.cloudflared
     depends_on:
       - app
     security_opt:
@@ -27,3 +35,6 @@ services:
 
 volumes:
   ai-note-data:
+  ai-note-cloudflared:
+    external: true
+    name: ai-note-cloudflared

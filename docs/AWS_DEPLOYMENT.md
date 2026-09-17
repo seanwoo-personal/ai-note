@@ -116,6 +116,31 @@ docker compose down
 
 `docker compose down`은 데이터 볼륨을 삭제하지 않습니다. `docker compose down -v`는 회의·계정 데이터를 삭제하므로 사용하지 마세요.
 
-## 8. 정식 URL로 전환할 때
+## 8. 고정 도메인 · 이름 있는 Cloudflare Tunnel
 
-고객 검증이 끝나면 Quick Tunnel 대신 이름이 있는 Cloudflare Tunnel이나 자체 도메인·리버스 프록시를 사용하고, `.env.production`의 `APP_ORIGIN`을 정확한 HTTPS 원본으로 설정합니다. 예: `APP_ORIGIN=https://note.example.jp`. 이후 컨테이너를 다시 시작합니다.
+Quick Tunnel 주소는 터널이 다시 만들어질 때마다 바뀝니다. 도메인이 Cloudflare DNS에 있으면(Cloudflare Registrar 구매 또는 네임서버 이전) 아래 한 번의 설정으로 고정 주소를 붙입니다. 터널 인증서·자격증명·ingress 설정은 서버의 Docker 볼륨 `ai-note-cloudflared`에만 있고 저장소에는 넣지 않습니다.
+
+```sh
+cd ~/ai-note
+docker volume create ai-note-cloudflared
+docker run --rm -v ai-note-cloudflared:/home/nonroot/.cloudflared alpine chown -R 65532:65532 /home/nonroot/.cloudflared
+CF="docker run --rm -v ai-note-cloudflared:/home/nonroot/.cloudflared cloudflare/cloudflared:latest"
+$CF tunnel login                     # 출력된 URL을 브라우저에서 열어 zone을 승인
+$CF tunnel create ai-note-tokyo      # 터널 ID가 출력됨
+$CF tunnel route dns ai-note-tokyo note.example.dev
+```
+
+`config.yml`을 볼륨 안에 만듭니다(`<id>`는 위 터널 ID).
+
+```yaml
+tunnel: <id>
+credentials-file: /home/nonroot/.cloudflared/<id>.json
+ingress:
+  - hostname: note.example.dev
+    service: http://app:3000
+  - service: http_status:404
+```
+
+그다음 프로젝트 폴더의 `.env`(compose 변수 파일, gitignore 대상)에 `CLOUDFLARE_TUNNEL_ARGS="run ai-note-tokyo"`를, `.env.production`에 `APP_ORIGIN=https://note.example.dev`를 넣고 `docker compose up -d`로 재시작합니다. 앱은 `APP_ORIGIN`과 정확히 같은 origin만 신뢰하므로 오타가 있으면 로그인·저장 요청이 403으로 막힙니다. `.dev` 같은 HSTS 사전 등록 TLD는 HTTPS로만 열립니다.
+
+확인: `curl -I https://note.example.dev/login`이 200이면 됩니다. 이후 Android 앱은 같은 주소로 다시 빌드합니다(`android-app/README.md`).

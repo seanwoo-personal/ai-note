@@ -74,7 +74,7 @@ docker compose up -d --build
 docker compose logs tunnel
 ```
 
-터널 로그의 `https://...trycloudflare.com` 주소를 고객에게 전달합니다. Quick Tunnel 주소는 테스트 전용이며 다시 만들면 바뀔 수 있습니다.
+터널 로그의 `https://...trycloudflare.com` 주소를 고객에게 전달합니다. Quick Tunnel 주소는 테스트 전용이며 다시 만들면 바뀔 수 있습니다. 고정 도메인은 이름 있는 Cloudflare Tunnel로 붙입니다([AWS 배포 안내 §8](docs/AWS_DEPLOYMENT.md#8-고정-도메인--이름-있는-cloudflare-tunnel)).
 
 ## 주요 경로
 

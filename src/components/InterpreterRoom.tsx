@@ -6,9 +6,11 @@ import { useAppPreferences } from "@/components/AppPreferences";
 import { AppDialog } from "@/components/AppDialog";
 import { LocaleSwitcher, ROOM_LANGUAGE_GROUP_LABEL } from "@/components/LocaleSwitcher";
 import { useSonioxLiveCapture } from "@/components/useSonioxLiveCapture";
+import { useSonioxTts } from "@/components/useSonioxTts";
 import { buildInviteText, ROOM_LANGUAGES, type RoomEvent, type RoomLanguage, type RoomRole } from "@/domain/room";
 import type { PublicRoom } from "@/lib/roomApi";
 import { ROOM_LANGUAGE_LABELS } from "@/lib/roomExport";
+import { ROOM_VOICES, selectSpeechJobs, type RoomVoice, type SpeechJob } from "@/lib/roomSpeech";
 import { applyRoomEvent, emptyRoomView, utterancePerspective, type RoomViewState } from "@/lib/roomView";
 import { type CoalescedUtterance, UtteranceCoalescer } from "@/lib/utteranceCoalescer";
 
@@ -86,6 +88,14 @@ export function InterpreterRoom({ roomId, role }: InterpreterRoomProps) {
   const [registerStatus, setRegisterStatus] = useState<string | null>(null);
   const registeringRef = useRef<RoomRole | null>(null);
   const capture = useSonioxLiveCapture();
+  // Spoken interpretation: the other seat's words, read aloud in my language.
+  const speech = useSonioxTts();
+  const [voiceOn, setVoiceOn] = useState(false);
+  const [voice, setVoice] = useState<RoomVoice>("Maya");
+  const [speechQueue, setSpeechQueue] = useState<SpeechJob[]>([]);
+  const [speechError, setSpeechError] = useState<string | null>(null);
+  const spokenRef = useRef(new Set<string>());
+  const speechProcessingRef = useRef(false);
   const clientIdRef = useRef<string>("");
   const lastEndpointRef = useRef(0);
   const originalLengthsRef = useRef<Record<string, number>>({});
@@ -266,6 +276,52 @@ export function InterpreterRoom({ roomId, role }: InterpreterRoomProps) {
     }
     armFlush();
   }, [armFlush, capture.transcript.endpointCount, capture.transcript.endpoints, me, other, roomId, submitUtterance, t]);
+
+  useEffect(() => {
+    if (!voiceOn || !me) return;
+    const jobs = selectSpeechJobs(view.utterances, me, spokenRef.current);
+    if (jobs.length === 0) return;
+    for (const job of jobs) spokenRef.current.add(job.utteranceId);
+    setSpeechQueue((current) => [...current, ...jobs]);
+  }, [me, view.utterances, voiceOn]);
+
+  // Depend on the stable callbacks, not the hook's per-render result object.
+  const speak = speech.speak;
+  const prepareSpeech = speech.prepare;
+  const stopSpeech = speech.stop;
+  useEffect(() => {
+    if (!voiceOn || speechProcessingRef.current || speechQueue.length === 0) return;
+    if (!["idle", "finished", "error"].includes(speech.phase)) return;
+    const job = speechQueue[0];
+    speechProcessingRef.current = true;
+    void speak({ text: job.text, language: job.language, voice }).catch(() => {
+      setSpeechError(t("통역 음성을 재생하지 못했습니다."));
+    }).finally(() => {
+      speechProcessingRef.current = false;
+      setSpeechQueue((current) => current.filter((item) => item.utteranceId !== job.utteranceId));
+    });
+  }, [speak, speech.phase, speechQueue, t, voice, voiceOn]);
+
+  const toggleVoice = useCallback(() => {
+    if (voiceOn) {
+      setVoiceOn(false);
+      setSpeechQueue([]);
+      stopSpeech();
+      return;
+    }
+    // Start from now: history is not read back, and playback is unlocked inside the click.
+    for (const utterance of view.utterances) spokenRef.current.add(utterance.utteranceId);
+    setSpeechError(null);
+    setVoiceOn(true);
+    void prepareSpeech().catch(() => setSpeechError(t("통역 음성을 재생하지 못했습니다.")));
+  }, [prepareSpeech, stopSpeech, t, view.utterances, voiceOn]);
+
+  useEffect(() => {
+    if (!ended) return;
+    setVoiceOn(false);
+    setSpeechQueue([]);
+    stopSpeech();
+  }, [ended, stopSpeech]);
 
   const translationPair = me && other && me.language !== other.language ? `${me.language}|${other.language}` : "";
   const startCapture = useCallback(() => {
@@ -583,6 +639,29 @@ export function InterpreterRoom({ roomId, role }: InterpreterRoomProps) {
             <p role="status" aria-live="polite" className="text-[13px] text-inkSoft">
               {captureError ?? capture.error ?? (speaking ? t("듣는 중 · 말이 끝나면 자동으로 기록됩니다.") : "")}
             </p>
+            <div className="flex w-full flex-wrap items-center gap-3 border-t border-line pt-3">
+              <button
+                type="button"
+                onClick={toggleVoice}
+                aria-pressed={voiceOn}
+                className={`min-h-11 rounded-lg border px-4 text-[14px] font-semibold ${voiceOn ? "border-accent bg-soft text-accent" : "border-line bg-panel text-ink"} hover:bg-soft`}
+              >
+                {voiceOn ? t("통역 음성 끄기") : t("통역 음성 듣기")}
+              </button>
+              <label className="flex items-center gap-2 text-[13px] text-inkSoft">
+                <span>{t("통역 음성")}</span>
+                <select
+                  value={voice}
+                  onChange={(event) => setVoice(event.target.value as RoomVoice)}
+                  className="min-h-11 rounded-lg border border-line bg-bg px-3 text-[14px] text-ink"
+                >
+                  {ROOM_VOICES.map((option) => <option key={option} value={option}>{option}</option>)}
+                </select>
+              </label>
+              <p role="status" aria-live="polite" className="text-[12px] text-inkSoft">
+                {speechError ?? (voiceOn ? (speech.phase === "playing" ? t("재생 중…") : t("이어폰을 끼면 상대 말이 끝난 뒤 내 언어로 들립니다.")) : "")}
+              </p>
+            </div>
           </div>
         )}
       </section>

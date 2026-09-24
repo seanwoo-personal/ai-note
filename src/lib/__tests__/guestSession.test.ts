@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   capGuestSessions,
@@ -23,13 +23,19 @@ const HOST = "11111111-1111-4111-8111-111111111111";
 let originalCwd: string;
 let workDir: string;
 
+// The fixtures carry fixed September 2026 timestamps; pin the wall clock so the
+// implementation's `new Date()` defaults stay inside that window forever.
+const CLOCK = "2026-09-15T00:30:00.000Z";
+
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"], now: new Date(CLOCK) });
   originalCwd = process.cwd();
   workDir = mkdtempSync(join(tmpdir(), "guest-session-"));
   process.chdir(workDir);
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   process.chdir(originalCwd);
   rmSync(workDir, { recursive: true, force: true });
 });

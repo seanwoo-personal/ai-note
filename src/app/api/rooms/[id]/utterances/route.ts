@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { attributeUtterance, ROOM_LANGUAGES, type RoomLanguage } from "@/domain/room";
+import { attributeUtterance, ROOM_LANGUAGES, type RoomEvent, type RoomLanguage, type RoomRole } from "@/domain/room";
 import { recordRequestUsage } from "@/lib/accountUsage";
 import {
   guardLocalApiRequest,
@@ -10,7 +10,7 @@ import {
 import { jsonNoStore, publicErrorResponse, safeLog } from "@/lib/publicApi";
 import { resolveRoomRequest, roomErrorResponse } from "@/lib/roomApi";
 import { appendRoomEvent, readRoomEvents, RoomStoreError } from "@/lib/roomStore";
-import { translateText } from "@/lib/translation";
+import { TRANSLATION_CONTEXT_LINES, translateText, type TranslationContextLine } from "@/lib/translation";
 
 // POST /api/rooms/[id]/utterances — a participant's device submits one final
 // utterance. The server decides the speaker (ADR 0028 §3), appends the
@@ -89,11 +89,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return roomErrorResponse(error, context.id);
     }
   }
+  // Every other participant language is (re)translated with the preceding
+  // utterances as context. The live text above is the instant answer; the
+  // refinement replaces it a few seconds later so breath-broken fragments read
+  // as one sentence and references resolve.
   const targets = [...new Set(context.room.participants.map((item) => item.language))]
-    .filter((language) => language !== parsed.data.sourceLanguage && language !== live?.language);
+    .filter((language) => language !== parsed.data.sourceLanguage);
+  const names: Record<RoomRole, string> = { host: "호스트", guest: "게스트" };
+  for (const participant of context.room.participants) names[participant.role] = participant.name;
+  const recent = log.events
+    .filter((event): event is Extract<RoomEvent, { type: "utterance" }> => event.type === "utterance")
+    .slice(-TRANSLATION_CONTEXT_LINES)
+    .map((event) => ({ speaker: names[event.speaker], text: event.original }));
   // Fire-and-forget: the request already runs inside the host tenant context,
   // which AsyncLocalStorage propagates into these continuations.
-  void translateInBackground(request, context.id, parsed.data.utteranceId, parsed.data.original, targets);
+  void translateInBackground(request, context.id, parsed.data.utteranceId, parsed.data.original, targets, recent);
 
   return jsonNoStore({
     accepted: true,
@@ -111,10 +121,11 @@ async function translateInBackground(
   utteranceId: string,
   original: string,
   targets: RoomLanguage[],
+  context: TranslationContextLine[],
 ): Promise<void> {
   for (const language of targets) {
     try {
-      const result = await translateText(original, language);
+      const result = await translateText(original, language, { context });
       if (!result.ok) {
         safeLog("warn", { code: "room_translation_failed", operation: "room_translate", meetingId: roomId, phase: language, reason: result.reason });
         continue;

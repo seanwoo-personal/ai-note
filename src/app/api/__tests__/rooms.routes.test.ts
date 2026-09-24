@@ -266,26 +266,34 @@ describe("interpreter room routes", () => {
     expect(received).toContain("event: translation");
   });
 
-  it("stores a live translation from the device immediately and skips the model for that language", async () => {
+  it("stores a live translation from the device immediately, then replaces it with a context-aware refinement", async () => {
     const { id, token, password } = await createRoom();
-    await joinAsGuest(token, password);
+    await joinAsGuest(token, password, "Alex");
+    await runWithAccountTenantData(HOST, () => utterancePOST(hostRequest(`/api/rooms/${id}/utterances`, {
+      method: "POST", json: { utteranceId: "u0", original: "그래서 제가 어제", sourceLanguage: "ko", liveTranslation: { language: "en", text: "So yesterday I (live)" } },
+    }), ctx(id)));
     const said = await runWithAccountTenantData(HOST, () => utterancePOST(hostRequest(`/api/rooms/${id}/utterances`, {
       method: "POST",
       json: {
-        utteranceId: "u-live", original: "안녕하세요", sourceLanguage: "ko",
-        liveTranslation: { language: "en", text: "Hello (live)" },
+        utteranceId: "u-live", original: "고객사에 다녀왔습니다.", sourceLanguage: "ko",
+        liveTranslation: { language: "en", text: "visited the customer (live)" },
       },
     }), ctx(id)));
     expect(said.status).toBe(200);
-    await expect(said.json()).resolves.toMatchObject({ accepted: true, pendingTranslations: [] });
+    // The live text is the instant answer; the model refines every target afterwards.
+    await expect(said.json()).resolves.toMatchObject({ accepted: true, pendingTranslations: ["en"] });
     const { events } = await runWithAccountTenantData(HOST, () => readRoomEvents(id));
-    expect(events.filter((event) => event.type === "translation")).toEqual([
-      expect.objectContaining({ utteranceId: "u-live", language: "en", text: "Hello (live)" }),
-    ]);
-    // Give any (unexpected) background translation a moment; none may appear.
-    await new Promise((resolve) => setTimeout(resolve, 150));
-    const again = await runWithAccountTenantData(HOST, () => readRoomEvents(id));
-    expect(again.events.filter((event) => event.type === "translation")).toHaveLength(1);
+    expect(events.filter((event) => event.type === "translation" && event.utteranceId === "u-live")[0]).toMatchObject({ language: "en", text: "visited the customer (live)" });
+
+    await runWithAccountTenantData(HOST, () => waitFor(async () => {
+      const log = await readRoomEvents(id);
+      return log.events.filter((event) => event.type === "translation" && event.utteranceId === "u-live").length === 2;
+    }));
+    const refined = (await runWithAccountTenantData(HOST, () => readRoomEvents(id))).events
+      .filter((event) => event.type === "translation" && event.utteranceId === "u-live").at(-1);
+    // FAKE_LLM echoes the prompt: the refinement saw the previous utterance as context.
+    expect(refined).toMatchObject({ language: "en" });
+    expect(refined && refined.type === "translation" ? refined.text : "").toContain("그래서 제가 어제");
   });
 
   it("allows manual speaker correction only in a shared room and only for known utterances", async () => {
@@ -395,7 +403,8 @@ describe("interpreter room routes", () => {
     expect(html.headers.get("content-disposition")).toContain("inline");
     const page = await html.text();
     expect(page).toContain("window.print()");
-    expect(page).toContain("Please check next week");
+    // The refinement pass may already have replaced the live line; the original always stays.
+    expect(page).toContain("다음 주 일정 확인 부탁드립니다.");
     const bad = await runWithAccountTenantData(HOST, () => exportGET(guestRequest(`/api/rooms/${id}/export?kind=minutes&format=pdf`, guest), ctx(id)));
     expect(bad.status).toBe(400);
   });

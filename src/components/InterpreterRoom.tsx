@@ -10,6 +10,12 @@ import { buildInviteText, ROOM_LANGUAGES, type RoomEvent, type RoomLanguage, typ
 import type { PublicRoom } from "@/lib/roomApi";
 import { ROOM_LANGUAGE_LABELS } from "@/lib/roomExport";
 import { applyRoomEvent, emptyRoomView, utterancePerspective, type RoomViewState } from "@/lib/roomView";
+import { type CoalescedUtterance, UtteranceCoalescer } from "@/lib/utteranceCoalescer";
+
+// A fragment that does not end a sentence waits this long for its continuation
+// (a breath pause) before it is committed on its own.
+const UTTERANCE_HOLD_MS = 1_800;
+const UTTERANCE_MAX_CHARS = 400;
 
 // Shared interpreter room screen (ADR 0028). The same component serves the host
 // and the guest; only `role` and the invite controls differ. Audio never
@@ -84,6 +90,9 @@ export function InterpreterRoom({ roomId, role }: InterpreterRoomProps) {
   const lastEndpointRef = useRef(0);
   const originalLengthsRef = useRef<Record<string, number>>({});
   const translationLengthsRef = useRef<Record<string, number>>({});
+  const coalescerRef = useRef(new UtteranceCoalescer({ holdMs: UTTERANCE_HOLD_MS, maxChars: UTTERANCE_MAX_CHARS }));
+  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const submitRef = useRef<(item: CoalescedUtterance) => void>(() => undefined);
   const listRef = useRef<HTMLOListElement>(null);
   const inviteCopyRef = useRef<HTMLButtonElement>(null);
   const rotateCancelRef = useRef<HTMLButtonElement>(null);
@@ -150,14 +159,65 @@ export function InterpreterRoom({ roomId, role }: InterpreterRoomProps) {
   }, [room, roomId]);
 
   useEffect(() => {
-    if (ended) capture.stop();
-  }, [capture, ended]);
-
-  useEffect(() => {
     const element = listRef.current;
     if (!element) return;
     element.scrollTop = element.scrollHeight;
   }, [view.utterances.length]);
+
+  // One committed utterance = one POST. Breath-broken endpoints are merged by
+  // the coalescer first; the live two-way translation of the merged pieces is
+  // sent along so the other seat reads something instantly, and the server
+  // refines it with context afterwards.
+  const submitUtterance = useCallback((item: CoalescedUtterance) => {
+    const sourceLanguage = item.language;
+    const liveLanguage = !item.codeSwitched && me && other
+      ? (sourceLanguage === me.language ? other.language : sourceLanguage === other.language ? me.language : null)
+      : null;
+    const liveTranslation = liveLanguage && item.translation ? { language: liveLanguage, text: item.translation } : undefined;
+    void fetch(`/api/rooms/${roomId}/utterances`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        utteranceId: `${clientIdRef.current}-${item.ids[0]}`,
+        original: item.original,
+        sourceLanguage,
+        speakerLabel: item.speakerLabel,
+        ...(liveTranslation ? { liveTranslation } : {}),
+      }),
+    }).catch(() => setCaptureError(t("발화를 전송하지 못했습니다. 연결을 확인해 주세요.")));
+  }, [me, other, roomId, t]);
+
+  useEffect(() => {
+    submitRef.current = submitUtterance;
+  }, [submitUtterance]);
+
+  const armFlush = useCallback(function arm() {
+    if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
+    flushTimerRef.current = null;
+    const deadline = coalescerRef.current.nextDeadline();
+    if (deadline === null) return;
+    flushTimerRef.current = setTimeout(() => {
+      flushTimerRef.current = null;
+      for (const item of coalescerRef.current.flushStale(Date.now())) submitRef.current(item);
+      arm();
+    }, Math.max(0, deadline - Date.now()));
+  }, []);
+
+  const flushPending = useCallback(() => {
+    if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
+    flushTimerRef.current = null;
+    for (const item of coalescerRef.current.flushAll()) submitRef.current(item);
+  }, []);
+
+  useEffect(() => () => {
+    if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
+  }, []);
+
+  useEffect(() => {
+    if (!ended) return;
+    flushPending();
+    capture.stop();
+  }, [capture, ended, flushPending]);
 
   useEffect(() => {
     if (capture.transcript.endpointCount <= lastEndpointRef.current) return;
@@ -191,20 +251,21 @@ export function InterpreterRoom({ roomId, role }: InterpreterRoomProps) {
       const liveLanguage = !endpoint.codeSwitched && me && other
         ? (sourceLanguage === me.language ? other.language : sourceLanguage === other.language ? me.language : null)
         : null;
-      const liveTranslation = liveLanguage && liveText ? { language: liveLanguage, text: liveText } : undefined;
-      void fetch(`/api/rooms/${roomId}/utterances`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          utteranceId: `${clientIdRef.current}-${endpoint.id}`,
-          original,
-          sourceLanguage,
-          speakerLabel: endpoint.speaker ?? null,
-          ...(liveTranslation ? { liveTranslation } : {}),
-        }),
-      }).catch(() => setCaptureError(t("발화를 전송하지 못했습니다. 연결을 확인해 주세요.")));
+      const commits = coalescerRef.current.push({
+        id: endpoint.id,
+        key,
+        speakerLabel: endpoint.speaker ?? null,
+        language: sourceLanguage,
+        original,
+        translation: liveLanguage ? liveText : "",
+        translationLanguage: liveLanguage,
+        codeSwitched: Boolean(endpoint.codeSwitched),
+        at: Date.now(),
+      });
+      for (const item of commits) submitUtterance(item);
     }
-  }, [capture.transcript.endpointCount, capture.transcript.endpoints, me, other, roomId, t]);
+    armFlush();
+  }, [armFlush, capture.transcript.endpointCount, capture.transcript.endpoints, me, other, roomId, submitUtterance, t]);
 
   const translationPair = me && other && me.language !== other.language ? `${me.language}|${other.language}` : "";
   const startCapture = useCallback(() => {
@@ -225,11 +286,12 @@ export function InterpreterRoom({ roomId, role }: InterpreterRoomProps) {
   const toggleSpeaking = useCallback(() => {
     setCaptureError(null);
     if (capture.phase === "listening" || capture.phase === "connecting" || capture.phase === "requesting") {
+      flushPending();
       capture.stop();
       return;
     }
     startCapture();
-  }, [capture, startCapture]);
+  }, [capture, flushPending, startCapture]);
 
   // When the other seat (or its language) changes while I'm listening, restart
   // the session so live translation follows the new pair.

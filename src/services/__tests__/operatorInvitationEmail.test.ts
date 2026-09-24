@@ -24,7 +24,7 @@ describe("operator invitation email", () => {
     vi.stubEnv("AI_NOTE_SMTP_USER", "smtp-user");
     vi.stubEnv("AI_NOTE_SMTP_PASSWORD", "smtp-secret");
     vi.stubEnv("AI_NOTE_SMTP_FROM", "no-reply@example.com");
-    const sendMail = vi.fn(async (_mail: Record<string, unknown>) => ({ messageId: "mail-1" }));
+    const sendMail = vi.fn<(mail: Record<string, unknown>) => Promise<{ messageId: string }>>(async () => ({ messageId: "mail-1" }));
     const createTransport = vi.fn(() => ({ sendMail }));
 
     await sendOperatorInvitationEmail(MESSAGE, { createTransport });

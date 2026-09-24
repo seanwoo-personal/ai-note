@@ -12,6 +12,7 @@ import { GUEST_SESSION_COOKIE } from "@/lib/guestSession";
 import { meetingFenceResponse } from "@/lib/meetingFence";
 import { assertSafeId } from "@/lib/meetingId";
 import { jsonNoStore, publicErrorResponse } from "@/lib/publicApi";
+import { publicOrigin } from "@/lib/publicOrigin";
 import {
   resolveGuestDetails,
   resolveRoomRequestIdentity,
@@ -100,16 +101,6 @@ export async function publicRoom(request: Request, room: RoomDocument, identity:
     participants,
     me,
   };
-}
-
-/** Public origin for links: pinned APP_ORIGIN behind the tunnel, else the request's own origin. */
-export function publicOrigin(request: Request): string {
-  const configured = process.env.APP_ORIGIN?.trim();
-  if (configured) return configured.replace(/\/+$/u, "");
-  const url = new URL(request.url);
-  const forwardedProto = request.headers.get("x-forwarded-proto");
-  const proto = process.env.AI_NOTE_DEPLOYMENT_MODE === "cloud" && forwardedProto === "https" ? "https:" : url.protocol;
-  return `${proto}//${url.host}`;
 }
 
 export function inviteUrl(request: Request, token: string): string {

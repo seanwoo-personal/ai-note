@@ -1,6 +1,7 @@
 import { accountError, accountJson, emailField, readAccountJson, textField } from "@/lib/accountApi";
 import { resolveRequestSession } from "@/lib/accountSession";
 import { AccountStoreError, createOperatorInvitation } from "@/lib/accountStore";
+import { publicOrigin } from "@/lib/publicOrigin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,10 +17,9 @@ export async function POST(request: Request) {
   if (!name || !email) return accountError("invalid_request", 400);
   try {
     const invitation = await createOperatorInvitation({ name, email, invitedBy: session.account.id });
-    const origin = new URL(request.url).origin;
     return accountJson({
       ok: true,
-      setupUrl: `${origin}/admin/accept?token=${encodeURIComponent(invitation.token)}`,
+      setupUrl: `${publicOrigin(request)}/admin/accept?token=${encodeURIComponent(invitation.token)}`,
       expiresAt: invitation.expiresAt,
     }, 201);
   } catch (error) {

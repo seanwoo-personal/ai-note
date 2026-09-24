@@ -405,6 +405,21 @@ function temporaryPassword(): string {
   return `T9!${suffix}`;
 }
 
+/**
+ * Super-admin only. Removes a plain operator account together with its admin
+ * sessions so the seat can be re-issued by invitation; the super admin itself
+ * and customers are never revocable here. The audit trail keeps the record.
+ */
+export async function revokeOperator(operatorId: string, actorId: string, root = accountDataRoot()): Promise<void> {
+  await mutateStore(root, (document) => {
+    const index = document.accounts.findIndex((item) => item.id === operatorId && item.role === "operator");
+    if (index < 0) throw new AccountStoreError("account_not_found");
+    document.accounts.splice(index, 1);
+    document.sessions = document.sessions.filter((session) => session.accountId !== operatorId);
+    audit(document, "operator.revoked", actorId, operatorId);
+  });
+}
+
 export async function requestCustomerTemporaryPassword(
   emailInput: string,
   root = accountDataRoot(),

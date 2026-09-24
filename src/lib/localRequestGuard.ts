@@ -11,6 +11,7 @@ export const DATA_SURFACE_INVENTORY = [
   "/api/admin/login",
   "/api/admin/logout",
   "/api/admin/mfa-reset",
+  "/api/admin/operators/[id]",
   "/api/admin/operators/accept",
   "/api/admin/operators/invite",
   "/api/admin/overview",

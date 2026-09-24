@@ -116,6 +116,22 @@ export function AdminConsole() {
     }
   };
 
+  const revoke = async (operator: Operator) => {
+    if (!window.confirm(`${operator.name} (${operator.email}) 운영자 권한을 해제할까요? 즉시 로그아웃되며 다시 초대해야 합니다.`)) return;
+    setBusyId(operator.id);
+    setMessage(null);
+    try {
+      const response = await fetch(`/api/admin/operators/${encodeURIComponent(operator.id)}`, { method: "DELETE", headers: { "content-type": "application/json" } });
+      if (!response.ok) throw new Error("revoke_failed");
+      await load();
+      setMessage("운영자를 해제했습니다.");
+    } catch {
+      setMessage("운영자를 해제하지 못했습니다. 다시 시도해 주세요.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const logout = async () => {
     await fetch("/api/admin/logout", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" }).catch(() => undefined);
     window.location.assign("/admin/login");
@@ -162,7 +178,7 @@ export function AdminConsole() {
         </section>
 
         <section className="mt-10 grid gap-5 xl:grid-cols-[1fr_1.05fr]">
-          <div className="rounded-xl border border-line bg-panel p-5 sm:p-6"><h2 className="text-[20px] font-bold">운영자 계정</h2><p className="mt-2 text-[13px] text-inkSoft">공개 가입 없이 일회용 초대 링크와 2단계 인증으로만 발급합니다.</p><ul className="mt-5 divide-y divide-line">{(overview?.operators ?? []).map((operator) => <li key={operator.id} className="flex items-center justify-between gap-4 py-3"><span className="min-w-0"><strong className="block truncate text-[14px]">{operator.name}</strong><span className="block truncate text-[12px] text-inkSoft">{operator.email}</span></span><span className="rounded-full bg-soft px-2 py-1 text-[11px] font-semibold text-accent">{operator.role === "super_admin" ? "최고 운영자" : "운영자"}</span></li>)}</ul></div>
+          <div className="rounded-xl border border-line bg-panel p-5 sm:p-6"><h2 className="text-[20px] font-bold">운영자 계정</h2><p className="mt-2 text-[13px] text-inkSoft">공개 가입 없이 일회용 초대 링크와 2단계 인증으로만 발급합니다.</p><ul className="mt-5 divide-y divide-line">{(overview?.operators ?? []).map((operator) => <li key={operator.id} className="flex items-center justify-between gap-4 py-3"><span className="min-w-0"><strong className="block truncate text-[14px]">{operator.name}</strong><span className="block truncate text-[12px] text-inkSoft">{operator.email}</span></span><span className="flex shrink-0 items-center gap-2"><span className="rounded-full bg-soft px-2 py-1 text-[11px] font-semibold text-accent">{operator.role === "super_admin" ? "최고 운영자" : "운영자"}</span>{overview?.currentOperator.role === "super_admin" && operator.role === "operator" && <button type="button" aria-label={`${operator.name} 운영자 해제`} onClick={() => void revoke(operator)} disabled={busyId === operator.id} className={`${secondaryButtonClass} min-h-9 px-3 text-[12px]`}>해제</button>}</span></li>)}</ul></div>
           <div className="rounded-xl border border-line bg-panel p-5 sm:p-6"><h2 className="text-[20px] font-bold">새 운영자 초대</h2>{overview?.currentOperator.role === "super_admin" ? <><p className="mt-2 text-[13px] text-inkSoft">24시간 동안 한 번만 쓸 수 있는 설정 링크를 발급합니다.</p><form onSubmit={invite} className="mt-5 grid gap-4 sm:grid-cols-2"><label className="text-[13px] font-semibold">이름<input className={inputClass} name="name" required /></label><label className="text-[13px] font-semibold">이메일<input className={inputClass} type="email" name="email" required /></label><button className={`${primaryButtonClass} sm:col-span-2`} type="submit">초대 링크 발급</button></form>{setupUrl && <div className="mt-4 rounded-lg bg-bg p-4"><p className="text-[12px] font-semibold text-inkSoft">한 번만 전달할 설정 링크</p><p className="mt-2 break-all font-mono text-[12px]">{setupUrl}</p><button type="button" onClick={() => void navigator.clipboard.writeText(setupUrl)} className={`${secondaryButtonClass} mt-3`}>링크 복사</button></div>}</> : <p className="mt-4 text-[13px] text-inkSoft">최고 운영자만 새 운영자 초대를 발급할 수 있습니다.</p>}</div>
         </section>
       </div>

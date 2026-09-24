@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **기능**: 같은 방 모드의 목소리 등록(좌석별 한 문장 → diarization 라벨 바인딩, 호스트 전용 API). 고객 가이드 ja/en/ko에 "통역 회의실" 절과 기능 목록 행 추가. Android 1.4는 `note.seanwoo.dev`를 기본 주소로 사용.
 - **운영**: GitHub Actions `Uptime` 워크플로(15분 주기, 실패 시 소유자 메일 알림).
 - **운영자 설정**: 최초 운영자·운영자 초대 수락·MFA 재설정 화면이 TOTP 등록 정보를 인증 앱 QR 코드로 표시(수동 입력용 설정 키 병기, `qrcode` 의존성 추가). 공개 주소에서 `/admin/setup`을 열면 "완료됨"으로 잘못 안내하던 것을 "서버 로컬에서만 열려요"로 구분. AWS 안내 5절에 SSH 포트 포워딩 절차 추가.
+- **운영자 관리**: 최고 운영자가 운영자 콘솔에서 일반 운영자를 해제(`DELETE /api/admin/operators/{id}`). 계정과 관리자 세션을 제거하고 감사 기록 `operator.revoked`를 남기며, 같은 이메일을 다시 초대할 수 있다. 최고 운영자 자신과 고객은 대상이 아니다.
+- **테스트**: 회의실·게스트 세션 테스트가 고정 날짜 fixture 때문에 시간이 지나면 깨지던 문제를 가짜 시계로 고정.
 - 이 항목들은 다음 제품 버전 확정 시 아래 원장에 편입한다. 1.17.0 이후 병합된 Vision 리브랜드·글로벌 미팅 번역·고객 준비 작업도 아직 버전 번호가 없다.
 
 ## Product version ledger

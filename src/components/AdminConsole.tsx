@@ -48,7 +48,7 @@ export function AdminConsole() {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [setupUrl, setSetupUrl] = useState<string | null>(null);
+  const [invitation, setInvitation] = useState<{ delivery: "email" | "link" | "link_after_mail_failure"; sentTo?: string; setupUrl: string } | null>(null);
 
   const load = useCallback(async () => {
     const response = await fetch("/api/admin/overview", { cache: "no-store" });
@@ -97,19 +97,19 @@ export function AdminConsole() {
     event.preventDefault();
     const form = event.currentTarget;
     const data = new FormData(form);
-    setSetupUrl(null);
+    setInvitation(null);
     try {
       const response = await fetch("/api/admin/operators/invite", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(Object.fromEntries(data.entries())),
       });
-      const body = await response.json().catch(() => null) as { setupUrl?: string; error?: { message?: string } } | null;
-      if (!response.ok || !body?.setupUrl) {
-        setMessage(body?.error?.message ?? "운영자 초대 링크를 만들지 못했습니다.");
+      const body = await response.json().catch(() => null) as { delivery?: "email" | "link" | "link_after_mail_failure"; sentTo?: string; setupUrl?: string; error?: { message?: string } } | null;
+      if (!response.ok || !body?.setupUrl || !body.delivery) {
+        setMessage(body?.error?.message ?? "운영자 초대를 만들지 못했습니다.");
         return;
       }
-      setSetupUrl(body.setupUrl);
+      setInvitation({ delivery: body.delivery, sentTo: body.sentTo, setupUrl: body.setupUrl });
       form.reset();
     } catch {
       setMessage("운영자 초대 서버에 연결하지 못했습니다.");
@@ -179,7 +179,9 @@ export function AdminConsole() {
 
         <section className="mt-10 grid gap-5 xl:grid-cols-[1fr_1.05fr]">
           <div className="rounded-xl border border-line bg-panel p-5 sm:p-6"><h2 className="text-[20px] font-bold">운영자 계정</h2><p className="mt-2 text-[13px] text-inkSoft">공개 가입 없이 일회용 초대 링크와 2단계 인증으로만 발급합니다.</p><ul className="mt-5 divide-y divide-line">{(overview?.operators ?? []).map((operator) => <li key={operator.id} className="flex items-center justify-between gap-4 py-3"><span className="min-w-0"><strong className="block truncate text-[14px]">{operator.name}</strong><span className="block truncate text-[12px] text-inkSoft">{operator.email}</span></span><span className="flex shrink-0 items-center gap-2"><span className="rounded-full bg-soft px-2 py-1 text-[11px] font-semibold text-accent">{operator.role === "super_admin" ? "최고 운영자" : "운영자"}</span>{overview?.currentOperator.role === "super_admin" && operator.role === "operator" && <button type="button" aria-label={`${operator.name} 운영자 해제`} onClick={() => void revoke(operator)} disabled={busyId === operator.id} className={`${secondaryButtonClass} min-h-9 px-3 text-[12px]`}>해제</button>}</span></li>)}</ul></div>
-          <div className="rounded-xl border border-line bg-panel p-5 sm:p-6"><h2 className="text-[20px] font-bold">새 운영자 초대</h2>{overview?.currentOperator.role === "super_admin" ? <><p className="mt-2 text-[13px] text-inkSoft">24시간 동안 한 번만 쓸 수 있는 설정 링크를 발급합니다.</p><form onSubmit={invite} className="mt-5 grid gap-4 sm:grid-cols-2"><label className="text-[13px] font-semibold">이름<input className={inputClass} name="name" required /></label><label className="text-[13px] font-semibold">이메일<input className={inputClass} type="email" name="email" required /></label><button className={`${primaryButtonClass} sm:col-span-2`} type="submit">초대 링크 발급</button></form>{setupUrl && <div className="mt-4 rounded-lg bg-bg p-4"><p className="text-[12px] font-semibold text-inkSoft">한 번만 전달할 설정 링크</p><p className="mt-2 break-all font-mono text-[12px]">{setupUrl}</p><button type="button" onClick={() => void navigator.clipboard.writeText(setupUrl)} className={`${secondaryButtonClass} mt-3`}>링크 복사</button></div>}</> : <p className="mt-4 text-[13px] text-inkSoft">최고 운영자만 새 운영자 초대를 발급할 수 있습니다.</p>}</div>
+          <div className="rounded-xl border border-line bg-panel p-5 sm:p-6"><h2 className="text-[20px] font-bold">새 운영자 초대</h2>{overview?.currentOperator.role === "super_admin" ? <><p className="mt-2 text-[13px] text-inkSoft">초대받는 사람의 메일로 24시간 동안 한 번만 쓸 수 있는 설정 링크를 보냅니다.</p><form onSubmit={invite} className="mt-5 grid gap-4 sm:grid-cols-2"><label className="text-[13px] font-semibold">이름<input className={inputClass} name="name" required /></label><label className="text-[13px] font-semibold">이메일<input className={inputClass} type="email" name="email" required /></label><button className={`${primaryButtonClass} sm:col-span-2`} type="submit">초대 메일 보내기</button></form>{invitation && <div className="mt-4 rounded-lg bg-bg p-4">{invitation.delivery === "email"
+  ? <p className="text-[13px] leading-6">{invitation.sentTo} 주소로 초대 메일을 보냈어요. 24시간 안에 한 번만 열 수 있습니다.</p>
+  : <p className="text-[13px] leading-6 text-warn">{invitation.delivery === "link_after_mail_failure" ? "초대 메일 발송에 실패해 링크로 발급했어요." : "메일 설정이 없어 링크로 발급했어요."} 아래 링크를 직접 전달해 주세요.</p>}<p className="mt-3 text-[12px] font-semibold text-inkSoft">{invitation.delivery === "email" ? "메일이 도착하지 않으면 이 링크를 직접 전달하세요" : "한 번만 전달할 설정 링크"}</p><p className="mt-2 break-all font-mono text-[12px]">{invitation.setupUrl}</p><button type="button" onClick={() => void navigator.clipboard.writeText(invitation.setupUrl)} className={`${secondaryButtonClass} mt-3`}>링크 복사</button></div>}</> : <p className="mt-4 text-[13px] text-inkSoft">최고 운영자만 새 운영자 초대를 발급할 수 있습니다.</p>}</div>
         </section>
       </div>
     </main>
